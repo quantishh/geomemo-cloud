@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const API_BASE_URL = window.location.origin;
+    // --- CHANGE: Point explicitly to your Cloud API Port ---
+    const API_BASE_URL = "http://3.22.27.191:8000";
     
     // Containers
     const jumpBar = document.getElementById('category-jump-bar');
@@ -56,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function processAndRenderArticles(articles) {
         // 1. Filter for TODAY (Local Time)
+        // Note: You might want to adjust this logic if server/client timezones differ significantly
         const todayString = new Date().toLocaleDateString();
         const todaysArticles = articles.filter(a => {
             if (!a.scraped_at) return false;
