@@ -106,3 +106,10 @@ DOWNLOAD_TIMEOUT = 180 # 3 minutes for slow proxy connections
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
+# --- CLOUD DATABASE CONFIGURATION ---
+# These settings ensure the scraper can find the database container ('db')
+# when running in the cloud, while defaulting to 'localhost' for local testing.
+POSTGRES_HOST = os.getenv('POSTGRES_HOST', 'db')
+POSTGRES_DB = os.getenv('POSTGRES_DB', 'geomemo')
+POSTGRES_USER = os.getenv('POSTGRES_USER', 'postgres')
+POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'Quantishh@1979')
