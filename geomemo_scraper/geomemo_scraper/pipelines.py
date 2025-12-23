@@ -40,8 +40,10 @@ class GeomemoDatabasePipeline:
 
     def open_spider(self, spider):
         try:
+            # --- UPDATED: Smart Host Detection ---
+            # Checks for 'POSTGRES_HOST' env var, defaults to 'db' (Cloud), works with 'localhost' if set.
             self.connection = psycopg2.connect(
-                host="localhost",
+                host=os.getenv("POSTGRES_HOST", "db"),
                 database="postgres",
                 user="postgres",
                 password="Quantishh@1979" 
