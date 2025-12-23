@@ -53,7 +53,8 @@ app.add_middleware(
 # --- DB Config ---
 # WARNING: Use Environment Variables in Production
 DB_CONFIG = {
-    "host": "localhost",
+    # This line now checks for the cloud database ('db') first, defaults to 'localhost' for local testing
+    "host": os.getenv("POSTGRES_HOST", "db"),
     "database": "postgres",
     "user": "postgres",
     "password": "Quantishh@1979" 
