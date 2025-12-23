@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- CHANGE: Point explicitly to your Cloud API Port ---
-    const API_BASE_URL = "http://3.22.27.191:8000";
+    const API_BASE_URL = "https://www.geomemo.news";
     
     // Containers
     const jumpBar = document.getElementById('category-jump-bar');
