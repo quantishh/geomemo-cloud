@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const API_BASE_URL = window.location.origin;
+    // --- CHANGE: Point explicitly to your Cloud API Port ---
+    const API_BASE_URL = "http://3.22.27.191:8000"; 
 
     // --- DOM ELEMENTS ---
     const articlesTbody = document.getElementById('articles-tbody');
