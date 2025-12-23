@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+.DS_Store
+geomemo_full_backup.sql
+uploaded_images/
+geomemo_scraper/geomemo_scraper/auth.json
+venv/

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoMemo - Archives</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">GeoMemo</div>
+            <div class="nav">
+                <a href="index.html">Home</a>
+                <a href="archives.html" class="highlight-link">Archives</a>
+                <a href="events.html">Events</a>
+                <a href="about.html">About</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" style="display: block;">
+        <h1 class="section-header">News Archive</h1>
+        <div id="archives-container">
+            <p style="padding:20px; color:#666;">Loading archives...</p>
+        </div>
+    </div>
+
+    <div class="footer">
+        &copy; 2025 GeoMemo. Briefing the world's decision makers.
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const container = document.getElementById('archives-container');
+            
+            function isToday(dateString) {
+                const d = new Date(dateString);
+                const today = new Date();
+                return d.getDate() === today.getDate() &&
+                       d.getMonth() === today.getMonth() &&
+                       d.getFullYear() === today.getFullYear();
+            }
+
+            try {
+                const res = await fetch('/articles/approved');
+                const allArticles = await res.json();
+
+                // Filter OUT today's news for archives
+                const oldArticles = allArticles.filter(a => !isToday(a.scraped_at));
+
+                container.innerHTML = '';
+                if (oldArticles.length === 0) {
+                    container.innerHTML = '<p style="padding:20px;">No archived news available.</p>';
+                    return;
+                }
+
+                // Group by Date
+                const grouped = oldArticles.reduce((acc, article) => {
+                    const dateKey = new Date(article.scraped_at).toLocaleDateString('en-US', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                    });
+                    if (!acc[dateKey]) acc[dateKey] = [];
+                    acc[dateKey].push(article);
+                    return acc;
+                }, {});
+
+                // Render Accordions
+                Object.keys(grouped).forEach(date => {
+                    const articles = grouped[date];
+                    
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = 'archive-group';
+
+                    const header = document.createElement('div');
+                    header.className = 'archive-header';
+                    header.innerHTML = `<span>${date}</span> <span>${articles.length} Stories ▼</span>`;
+                    
+                    const content = document.createElement('div');
+                    content.className = 'archive-content';
+
+                    // Use the same rendering logic as main page for consistency
+                    articles.forEach(a => {
+                        // Simple rendering for archive (Title + Link)
+                        const item = document.createElement('div');
+                        item.className = 'news-item';
+                        item.innerHTML = `
+                            <a href="${a.url}" target="_blank" class="headline-link" style="font-size:14px;">${a.summary || a.headline}</a>
+                            <div class="meta">${a.publication_name} • ${new Date(a.scraped_at).toLocaleTimeString()}</div>
+                        `;
+                        content.appendChild(item);
+                    });
+
+                    header.addEventListener('click', () => {
+                        content.classList.toggle('open');
+                    });
+
+                    groupDiv.appendChild(header);
+                    groupDiv.appendChild(content);
+                    container.appendChild(groupDiv);
+                });
+
+            } catch (err) {
+                container.innerHTML = '<p>Error loading archives.</p>';
+                console.error(err);
+            }
+        });
+    </script>
+</body>
+</html>

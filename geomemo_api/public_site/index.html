@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoMemo - Intelligence Briefing</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-content">
+            <div class="logo-opt2">
+                <span class="logo-bold">Geo</span><span class="logo-light">Memo</span>
+            </div>
+            <div class="nav">
+                <a href="archives.html">Archives</a>
+                <a href="events.html">Events</a>
+                <a href="about.html">About</a>
+                <a href="newsletter.html" class="highlight-link">Newsletter</a>
+            </div>
+            <div class="date-display" id="current-date-display"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        
+        <div class="main-column">
+            <div id="category-jump-bar"></div>
+
+            <div id="loading" style="display:none; text-align:center; padding:20px; color:#666;">
+                Loading Intelligence...
+            </div>
+
+            <div id="top-news-section">
+                <div class="section-header" id="top-news-header" style="display:none;">TOP NEWS</div>
+                <div id="top-news-container"></div>
+            </div>
+
+            <div id="category-news-container"></div>
+        </div>
+
+        <div class="middle-column">
+            <div class="sidebar-header">Sponsor Message</div>
+            <div class="sidebar-block-sponsor" id="sponsors-container">
+                <p style="color:#999; font-size:12px;">Loading...</p>
+            </div>
+
+            <div class="sidebar-header" style="margin-top: 30px;">Featured</div>
+            <div class="sidebar-block-podcast" id="podcasts-container"></div>
+        </div>
+
+        <div class="right-column">
+            <div class="sidebar-block-newest">
+                <div class="sidebar-header">Newest Updates</div>
+                <div id="tweets-container"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="footer">
+        &copy; 2025 GeoMemo. Briefing the world's decision makers.
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('current-date-display').textContent = new Date().toLocaleDateString('en-US', options);
+    </script>
+</body>
+</html>

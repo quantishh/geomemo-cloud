@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoMemo Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Custom tweak to make the header dropdown look seamless */
+        #category-filter {
+            background-color: transparent;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem; /* Matches text-xs */
+            color: #374151; /* Matches text-gray-700 */
+            cursor: pointer;
+            width: 100%;
+            outline: none;
+        }
+        #category-filter:hover {
+            color: #000;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-4xl font-bold text-gray-800">GeoMemo Dashboard</h1>
+                <p class="text-lg text-gray-600">Curation & Management</p>
+            </div>
+            <button id="generate-newsletter-btn" class="bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow hover:bg-purple-800 flex items-center gap-2">
+                <span>📧</span> Generate Newsletter
+            </button>
+        </header>
+
+        <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
+            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+                💰 Manage Sponsors
+            </summary>
+            <div class="p-6">
+                <form id="sponsor-form" class="space-y-3 mb-6 border-b pb-6">
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" id="sponsor-company" name="company_name" placeholder="Company Name" class="p-2 border rounded w-full" required>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Logo URL OR Upload File</label>
+                            <div class="flex gap-2">
+                                <input type="url" id="sponsor-logo-url" name="logo_url" placeholder="https://..." class="p-2 border rounded w-1/2">
+                                <input type="file" id="sponsor-logo-file" name="logo_file" class="p-1 border rounded w-1/2 text-sm">
+                            </div>
+                        </div>
+                    </div>
+                    <input type="text" id="sponsor-headline" name="headline" placeholder="Ad Headline (Bold)" class="p-2 border rounded w-full" required>
+                    <textarea id="sponsor-summary" name="summary" placeholder="Ad Body Text" class="p-2 border rounded w-full h-20" required></textarea>
+                    <input type="url" id="sponsor-link" name="link_url" placeholder="Click-through URL" class="p-2 border rounded w-full" required>
+                    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Add Sponsor</button>
+                </form>
+                <h3 class="font-bold text-gray-700 mb-2">Active Sponsors</h3>
+                <table class="w-full text-sm text-left text-gray-500"><tbody id="sponsors-tbody"></tbody></table>
+            </div>
+        </details>
+
+        <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
+            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+                🎙️ Manage Featured Content (Auto-Fetch)
+            </summary>
+            <div class="p-6">
+                <form id="podcast-form" class="space-y-3 mb-6 border-b pb-6">
+                    <div class="flex gap-2 items-end">
+                        <div class="flex-grow">
+                            <label class="block text-xs font-bold text-gray-600 mb-1">1. Paste Link & Fetch</label>
+                            <input type="url" id="podcast-link" name="link_url" placeholder="YouTube/Spotify Link..." class="p-2 border rounded w-full" required>
+                        </div>
+                        <button type="button" id="fetch-podcast-meta-btn" class="bg-indigo-100 text-indigo-700 px-4 py-2 rounded font-bold hover:bg-indigo-200 mb-0.5">Fetch Metadata</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mt-4">
+                        <input type="text" id="podcast-show" name="show_name" placeholder="Show Name / Site Name" class="p-2 border rounded w-full" required>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Cover Image (URL or Upload)</label>
+                            <div class="flex gap-2">
+                                <input type="url" id="podcast-image-url" name="image_url" placeholder="Image URL" class="p-2 border rounded w-1/2">
+                                <input type="file" id="podcast-image-file" name="image_file" class="p-1 border rounded w-1/2 text-sm">
+                            </div>
+                        </div>
+                    </div>
+                    <input type="text" id="podcast-title" name="episode_title" placeholder="Episode Title" class="p-2 border rounded w-full" required>
+                    <textarea id="podcast-desc" name="description" placeholder="Description" class="p-2 border rounded w-full h-20" required></textarea>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full">Add Content</button>
+                </form>
+                <h3 class="font-bold text-gray-700 mb-2">Active Content</h3>
+                <table class="w-full text-sm text-left text-gray-500"><tbody id="podcasts-tbody"></tbody></table>
+            </div>
+        </details>
+
+        <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
+            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+                🐦 Post Tweets
+            </summary>
+            <div class="p-6">
+                <form id="tweet-entry-form" class="flex gap-4 mb-6 border-b pb-6">
+                    <input type="url" id="tweet-url" placeholder="https://x.com/..." class="flex-grow p-2 border rounded" required>
+                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Fetch & Post</button>
+                </form>
+                <table class="w-full text-sm text-left text-gray-500"><tbody id="tweets-manager-tbody"></tbody></table>
+            </div>
+        </details>
+
+        <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200" open>
+            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+                📰 Article Curation
+            </summary>
+            <div class="p-6">
+                
+                <form id="manual-entry-form" class="mb-6 p-4 bg-gray-50 rounded border border-gray-200 space-y-3">
+                    <h3 class="font-bold text-gray-700">Manual Entry</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" id="manual-headline" name="headline" placeholder="Headline" class="p-2 border rounded w-full" required>
+                        <input type="url" id="manual-url" name="url" placeholder="URL" class="p-2 border rounded w-full" required>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" id="manual-publication" name="publication_name" placeholder="Publication Name" class="p-2 border rounded w-full">
+                        <input type="text" id="manual-author" name="author" placeholder="Author" class="p-2 border rounded w-full">
+                    </div>
+                    <textarea id="manual-content" name="content" placeholder="Content/Summary" class="p-2 border rounded w-full h-60" required></textarea>
+                    <div class="flex justify-between items-center">
+                        <label class="flex items-center gap-2"><input type="checkbox" id="manual-is-top" name="is_top_story"> Top Story</label>
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Submit</button>
+                    </div>
+                </form>
+
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">Queue</h2>
+                    <div class="flex gap-2">
+                        <button id="batch-approve" class="bg-green-600 text-white px-3 py-1 rounded text-sm">Approve</button>
+                        <button id="batch-reject" class="bg-red-600 text-white px-3 py-1 rounded text-sm">Reject</button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-500 table-fixed">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th class="p-3 w-12"><input type="checkbox" id="select-all-checkbox"></th>
+                                <th class="p-3 w-3/12">Headline</th>
+                                <th class="p-3 w-2/12">
+                                    <select id="category-filter">
+                                        <option value="All">CATEGORY (ALL)</option>
+                                    </select>
+                                </th>
+                                <th class="p-3 w-4/12">Summary</th>
+                                <th class="p-3 w-1/12">Status</th>
+                                <th class="p-3 w-1/12">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="articles-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+    </div>
+
+    <div id="enhance-modal" class="modal-overlay hidden"><div class="modal-container max-w-2xl"><div class="modal-header"><h2>Enhance</h2><button class="modal-close-btn">&times;</button></div><div class="modal-body space-y-3"><div class="grid grid-cols-2 gap-4"><input type="text" id="enhance-publication" placeholder="Publication" class="p-2 border rounded w-full"><input type="text" id="enhance-author" placeholder="Author" class="p-2 border rounded w-full"></div><textarea id="enhance-text-input" class="p-2 border rounded w-full h-40" placeholder="Content..."></textarea><button id="confirm-enhance-btn" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Enhance & Approve</button></div></div></div>
+    
+    <div id="newsletter-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div class="bg-white rounded-lg w-full max-w-4xl h-[90vh] flex flex-col p-6"><div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Newsletter Preview</h2><button id="close-newsletter-btn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button></div><div class="mb-4"><label class="block font-bold mb-1">Subject Line:</label><input type="text" id="newsletter-subject" class="w-full p-2 border rounded bg-gray-50" readonly></div><textarea id="newsletter-output" class="flex-grow w-full p-4 border rounded font-mono text-sm mb-4" readonly></textarea><button id="copy-html-btn" class="bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-700 font-bold w-full">Copy HTML to Clipboard</button></div></div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoMemo Daily Newsletter</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <style>
+        /* Styles remain identical to Techmeme replica */
+        .newsletter-container { max-width: 700px; margin: 0 auto; padding: 20px; }
+        .newsletter-header-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 15px; margin-bottom: 20px; }
+        .newsletter-title { font-family: "Calibri", "Segoe UI", sans-serif; font-weight: 700; font-size: 20px; color: #002b55; }
+        .intro-text { font-family: "Candara", sans-serif; font-size: 15px; line-height: 1.5; margin-bottom: 20px; color: #111; }
+        .intro-text a { color: #105cb6; text-decoration: underline; }
+        .required-legend { text-align: right; font-size: 12px; color: #666; margin-bottom: 15px; }
+        .required-star { color: #cc0000; margin-left: 2px; }
+        .form-group { margin-bottom: 15px; }
+        .form-label { display: block; font-family: "Calibri", sans-serif; font-weight: 700; font-size: 15px; margin-bottom: 5px; color: #000; }
+        .form-input, .form-select { width: 100%; padding: 10px; font-family: "Candara", sans-serif; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; background-color: #fff; }
+        .form-select { height: 42px; }
+        .subscribe-btn { background-color: #430297; color: white; font-family: "Calibri", sans-serif; font-weight: 700; font-size: 17px; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; margin-top: 15px; transition: background-color 0.2s; }
+        .subscribe-btn:hover { background-color: #2e016b; }
+        .subscribe-btn:disabled { background-color: #888; cursor: not-allowed; }
+        
+        /* Success/Error/Warning Messages */
+        #form-message { margin-top: 15px; padding: 10px; border-radius: 4px; display: none; font-family: "Candara", sans-serif; font-size: 14px; }
+        .msg-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .msg-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        /* New Warning Style for "Already Subscribed" */
+        .msg-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-content">
+            <div class="logo-opt2">GeoMemo</div>
+            <div class="nav">
+                <a href="index.html">Home</a>
+                <a href="archives.html">Archives</a>
+                <a href="events.html">Events</a>
+                <a href="about.html">About</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="newsletter-container">
+            
+            <div class="newsletter-header-row">
+                <div class="logo-opt2" style="font-size:18px; border-width:2px;">GeoMemo</div>
+                <div class="newsletter-title">Daily Newsletter</div>
+            </div>
+
+            <div class="intro-text">
+                GeoMemo's newsletter gives you the high-signal intelligence and geopolitical context we've posted to our <a href="index.html">homepage</a> throughout the past 24 hours.
+            </div>
+
+            <div class="required-legend">
+                <span class="required-star">*</span> indicates required
+            </div>
+
+            <form id="newsletter-form">
+                
+                <div class="form-group">
+                    <label class="form-label">Email Address <span class="required-star">*</span></label>
+                    <input type="email" id="email" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">First Name</label>
+                    <input type="text" id="first_name" class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Last Name</label>
+                    <input type="text" id="last_name" class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Company <span class="required-star">*</span></label>
+                    <input type="text" id="company" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Title <span class="required-star">*</span></label>
+                    <input type="text" id="title" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">My field is <span class="required-star">*</span></label>
+                    <select id="field" class="form-select" required>
+                        <option value="" disabled selected>(select one)</option>
+                        <option value="Investment Banking">Investment Banking</option>
+                        <option value="Private Equity">Private Equity</option>
+                        <option value="Venture Capital">Venture Capital</option>
+                        <option value="Asset Management">Asset Management</option>
+                        <option value="Family Office">Family Office</option>
+                        <option value="Hedge Fund">Hedge Fund</option>
+                        <option value="Finance / General">Finance / General</option>
+                        <option value="Politics / Government">Politics / Government</option>
+                        <option value="Think Tank / Policy">Think Tank / Policy</option>
+                        <option value="Education / Academia">Education / Academia</option>
+                        <option value="Something Different">Something Different</option>
+                    </select>
+                </div>
+
+                <button type="submit" id="submit-btn" class="subscribe-btn">Subscribe</button>
+                
+                <div id="form-message"></div>
+
+            </form>
+
+        </div>
+    </div>
+
+    <div class="footer">
+        &copy; 2025 GeoMemo. Briefing the world's decision makers.
+    </div>
+
+    <script>
+        document.getElementById('newsletter-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const btn = document.getElementById('submit-btn');
+            const msgDiv = document.getElementById('form-message');
+            
+            // Reset UI
+            btn.disabled = true;
+            btn.textContent = "Processing...";
+            msgDiv.style.display = 'none';
+            msgDiv.className = '';
+
+            const payload = {
+                email: document.getElementById('email').value,
+                first_name: document.getElementById('first_name').value,
+                last_name: document.getElementById('last_name').value,
+                company: document.getElementById('company').value,
+                title: document.getElementById('title').value,
+                field: document.getElementById('field').value
+            };
+
+            try {
+                const response = await fetch('/api/subscribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Success Scenario
+                    msgDiv.textContent = "Success! Please check your email to confirm your subscription.";
+                    msgDiv.classList.add('msg-success');
+                    msgDiv.style.display = 'block';
+                    document.getElementById('newsletter-form').reset();
+                    btn.textContent = "Subscribed";
+                } else if (response.status === 409) {
+                    // Already Subscribed Scenario
+                    msgDiv.textContent = "You are already subscribed! (Check your inbox for previous updates)";
+                    msgDiv.classList.add('msg-warning');
+                    msgDiv.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = "Subscribe";
+                } else {
+                    // Other Errors
+                    throw new Error(result.detail || "Subscription failed");
+                }
+            } catch (error) {
+                console.error(error);
+                msgDiv.textContent = "Error: " + error.message;
+                msgDiv.classList.add('msg-error');
+                msgDiv.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = "Subscribe";
+            }
+        });
+    </script>
+
+</body>
+</html>
