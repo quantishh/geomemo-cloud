@@ -227,6 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch(e){}
     }
 
+    // --- UPDATED: Fetch Tweets with Images ---
     async function fetchTweets() {
         if(!tweetsContainer) return;
         try {
@@ -234,11 +235,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const tweets = await res.json();
             if(tweets.length === 0) { tweetsContainer.innerHTML = ''; return; }
 
-            tweetsContainer.innerHTML = tweets.map(t => `
+            tweetsContainer.innerHTML = tweets.map(t => {
+                // Logic: IF we have an image URL, create an IMG tag. If not, empty string.
+                const imageHtml = t.image_url 
+                    ? `<div style="margin-top:8px; margin-bottom:4px;">
+                         <img src="${t.image_url}" style="width:100%; height:auto; border-radius:4px; border:1px solid #eee;">
+                       </div>`
+                    : '';
+
+                return `
                 <div class="tweet-item" style="border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
-                    <a href="${t.url}" target="_blank" style="font-size:13px; color:#333; text-decoration:none;">${t.content}</a>
-                    <div style="font-size:10px; color:#999; margin-top:4px;">Posted by ${t.author || 'X User'}</div>
-                </div>`).join('');
+                    <a href="${t.url}" target="_blank" style="font-size:13px; color:#333; text-decoration:none; display:block; line-height:1.4;">
+                        ${t.content}
+                    </a>
+                    
+                    ${imageHtml} <div style="font-size:10px; color:#999; margin-top:6px;">
+                        Posted by ${t.author || 'X User'}
+                    </div>
+                </div>`;
+            }).join('');
         } catch(e){}
     }
 });
