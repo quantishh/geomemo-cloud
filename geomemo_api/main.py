@@ -263,43 +263,9 @@ The user is manually submitting an article. Categorize it and return a valid JSO
         logger.error(f"Groq call failed: {e}")
         raise HTTPException(status_code=500, detail=f"Groq error: {e}")
 
-# --- Helper: Scrape Tweet (API) ---
-def scrape_tweet_meta(url: str):
-    try:
-        match = re.search(r'/status/(\d+)', url)
-        if not match: return None
-        tweet_id = match.group(1)
-        response = requests.get(f"https://api.fxtwitter.com/i/status/{tweet_id}", timeout=10)
-        if response.status_code != 200: return None
-        data = response.json()
-        tweet_data = data.get('tweet', {})
-        text = tweet_data.get('text', '')
-        author_info = tweet_data.get('author', {})
-        author = author_info.get('name', 'X User')
-        if author_info.get('screen_name'): author += f" (@{author_info.get('screen_name')})"
-        image_url = None
-        media = tweet_data.get('media', {})
-        if media.get('photos'): image_url = media['photos'][0].get('url')
-        return {"content": text, "image_url": image_url, "author": author}
-    except Exception as e:
-        logger.error(f"Scrape error: {e}")
-        return None
-
-# --- HELPER: Save Uploaded File ---
-def save_upload_file(upload_file: UploadFile) -> str:
-    try:
-        file_path = UPLOAD_DIR / f"{int(datetime.now().timestamp())}_{upload_file.filename}"
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(upload_file.file, buffer)
-        return f"/uploads/{file_path.name}"
-    except Exception as e:
-        logger.error(f"File save error: {e}")
-        return None
-
-# --- Helper: Generic Metadata Scraper ---
-@app.post("/api/scrape-metadata")
-def scrape_generic_metadata(request: ScrapeRequest):
-    url = request.url
+# --- NEW HELPER: Reusable Metadata Scraper (Added for robustness) ---
+def fetch_url_metadata(url: str) -> dict:
+    """Scrapes OpenGraph/Meta data from any URL (YouTube, Apple, or Generic)"""
     # 1. YOUTUBE
     if "youtube.com" in url or "youtu.be" in url:
         try:
@@ -336,24 +302,94 @@ def scrape_generic_metadata(request: ScrapeRequest):
                         return {"title": title, "description": show_name, "image_url": image_url, "site_name": "Apple Podcasts"}
         except Exception as e: logger.warning(f"Apple scrape failed: {e}")
 
-    # 3. GENERIC
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    # 3. GENERIC (News Sites, Blogs, etc.)
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
     try:
         response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code != 200: raise HTTPException(400, "Failed to fetch URL")
+        if response.status_code != 200: return None
         soup = BeautifulSoup(response.text, 'html.parser')
-        title = soup.find("meta", property="og:title")
-        title = title["content"] if title else soup.title.string if soup.title else ""
-        desc = soup.find("meta", property="og:description")
-        description = desc["content"] if desc else ""
-        image = soup.find("meta", property="og:image")
-        image_url = image["content"] if image else ""
-        site_name = soup.find("meta", property="og:site_name")
-        site = site_name["content"] if site_name else ""
-        return {"title": title, "description": description, "image_url": image_url, "site_name": site}
+        
+        # Helper to safely get meta content
+        def get_meta(prop):
+            tag = soup.find("meta", property=prop) or soup.find("meta", attrs={"name": prop})
+            return tag["content"] if tag else ""
+
+        title = get_meta("og:title") or (soup.title.string if soup.title else "")
+        description = get_meta("og:description") or get_meta("description")
+        image_url = get_meta("og:image") or get_meta("twitter:image")
+        site_name = get_meta("og:site_name")
+        
+        return {"title": title, "description": description, "image_url": image_url, "site_name": site_name}
     except Exception as e:
-        logger.error(f"Generic scrape error: {e}")
-        raise HTTPException(500, str(e))
+        logger.error(f"Generic scrape error for {url}: {e}")
+        return None
+
+# --- Helper: Scrape Tweet (API) (Refactored) ---
+def scrape_tweet_meta(url: str):
+    try:
+        match = re.search(r'/status/(\d+)', url)
+        if not match: return None
+        tweet_id = match.group(1)
+        
+        # Fetch from fxtwitter
+        response = requests.get(f"https://api.fxtwitter.com/i/status/{tweet_id}", timeout=10)
+        if response.status_code != 200: return None
+        data = response.json()
+        
+        tweet_data = data.get('tweet', {})
+        text = tweet_data.get('text', '')
+        
+        # Author
+        author_info = tweet_data.get('author', {})
+        author = author_info.get('name', 'X User')
+        if author_info.get('screen_name'): author += f" (@{author_info.get('screen_name')})"
+        
+        image_url = None
+        media = tweet_data.get('media', {})
+        
+        # 1. Try Photos (Existing logic)
+        if media.get('photos'): 
+            image_url = media['photos'][0].get('url')
+            
+        # 2. Try Videos (New: Grab thumbnail)
+        elif media.get('videos'):
+            image_url = media['videos'][0].get('thumbnail_url')
+            
+        # 3. Fallback: Look for External Link in Text (Fix for News/Al Jazeera)
+        if not image_url:
+            # Find all http/https links in the tweet text
+            urls = re.findall(r'https?://\S+', text)
+            for link in urls:
+                # Basic filter to skip obvious noise if needed
+                # Scrape the link to get its OG Image (News Card)
+                meta = fetch_url_metadata(link)
+                if meta and meta.get('image_url'):
+                    image_url = meta['image_url']
+                    break # Use the first valid image found
+
+        return {"content": text, "image_url": image_url, "author": author}
+    except Exception as e:
+        logger.error(f"Scrape error: {e}")
+        return None
+
+# --- HELPER: Save Uploaded File ---
+def save_upload_file(upload_file: UploadFile) -> str:
+    try:
+        file_path = UPLOAD_DIR / f"{int(datetime.now().timestamp())}_{upload_file.filename}"
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(upload_file.file, buffer)
+        return f"/uploads/{file_path.name}"
+    except Exception as e:
+        logger.error(f"File save error: {e}")
+        return None
+
+# --- Helper: Generic Metadata Scraper (Updated Endpoint) ---
+@app.post("/api/scrape-metadata")
+def scrape_generic_metadata(request: ScrapeRequest):
+    data = fetch_url_metadata(request.url)
+    if not data:
+        raise HTTPException(400, "Failed to fetch metadata")
+    return data
 
 # --- API Endpoints ---
 
