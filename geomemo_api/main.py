@@ -53,7 +53,6 @@ app.add_middleware(
 # --- DB Config ---
 # WARNING: Use Environment Variables in Production
 DB_CONFIG = {
-    # This line now checks for the cloud database ('db') first, defaults to 'localhost' for local testing
     "host": os.getenv("POSTGRES_HOST", "db"),
     "database": "postgres",
     "user": "postgres",
@@ -80,7 +79,7 @@ class ManualArticleSubmission(BaseModel):
     content: str
     is_top_story: bool = False
 class EnhanceRequest(BaseModel):
-    summary: str  # We now accept summary, NOT headline
+    summary: str  
     publication_name: Optional[str] = None
     author: Optional[str] = None
 class Article(BaseModel):
@@ -96,7 +95,7 @@ class Article(BaseModel):
     scraped_at: datetime | None = None
     distance: Optional[float] = None
     is_top_story: bool = False
-    parent_id: Optional[int] = None # Added for Clustering
+    parent_id: Optional[int] = None
     confidence_score: Optional[int] = 0
 class TweetSubmission(BaseModel):
     url: str 
@@ -195,7 +194,7 @@ def init_db():
             );
         """)
         
-        # Ensure Articles table exists (Basic structure if not present)
+        # Ensure Articles table exists
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS articles (
                 id SERIAL PRIMARY KEY,
@@ -215,7 +214,7 @@ def init_db():
             );
         """)
         
-        # Migrations: Add columns if they don't exist
+        # Migrations
         try: cursor.execute("ALTER TABLE tweets ADD COLUMN IF NOT EXISTS image_url TEXT")
         except: conn.rollback()
         
@@ -263,9 +262,8 @@ The user is manually submitting an article. Categorize it and return a valid JSO
         logger.error(f"Groq call failed: {e}")
         raise HTTPException(status_code=500, detail=f"Groq error: {e}")
 
-# --- NEW HELPER: Reusable Metadata Scraper (Added for robustness) ---
+# --- Helper: URL Metadata Scraper ---
 def fetch_url_metadata(url: str) -> dict:
-    """Scrapes OpenGraph/Meta data from any URL (YouTube, Apple, or Generic)"""
     # 1. YOUTUBE
     if "youtube.com" in url or "youtu.be" in url:
         try:
@@ -302,14 +300,13 @@ def fetch_url_metadata(url: str) -> dict:
                         return {"title": title, "description": show_name, "image_url": image_url, "site_name": "Apple Podcasts"}
         except Exception as e: logger.warning(f"Apple scrape failed: {e}")
 
-    # 3. GENERIC (News Sites, Blogs, etc.)
+    # 3. GENERIC
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
     try:
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code != 200: return None
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Helper to safely get meta content
         def get_meta(prop):
             tag = soup.find("meta", property=prop) or soup.find("meta", attrs={"name": prop})
             return tag["content"] if tag else ""
@@ -324,14 +321,13 @@ def fetch_url_metadata(url: str) -> dict:
         logger.error(f"Generic scrape error for {url}: {e}")
         return None
 
-# --- Helper: Scrape Tweet (API) (Refactored) ---
+# --- Helper: Scrape Tweet ---
 def scrape_tweet_meta(url: str):
     try:
         match = re.search(r'/status/(\d+)', url)
         if not match: return None
         tweet_id = match.group(1)
         
-        # Fetch from fxtwitter
         response = requests.get(f"https://api.fxtwitter.com/i/status/{tweet_id}", timeout=10)
         if response.status_code != 200: return None
         data = response.json()
@@ -339,7 +335,6 @@ def scrape_tweet_meta(url: str):
         tweet_data = data.get('tweet', {})
         text = tweet_data.get('text', '')
         
-        # Author
         author_info = tweet_data.get('author', {})
         author = author_info.get('name', 'X User')
         if author_info.get('screen_name'): author += f" (@{author_info.get('screen_name')})"
@@ -347,32 +342,26 @@ def scrape_tweet_meta(url: str):
         image_url = None
         media = tweet_data.get('media', {})
         
-        # 1. Try Photos (Existing logic)
         if media.get('photos'): 
             image_url = media['photos'][0].get('url')
-            
-        # 2. Try Videos (New: Grab thumbnail)
         elif media.get('videos'):
             image_url = media['videos'][0].get('thumbnail_url')
-            
-        # 3. Fallback: Look for External Link in Text (Fix for News/Al Jazeera)
+        
+        # Fallback: External Link Image
         if not image_url:
-            # Find all http/https links in the tweet text
             urls = re.findall(r'https?://\S+', text)
             for link in urls:
-                # Basic filter to skip obvious noise if needed
-                # Scrape the link to get its OG Image (News Card)
                 meta = fetch_url_metadata(link)
                 if meta and meta.get('image_url'):
                     image_url = meta['image_url']
-                    break # Use the first valid image found
+                    break 
 
         return {"content": text, "image_url": image_url, "author": author}
     except Exception as e:
         logger.error(f"Scrape error: {e}")
         return None
 
-# --- HELPER: Save Uploaded File ---
+# --- Helper: Save Uploaded File ---
 def save_upload_file(upload_file: UploadFile) -> str:
     try:
         file_path = UPLOAD_DIR / f"{int(datetime.now().timestamp())}_{upload_file.filename}"
@@ -383,7 +372,6 @@ def save_upload_file(upload_file: UploadFile) -> str:
         logger.error(f"File save error: {e}")
         return None
 
-# --- Helper: Generic Metadata Scraper (Updated Endpoint) ---
 @app.post("/api/scrape-metadata")
 def scrape_generic_metadata(request: ScrapeRequest):
     data = fetch_url_metadata(request.url)
@@ -398,13 +386,13 @@ def get_articles():
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try: 
-        # REMOVED: "WHERE scraped_at >= NOW() - INTERVAL '7 days'"
-        # Now fetches ALL history
+        # --- CHANGED: Only fetch last 7 days ---
         cursor.execute("""
             SELECT id, url, headline AS headline_original, headline_en AS headline, 
             summary, category, status, publication_name, author, scraped_at, 
             is_top_story, confidence_score, parent_id 
             FROM articles 
+            WHERE scraped_at >= NOW() - INTERVAL '7 days'
             ORDER BY scraped_at DESC
         """)
         return [dict(row) for row in cursor.fetchall()]
@@ -415,11 +403,34 @@ def get_articles():
         cursor.close()
         conn.close()
 
+# --- NEW: Archive Route ---
+@app.get("/articles/archive", response_model=List[Article])
+def get_archived_articles():
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try: 
+        # Fetches older articles (limit 500)
+        cursor.execute("""
+            SELECT id, url, headline AS headline_original, headline_en AS headline, 
+            summary, category, status, publication_name, author, scraped_at, 
+            is_top_story, confidence_score, parent_id 
+            FROM articles 
+            WHERE scraped_at < NOW() - INTERVAL '7 days'
+            ORDER BY scraped_at DESC
+            LIMIT 500
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    except Exception as e: 
+        logger.error(f"Archive fetch error: {e}")
+        raise HTTPException(500, "DB Error")
+    finally: 
+        cursor.close()
+        conn.close()
+
 @app.get("/articles/approved", response_model=List[Article])
 def get_approved_articles():
     conn = get_db_connection(); cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try: 
-        # ADDED: parent_id to SELECT
         cursor.execute("SELECT id, url, headline AS headline_original, headline_en AS headline, summary, category, status, publication_name, author, scraped_at, is_top_story, confidence_score, parent_id FROM articles WHERE status = 'approved' ORDER BY is_top_story DESC, scraped_at DESC")
         return [dict(row) for row in cursor.fetchall()]
     except Exception as e: logger.error(f"Fetch approved error: {e}"); raise HTTPException(500, "DB Error")
@@ -444,15 +455,12 @@ def manual_article_submission(article: ManualArticleSubmission):
     finally: 
         if 'cursor' in locals(): cursor.close(); conn.close()
 
-# --- UPDATED: Enhance Route (Fixed to use summary only) ---
 @app.post("/articles/{article_id}/enhance")
 def enhance_article_summary(article_id: int, request: EnhanceRequest):
-    # FIX: Use 'summary' from the request model (matched to frontend)
     text_input = request.summary
     if not text_input: raise HTTPException(400, "No text provided")
     
     try:
-        # Prompt AI to refine the summary (since user is submitting summary text)
         chat = groq_client.chat.completions.create(
             messages=[{"role": "system", "content": "Summarize/Rewrite this headline/content for a professional news feed in 50 words. English only."}, {"role": "user", "content": text_input}],
             model="llama-3.3-70b-versatile", temperature=0.1
@@ -461,10 +469,8 @@ def enhance_article_summary(article_id: int, request: EnhanceRequest):
         
         conn = get_db_connection(); cursor = conn.cursor()
         
-        # Embed the new summary
         embedding = embedding_model.encode(new_summary).tolist()
         
-        # FIX: Update ONLY the summary column. DO NOT update headline_en.
         sql = "UPDATE articles SET summary = %s, embedding = %s, status = 'pending'"
         params = [new_summary, embedding]
         
@@ -478,7 +484,6 @@ def enhance_article_summary(article_id: int, request: EnhanceRequest):
         return {"message": "Enhanced", "new_summary": new_summary}
     except Exception as e: logger.error(f"Enhance error: {e}"); raise HTTPException(500, f"Error: {e}")
 
-# --- SPONSORS & PODCASTS & TWEETS (Kept same as original, verified working) ---
 @app.post("/sponsors", status_code=201)
 async def add_sponsor(company_name: str = Form(...), headline: str = Form(...), summary: str = Form(...), link_url: str = Form(...), logo_url: Optional[str] = Form(None), logo_file: UploadFile = File(None)):
     final_logo = logo_url
@@ -563,7 +568,6 @@ def get_similar_articles(article_id: int):
         cursor.execute("SELECT embedding, scraped_at, category FROM articles WHERE id = %s", (article_id,))
         target = cursor.fetchone()
         if not target: raise HTTPException(404, "Not found")
-        # ADDED parent_id to select
         cursor.execute("""
             SELECT id, url, headline AS headline_original, headline_en AS headline, summary, category, status, publication_name, author, scraped_at, is_top_story, parent_id,
             embedding <=> %s AS distance 
@@ -574,7 +578,6 @@ def get_similar_articles(article_id: int):
     except Exception as e: logger.error(f"Sim error: {e}"); raise HTTPException(500, "DB Error")
     finally: cursor.close(); conn.close()
 
-# --- FIXED: Cluster Logic (Sets parent_id instead of rejecting) ---
 @app.post("/cluster/approve", response_model=ClusterAnalysisResponse)
 async def analyze_and_approve_cluster(request: ClusterAnalysisRequest):
     original_id = request.original_article_id; cluster_ids = request.cluster_ids
@@ -585,7 +588,6 @@ async def analyze_and_approve_cluster(request: ClusterAnalysisRequest):
         cursor.execute(f"SELECT id, headline_en, summary, publication_name, url FROM articles WHERE id IN ({q_placeholders})", tuple(all_ids))
         articles = {row['id']: dict(row) for row in cursor.fetchall()}
         
-        # Prepare context for AI
         txt = ""; orig = articles.get(original_id, {}); txt += f"--- MAIN ---\nHead: {orig.get('headline_en')}\nSum: {orig.get('summary')}\n\n"
         for i, aid in enumerate(cluster_ids): 
             rel = articles.get(aid, {}); txt += f"--- REL {i+1} ---\nHead: {rel.get('headline_en')}\nSum: {rel.get('summary')}\n\n"
@@ -593,13 +595,10 @@ async def analyze_and_approve_cluster(request: ClusterAnalysisRequest):
         chat = groq_client.chat.completions.create(messages=[{"role": "system", "content": "Synthesize these into a cohesive summary. Return HTML <p>...</p> only."}, {"role": "user", "content": txt}], model="llama-3.3-70b-versatile", temperature=0.2)
         new_sum = chat.choices[0].message.content
         
-        # Update Main Story
         cursor.execute("UPDATE articles SET status = 'approved', summary = %s, is_top_story = %s WHERE id = %s", (new_sum, request.make_top_story, original_id))
         
-        # Update Cluster Children (Set parent_id and Approve them)
         if cluster_ids:
             child_ph = ','.join(['%s'] * len(cluster_ids))
-            # IMPORTANT: We set parent_id = original_id and status = approved
             cursor.execute(f"UPDATE articles SET status = 'approved', parent_id = %s WHERE id IN ({child_ph})", (original_id, *cluster_ids))
             
         conn.commit()
