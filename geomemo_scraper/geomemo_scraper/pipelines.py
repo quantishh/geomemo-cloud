@@ -40,8 +40,7 @@ class GeomemoDatabasePipeline:
 
     def open_spider(self, spider):
         try:
-            # --- UPDATED: Smart Host Detection ---
-            # Checks for 'POSTGRES_HOST' env var, defaults to 'db' (Cloud), works with 'localhost' if set.
+            # --- Smart Host Detection ---
             self.connection = psycopg2.connect(
                 host=os.getenv("POSTGRES_HOST", "db"),
                 database="postgres",
@@ -62,54 +61,30 @@ class GeomemoDatabasePipeline:
         if self.connection: self.connection.close()
         self.logger.info("Database connection closed")
 
-    def _get_historical_context(self, embedding):
+    def _get_groq_completion(self, headline: str, content_snippet: str) -> dict:
         """
-        Fetches historical context. Fixes the 'vector <=> numeric[]' error.
+        Sends the article to Groq (Llama 3) for classification.
+        UPDATED: Removed 'History' context to prevent rejection loops.
         """
-        try:
-            # --- FIX: Added ::vector cast to the placeholder ---
-            self.cursor.execute(
-                """
-                SELECT headline_en, status 
-                FROM articles 
-                WHERE status IN ('approved', 'rejected')
-                ORDER BY embedding <=> %s::vector ASC
-                LIMIT 5
-                """,
-                (embedding,)
-            )
-            rows = self.cursor.fetchall()
-            
-            if not rows:
-                return "No historical data available yet."
-            
-            context_str = "Here are similar articles the user has previously processed:\n"
-            for row in rows:
-                context_str += f"- Headline: '{row[0]}' | User Decision: {row[1].upper()}\n"
-            return context_str
-            
-        except (Exception, InternalError) as e:
-            # --- FIX: Immediate Rollback on error to prevent stuck transaction ---
-            self.connection.rollback()
-            self.logger.warning(f"Could not fetch history (Transaction Rolled Back): {e}")
-            return "No historical data available (DB Error)."
-
-    def _get_groq_completion(self, headline: str, content_snippet: str, history_context: str) -> dict:
         system_prompt = f"""
 You are a top-tier geopolitical analyst for 'GeoMemo'.
 Your goal is to curate high-value geopolitical news.
 
+INSTRUCTION:
+Judge this article STRICTLY based on the definitions below. 
+Do not use previous rejections as a guide. If it fits a category, approve it.
+
 STEP 1: Analyze relevance based on these rules:
-- `Geopolitical Conflict`: War, civil war, terrorism.
-- `Geopolitical Politics`: NATIONAL elections/outcomes only.
-- `GeoNatDisaster`: MAJOR climate disasters only.
-- `Geopolitical Economics`: Trade, sanctions, economic pacts.
-- `Global Markets`: Major stock/commodity/currency moves.
+- `Geopolitical Conflict`: War, civil war, terrorism, defense pacts.
+- `Geopolitical Politics`: NATIONAL elections/outcomes, diplomatic tensions.
+- `GeoNatDisaster`: MAJOR climate disasters with international aid/impact.
+- `Geopolitical Economics`: Trade wars, sanctions, economic pacts (EU, BRICS, etc).
+- `Global Markets`: Major stock/commodity/currency moves driven by policy.
 - `GeoLocal`: Local event with INTERNATIONAL implications.
 
 STEP 2: Assign a CONFIDENCE SCORE (0-100).
-- Review the "User History" provided. If the user rejected similar articles in the past, give a LOW score (0-30).
-- If the user approved similar articles, or if it strongly matches the rules above, give a HIGH score (80-100).
+- High Score (80-100): Fits the rules clearly.
+- Low Score (0-30): Sports, Celebrity Gossip, Local Crime, or minor local news.
 
 STEP 3: Output valid JSON:
 {{
@@ -124,9 +99,6 @@ STEP 3: Output valid JSON:
 --- NEW ARTICLE ---
 Headline: "{headline}"
 Content: "{content_snippet}"
-
---- USER HISTORY (LEARNING CONTEXT) ---
-{history_context}
 """
         try:
             chat_completion = groq_client.chat.completions.create(
@@ -152,23 +124,20 @@ Content: "{content_snippet}"
         self.logger.info(f"Processing: '{headline}'")
 
         try:
-            # 1. Generate Embedding
+            # 1. Generate Embedding (Still useful for searching later)
             text_to_embed = f"Headline: {headline}\nSummary: {content_snippet}"
             embedding = self.embedding_model.encode(text_to_embed).tolist()
             adapter['embedding'] = embedding
 
-            # 2. Get History (RAG) - Now robust against errors
-            history_context = self._get_historical_context(embedding)
+            # 2. Ask Groq (Without History Context)
+            processed_data = self._get_groq_completion(headline, content_snippet)
 
-            # 3. Ask Groq
-            processed_data = self._get_groq_completion(headline, content_snippet, history_context)
-
-            # 4. Check Relevance
+            # 3. Check Relevance
             if processed_data.get("is_relevant") == "no":
                 self.logger.info(f"DROPPED (Irrelevant): '{headline}' (Score: {processed_data.get('confidence_score', 0)})")
                 raise DropItem(f"Irrelevant: {headline}")
 
-            # 5. Assign Data
+            # 4. Assign Data
             adapter['headline_en'] = processed_data.get('headline_en', headline)
             adapter['summary'] = processed_data.get('summary', 'No summary.')
             adapter['category'] = processed_data.get('category', 'Other')
@@ -178,7 +147,7 @@ Content: "{content_snippet}"
 
             self.logger.info(f"Success: '{headline}' | Score: {adapter['confidence_score']}/100")
 
-            # 6. Save to DB
+            # 5. Save to DB
             self.cursor.execute(
                 """
                 INSERT INTO articles 
