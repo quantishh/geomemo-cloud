@@ -148,6 +148,13 @@ class ScrapeRequest(BaseModel):
 def get_db_connection():
     try:
         conn = psycopg2.connect(**DB_CONFIG)
+        
+        # --- FIX 1: Force AI Vector Extension to load FIRST ---
+        cursor = conn.cursor()
+        cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+        conn.commit()
+        cursor.close()
+        
         register_vector(conn)
         return conn
     except psycopg2.OperationalError as e:
@@ -429,12 +436,31 @@ def get_archived_articles():
 
 @app.get("/articles/approved", response_model=List[Article])
 def get_approved_articles():
-    conn = get_db_connection(); cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try: 
-        cursor.execute("SELECT id, url, headline AS headline_original, headline_en AS headline, summary, category, status, publication_name, author, scraped_at, is_top_story, confidence_score, parent_id FROM articles WHERE status = 'approved' ORDER BY is_top_story DESC, scraped_at DESC")
+        # --- FIX 2: Only fetch the most recent batch of news! No more midnight blanks. ---
+        cursor.execute("""
+            WITH LatestBatch AS (
+                SELECT MAX(scraped_at::date) as max_date 
+                FROM articles 
+                WHERE status = 'approved'
+            )
+            SELECT id, url, headline AS headline_original, headline_en AS headline, 
+            summary, category, status, publication_name, author, scraped_at, 
+            is_top_story, confidence_score, parent_id 
+            FROM articles 
+            WHERE status = 'approved' 
+            AND scraped_at::date = (SELECT max_date FROM LatestBatch)
+            ORDER BY is_top_story DESC, scraped_at DESC
+        """)
         return [dict(row) for row in cursor.fetchall()]
-    except Exception as e: logger.error(f"Fetch approved error: {e}"); raise HTTPException(500, "DB Error")
-    finally: cursor.close(); conn.close()
+    except Exception as e: 
+        logger.error(f"Fetch approved error: {e}")
+        raise HTTPException(500, "DB Error")
+    finally: 
+        cursor.close()
+        conn.close()
 
 @app.post("/articles/manual-submission", status_code=201)
 def manual_article_submission(article: ManualArticleSubmission):
