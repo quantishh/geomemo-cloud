@@ -40,8 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
     // --- STATE ---
-    let allArticlesCache = []; 
+    let allArticlesCache = [];
     let currentEnhanceId = null;
+    let currentSortBy = 'scraped_at';
+    let currentSortOrder = 'desc';
     
     // ** UPDATED CATEGORY ORDER **
     const VALID_CATEGORIES = [
@@ -54,12 +56,21 @@ document.addEventListener('DOMContentLoaded', () => {
         'Other'
     ];
 
+    // --- M2: Score + Source DOM ---
+    const autoApproveBtn = document.getElementById('auto-approve-btn');
+    const autoRejectBtn = document.getElementById('auto-reject-btn');
+    const scoreSortHeader = document.getElementById('score-sort-header');
+    const sourceForm = document.getElementById('source-form');
+    const seedSourcesBtn = document.getElementById('seed-sources-btn');
+    const recalcSourcesBtn = document.getElementById('recalc-sources-btn');
+
     // --- INITIALIZATION ---
-    populateCategoryFilter(); 
+    populateCategoryFilter();
     fetchArticles(false);
     fetchTweetManagerList();
     fetchSponsorsList();
     fetchPodcastsList();
+    fetchSourcesList();
 
     // --- EVENT LISTENERS ---
     if (categoryFilter) categoryFilter.addEventListener('change', () => renderArticles());
@@ -83,6 +94,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sponsorForm) sponsorForm.addEventListener('submit', handleSponsorSubmit);
     if (podcastForm) podcastForm.addEventListener('submit', handlePodcastSubmit);
     if (fetchMetaBtn) fetchMetaBtn.addEventListener('click', handleFetchMeta);
+
+    // M2: Smart Curation Listeners
+    if (autoApproveBtn) autoApproveBtn.addEventListener('click', handleAutoApprove);
+    if (autoRejectBtn) autoRejectBtn.addEventListener('click', handleAutoReject);
+    if (scoreSortHeader) scoreSortHeader.addEventListener('click', toggleScoreSort);
+    if (sourceForm) sourceForm.addEventListener('submit', handleSourceSubmit);
+    if (seedSourcesBtn) seedSourcesBtn.addEventListener('click', handleSeedSources);
+    if (recalcSourcesBtn) recalcSourcesBtn.addEventListener('click', handleRecalcSources);
 
     // Newsletter Listeners
     if (generateNewsletterBtn) generateNewsletterBtn.addEventListener('click', generateNewsletter);
@@ -128,6 +147,14 @@ document.addEventListener('DOMContentLoaded', () => {
                d.getFullYear() === today.getFullYear();
     }
 
+    // --- HELPER: SCORE CLASS ---
+    function getScoreClass(score) {
+        if (score == null || score === 0) return '';
+        if (score >= 70) return 'score-high';
+        if (score >= 40) return 'score-medium';
+        return 'score-low';
+    }
+
     // --- HELPER: POPULATE FILTER ---
     function populateCategoryFilter() {
         if (!categoryFilter) return;
@@ -148,7 +175,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentScrollY = window.scrollY;
         if (articlesTbody && articlesTbody.children.length === 0) showLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/articles`);
+            const params = new URLSearchParams();
+            if (currentSortBy !== 'scraped_at') params.set('sort_by', currentSortBy);
+            if (currentSortOrder !== 'desc') params.set('order', currentSortOrder);
+            const qs = params.toString();
+            const response = await fetch(`${API_BASE_URL}/articles${qs ? '?' + qs : ''}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             allArticlesCache = await response.json();
             renderArticles(); 
@@ -188,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (groupedArticles['Unsorted']) sortedDates.push('Unsorted');
 
         if (sortedDates.length === 0) {
-             articlesTbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">No articles found.</td></tr>';
+             articlesTbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">No articles found.</td></tr>';
              return;
         }
 
@@ -221,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const headerRow = document.createElement('tr');
             headerRow.className = 'date-header-row';
             headerRow.innerHTML = `
-                <td colspan="6" class="date-header bg-gray-100 p-2 border-b border-gray-200">
+                <td colspan="7" class="date-header bg-gray-100 p-2 border-b border-gray-200">
                     <div class="flex items-center">
                         <input type="checkbox" class="date-batch-checkbox mr-3 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" data-date="${date}">
                         <span class="toggle-icon inline-block w-4 mr-2 cursor-pointer text-gray-500">▼</span>
@@ -293,8 +324,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const dashboardHeadline = article.headline || article.headline_original || "No Headline";
         const displaySummary = article.summary || "";
 
+        // M2: Score display
+        const score = article.auto_approval_score;
+        const scoreVal = (score != null && score > 0) ? Math.round(score) : null;
+        const scoreClass = getScoreClass(scoreVal);
+        const scoreHtml = scoreVal != null
+            ? `<span class="score-indicator ${scoreClass}">${scoreVal}</span>`
+            : '<span class="text-xs text-gray-400">—</span>';
+        const repetitionScore = article.repetition_score || 0;
+        const repeatFlag = repetitionScore >= 0.85
+            ? '<span class="repeat-flag">REPEAT</span>'
+            : '';
+
+        // M2: Country codes display
+        const countryCodes = article.country_codes || [];
+        const countryHtml = countryCodes.length > 0
+            ? `<div class="country-tags">${countryCodes.map(c => `<span class="country-tag">${c}</span>`).join('')}</div>`
+            : '';
+
         tr.innerHTML = `
-            <td class="p-3 align-top w-12">
+            <td class="p-3 align-top w-10">
                 <input type="checkbox" class="article-checkbox rounded h-4 w-4" data-id="${article.id}">
                 ${!isChild ? `<button class="star-btn block mt-2 ${starClass} transition-colors text-lg" data-id="${article.id}">★</button>` : ''}
             </td>
@@ -302,25 +351,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${childIcon}
                 <a href="${article.url}" target="_blank" class="font-semibold text-blue-600 hover:underline text-sm">${dashboardHeadline}</a>
                 <div class="text-xs text-gray-500 mt-1">${article.publication_name || 'N/A'}</div>
+                ${countryHtml}
             </td>
-            <td class="p-3 align-top w-2/12">
+            <td class="p-3 align-top w-1/12">
                 <select class="category-dropdown w-full p-1 border rounded border-gray-300 text-xs bg-white" data-id="${article.id}">
                     ${categoryOptions}
                 </select>
             </td>
-            <td class="p-3 align-top w-4/12 text-sm text-gray-600">
+            <td class="p-3 align-top w-3/12 text-sm text-gray-600">
                 ${displaySummary}
+            </td>
+            <td class="p-3 align-top w-1/12 text-center">
+                ${scoreHtml}${repeatFlag}
             </td>
             <td class="p-3 align-top w-1/12">
                 <span class="status-badge ${statusClass} text-xs block mb-1">${statusIcon} ${article.status}</span>
             </td>
-            <td class="p-3 align-top w-1/12 space-y-2">
+            <td class="p-3 align-top w-2/12 space-y-2">
                 <button class="action-btn approve-btn w-full text-xs" onclick="updateStatus(${article.id}, 'approved')">Approve</button>
                 <button class="action-btn reject-btn w-full text-xs" onclick="updateStatus(${article.id}, 'rejected')">Reject</button>
                 <button class="similar-btn w-full text-xs" onclick="handleFindSimilarClick(${article.id}, '${dashboardHeadline.replace(/'/g, "\\'")}')">Find Similar</button>
-                <button class="enhance-btn w-full text-xs" 
-                    data-id="${article.id}" 
-                    data-pub="${article.publication_name || ''}" 
+                <button class="enhance-btn w-full text-xs"
+                    data-id="${article.id}"
+                    data-pub="${article.publication_name || ''}"
                     data-auth="${article.author || ''}">✨ Enhance</button>
             </td>
         `;
@@ -763,12 +816,170 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchPodcastsList(); 
     }
 
-    async function fetchPodcastsList() { 
-        const tb=document.getElementById('podcasts-tbody'); 
-        if(!tb)return; 
-        const res=await fetch(`${API_BASE_URL}/podcasts`); 
-        const items=await res.json(); 
-        tb.innerHTML=items.map(p=>`<tr><td>${p.show_name}</td><td><button onclick="deleteItem('podcasts', ${p.id})">🗑️</button></td></tr>`).join(''); 
+    async function fetchPodcastsList() {
+        const tb=document.getElementById('podcasts-tbody');
+        if(!tb)return;
+        const res=await fetch(`${API_BASE_URL}/podcasts`);
+        const items=await res.json();
+        tb.innerHTML=items.map(p=>`<tr><td>${p.show_name}</td><td><button onclick="deleteItem('podcasts', ${p.id})">🗑️</button></td></tr>`).join('');
+    }
+
+    // =========================================
+    // M2: SMART CURATION — AUTO-APPROVE/REJECT
+    // =========================================
+
+    async function handleAutoApprove() {
+        const threshold = prompt("Auto-approve all pending articles with score >= ?", "80");
+        if (threshold === null) return;
+        const val = parseFloat(threshold);
+        if (isNaN(val)) return alert("Invalid number");
+        if (!confirm(`Approve ALL pending articles with auto_approval_score >= ${val}?`)) return;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/articles/auto-approve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ threshold: val })
+            });
+            if (!res.ok) throw new Error("Failed");
+            const data = await res.json();
+            alert(data.message);
+            fetchArticles(true);
+        } catch (e) {
+            alert("Error: " + e.message);
+        }
+    }
+
+    async function handleAutoReject() {
+        const threshold = prompt("Auto-reject all pending articles with score <= ?", "30");
+        if (threshold === null) return;
+        const val = parseFloat(threshold);
+        if (isNaN(val)) return alert("Invalid number");
+        if (!confirm(`Reject ALL pending articles with auto_approval_score <= ${val}?`)) return;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/articles/auto-reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ threshold: val })
+            });
+            if (!res.ok) throw new Error("Failed");
+            const data = await res.json();
+            alert(data.message);
+            fetchArticles(true);
+        } catch (e) {
+            alert("Error: " + e.message);
+        }
+    }
+
+    function toggleScoreSort() {
+        if (currentSortBy === 'auto_approval_score') {
+            currentSortOrder = currentSortOrder === 'desc' ? 'asc' : 'desc';
+        } else {
+            currentSortBy = 'auto_approval_score';
+            currentSortOrder = 'desc';
+        }
+        const arrow = document.getElementById('score-sort-arrow');
+        if (arrow) arrow.textContent = currentSortOrder === 'desc' ? '▼' : '▲';
+        fetchArticles(true);
+    }
+
+    // =========================================
+    // M2: SOURCE MANAGEMENT
+    // =========================================
+
+    async function fetchSourcesList() {
+        const tb = document.getElementById('sources-tbody');
+        if (!tb) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources`);
+            if (!res.ok) return;
+            const sources = await res.json();
+            tb.innerHTML = sources.map(s => `
+                <tr>
+                    <td class="font-medium text-gray-800">${s.name}</td>
+                    <td class="text-gray-500">${s.domain || '—'}</td>
+                    <td>
+                        <span class="score-indicator ${getScoreClass(s.credibility_score)}">${s.credibility_score}</span>
+                    </td>
+                    <td>${s.tier || '—'}</td>
+                    <td>${s.total_articles || 0}</td>
+                    <td class="text-green-700">${s.approved_count || 0}</td>
+                    <td class="text-red-700">${s.rejected_count || 0}</td>
+                    <td>
+                        <button onclick="deleteSource(${s.id})" class="text-red-500 hover:text-red-700 text-xs font-semibold">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            console.error('Error fetching sources:', e);
+        }
+    }
+
+    window.deleteSource = async (id) => {
+        if (!confirm("Delete this source? Articles will be unlinked.")) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources/${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error("Failed");
+            fetchSourcesList();
+        } catch (e) {
+            alert("Error: " + e.message);
+        }
+    };
+
+    async function handleSourceSubmit(e) {
+        e.preventDefault();
+        const data = {
+            name: document.getElementById('source-name').value,
+            domain: document.getElementById('source-domain').value || null,
+            credibility_score: parseInt(document.getElementById('source-credibility').value) || 50,
+            tier: parseInt(document.getElementById('source-tier').value) || 3,
+            country: document.getElementById('source-country').value || null,
+            language: 'en'
+        };
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "Failed");
+            }
+            e.target.reset();
+            document.getElementById('source-credibility').value = '50';
+            fetchSourcesList();
+            alert("Source created!");
+        } catch (err) {
+            alert("Error: " + err.message);
+        }
+    }
+
+    async function handleSeedSources() {
+        if (!confirm("Seed sources table from existing article publication names?")) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources/seed`, { method: 'POST' });
+            if (!res.ok) throw new Error("Failed");
+            const data = await res.json();
+            alert(data.message);
+            fetchSourcesList();
+        } catch (e) {
+            alert("Error: " + e.message);
+        }
+    }
+
+    async function handleRecalcSources() {
+        if (!confirm("Recalculate credibility scores from approve/reject history?")) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources/recalculate`, { method: 'POST' });
+            if (!res.ok) throw new Error("Failed");
+            const data = await res.json();
+            alert(data.message);
+            fetchSourcesList();
+        } catch (e) {
+            alert("Error: " + e.message);
+        }
     }
 
 });

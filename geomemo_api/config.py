@@ -31,3 +31,33 @@ VALID_CATEGORIES = [
     'Geopolitical Politics', 'GeoNatDisaster', 'GeoLocal', 'Other'
 ]
 VALID_CATEGORIES_SET = set(VALID_CATEGORIES)
+
+# --- M2: Auto-Approval Scoring Weights ---
+SCORING_WEIGHTS = {
+    "confidence": 0.40,      # 40% from Groq confidence_score
+    "credibility": 0.30,     # 30% from source credibility_score
+    "novelty": 0.15,         # 15% from novelty (1 - max similarity to recent approved)
+    "category_bonus": 0.15,  # 15% from category relevance bonus
+}
+
+# Category relevance bonuses (0-100 scale)
+# Higher = more desirable for the platform's audience
+CATEGORY_RELEVANCE_BONUS = {
+    "Geopolitical Conflict": 95,
+    "Geopolitical Economics": 90,
+    "Global Markets": 85,
+    "Geopolitical Politics": 80,
+    "GeoNatDisaster": 60,
+    "GeoLocal": 40,
+    "Other": 10,
+}
+
+# Repetition detection threshold
+REPETITION_THRESHOLD = 0.85
+
+# Auto-approve/reject score thresholds (defaults, overridable via API)
+AUTO_APPROVE_THRESHOLD = 80
+AUTO_REJECT_THRESHOLD = 30
+
+# Default source credibility for unknown sources
+DEFAULT_SOURCE_CREDIBILITY = 50

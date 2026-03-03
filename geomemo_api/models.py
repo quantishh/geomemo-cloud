@@ -26,6 +26,8 @@ class Article(BaseModel):
     relevance_score: Optional[float] = 0
     repetition_score: Optional[float] = 0
     auto_approval_score: Optional[float] = 0
+    country_codes: Optional[List[str]] = None
+    region: Optional[str] = None
 
 
 class StatusUpdate(BaseModel):
@@ -35,6 +37,14 @@ class StatusUpdate(BaseModel):
 class BatchStatusUpdate(BaseModel):
     ids: List[int]
     status: str
+
+
+class AutoApproveRequest(BaseModel):
+    threshold: float = 80.0
+
+
+class AutoRejectRequest(BaseModel):
+    threshold: float = 30.0
 
 
 class CategoryUpdate(BaseModel):
@@ -141,3 +151,12 @@ class SourceUpdate(BaseModel):
     tier: Optional[int] = None
     country: Optional[str] = None
     language: Optional[str] = None
+
+
+class SourceCreate(BaseModel):
+    name: str
+    domain: Optional[str] = None
+    credibility_score: int = 50
+    tier: int = 3
+    country: Optional[str] = None
+    language: str = 'en'

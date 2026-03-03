@@ -1,12 +1,13 @@
 """
 Article endpoints: listing, approval, enhancement, clustering, similarity search.
+M2: Added filtering/sorting, auto-approve/reject, duplicate detection.
 """
 import json
 import logging
-from typing import List
+from typing import List, Optional
 
 import psycopg2.extras
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from psycopg2.extras import execute_values
 from groq import Groq
 from sentence_transformers import SentenceTransformer
@@ -17,6 +18,7 @@ from models import (
     Article, StatusUpdate, BatchStatusUpdate, CategoryUpdate,
     ManualArticleSubmission, EnhanceRequest,
     ClusterAnalysisRequest, ClusterAnalysisResponse,
+    AutoApproveRequest, AutoRejectRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,22 +65,71 @@ The user is manually submitting an article. Categorize it and return a valid JSO
         raise HTTPException(status_code=500, detail=f"Groq error: {e}")
 
 
-# --- Article Listing ---
+# --- Article Columns (shared across queries) ---
+ARTICLE_COLUMNS = """
+    id, url, headline AS headline_original, headline_en AS headline,
+    summary, category, status, publication_name, author, scraped_at,
+    is_top_story, confidence_score, parent_id,
+    source_id, relevance_score, repetition_score, auto_approval_score,
+    country_codes, region
+"""
+
+
+# --- Article Listing (M2: with filtering/sorting) ---
 
 @router.get("/articles", response_model=List[Article])
-def get_articles():
+def get_articles(
+    sort_by: str = "scraped_at",
+    order: str = "desc",
+    min_score: Optional[float] = None,
+    max_score: Optional[float] = None,
+    category: Optional[str] = None,
+    status: Optional[str] = None,
+    days: int = 7,
+):
+    """
+    List articles with optional filtering and sorting.
+    Backwards compatible: no params = original behavior (last 7 days, sorted by scraped_at DESC).
+    """
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
-        cursor.execute("""
-            SELECT id, url, headline AS headline_original, headline_en AS headline,
-            summary, category, status, publication_name, author, scraped_at,
-            is_top_story, confidence_score, parent_id,
-            source_id, relevance_score, repetition_score, auto_approval_score
+        # Whitelist allowed sort columns to prevent SQL injection
+        ALLOWED_SORT_COLS = {
+            "scraped_at", "auto_approval_score", "confidence_score",
+            "repetition_score", "publication_name",
+        }
+        if sort_by not in ALLOWED_SORT_COLS:
+            sort_by = "scraped_at"
+        if order.lower() not in ("asc", "desc"):
+            order = "desc"
+
+        where_clauses = [f"scraped_at >= NOW() - INTERVAL '{int(days)} days'"]
+        params = []
+
+        if min_score is not None:
+            where_clauses.append("auto_approval_score >= %s")
+            params.append(min_score)
+        if max_score is not None:
+            where_clauses.append("auto_approval_score <= %s")
+            params.append(max_score)
+        if category:
+            where_clauses.append("category = %s")
+            params.append(category)
+        if status:
+            where_clauses.append("status = %s")
+            params.append(status)
+
+        where_sql = " AND ".join(where_clauses)
+
+        query = f"""
+            SELECT {ARTICLE_COLUMNS}
             FROM articles
-            WHERE scraped_at >= NOW() - INTERVAL '7 days'
-            ORDER BY scraped_at DESC
-        """)
+            WHERE {where_sql}
+            ORDER BY {sort_by} {order}
+        """
+
+        cursor.execute(query, tuple(params))
         return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Fetch error: {e}")
@@ -93,11 +144,8 @@ def get_archived_articles():
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
-        cursor.execute("""
-            SELECT id, url, headline AS headline_original, headline_en AS headline,
-            summary, category, status, publication_name, author, scraped_at,
-            is_top_story, confidence_score, parent_id,
-            source_id, relevance_score, repetition_score, auto_approval_score
+        cursor.execute(f"""
+            SELECT {ARTICLE_COLUMNS}
             FROM articles
             WHERE scraped_at < NOW() - INTERVAL '7 days'
             ORDER BY scraped_at DESC
@@ -117,16 +165,13 @@ def get_approved_articles():
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
-        cursor.execute("""
+        cursor.execute(f"""
             WITH LatestBatch AS (
                 SELECT MAX(scraped_at::date) as max_date
                 FROM articles
                 WHERE status = 'approved'
             )
-            SELECT id, url, headline AS headline_original, headline_en AS headline,
-            summary, category, status, publication_name, author, scraped_at,
-            is_top_story, confidence_score, parent_id,
-            source_id, relevance_score, repetition_score, auto_approval_score
+            SELECT {ARTICLE_COLUMNS}
             FROM articles
             WHERE status = 'approved'
             AND scraped_at::date = (SELECT max_date FROM LatestBatch)
@@ -281,7 +326,65 @@ def batch_update_article_status(update_data: BatchStatusUpdate):
         conn.close()
 
 
-# --- Similarity & Clustering ---
+# --- M2: Auto-Approve / Auto-Reject ---
+
+@router.post("/articles/auto-approve")
+def auto_approve_articles(request: AutoApproveRequest = AutoApproveRequest()):
+    """Approve all pending articles with auto_approval_score >= threshold."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """UPDATE articles SET status = 'approved'
+               WHERE status = 'pending' AND auto_approval_score >= %s
+               RETURNING id""",
+            (request.threshold,)
+        )
+        approved_ids = [row[0] for row in cursor.fetchall()]
+        conn.commit()
+        return {
+            "message": f"Auto-approved {len(approved_ids)} articles",
+            "count": len(approved_ids),
+            "ids": approved_ids,
+            "threshold": request.threshold,
+        }
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/articles/auto-reject")
+def auto_reject_articles(request: AutoRejectRequest = AutoRejectRequest()):
+    """Reject all pending articles with auto_approval_score <= threshold."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """UPDATE articles SET status = 'rejected'
+               WHERE status = 'pending' AND auto_approval_score <= %s
+               RETURNING id""",
+            (request.threshold,)
+        )
+        rejected_ids = [row[0] for row in cursor.fetchall()]
+        conn.commit()
+        return {
+            "message": f"Auto-rejected {len(rejected_ids)} articles",
+            "count": len(rejected_ids),
+            "ids": rejected_ids,
+            "threshold": request.threshold,
+        }
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Similarity, Duplicates & Clustering ---
 
 @router.get("/articles/{article_id}/similar", response_model=List[Article])
 def get_similar_articles(article_id: int):
@@ -293,9 +396,7 @@ def get_similar_articles(article_id: int):
         if not target:
             raise HTTPException(404, "Not found")
         cursor.execute(
-            """SELECT id, url, headline AS headline_original, headline_en AS headline,
-            summary, category, status, publication_name, author, scraped_at,
-            is_top_story, parent_id,
+            f"""SELECT {ARTICLE_COLUMNS},
             embedding <=> %s AS distance
             FROM articles WHERE id != %s AND embedding IS NOT NULL
             AND scraped_at::date = %s::date AND category = %s
@@ -303,8 +404,42 @@ def get_similar_articles(article_id: int):
             (target['embedding'], article_id, target['scraped_at'], target['category']),
         )
         return [dict(row) for row in cursor.fetchall()]
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Sim error: {e}")
+        raise HTTPException(500, "DB Error")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/articles/{article_id}/duplicates", response_model=List[Article])
+def get_duplicate_articles(article_id: int, threshold: float = 0.85):
+    """Find near-duplicate articles (cosine similarity >= threshold)."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("SELECT embedding FROM articles WHERE id = %s", (article_id,))
+        target = cursor.fetchone()
+        if not target or not target['embedding']:
+            raise HTTPException(404, "Article not found or has no embedding")
+
+        cursor.execute(
+            f"""SELECT {ARTICLE_COLUMNS},
+            1 - (embedding <=> %s) AS distance
+            FROM articles
+            WHERE id != %s AND embedding IS NOT NULL
+            AND 1 - (embedding <=> %s) >= %s
+            ORDER BY distance DESC
+            LIMIT 20""",
+            (target['embedding'], article_id, target['embedding'], threshold)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Duplicates error: {e}")
         raise HTTPException(500, "DB Error")
     finally:
         cursor.close()

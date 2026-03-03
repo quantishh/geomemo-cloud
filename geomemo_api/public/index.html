@@ -136,26 +136,89 @@
                     <div class="flex gap-2">
                         <button id="batch-approve" class="bg-green-600 text-white px-3 py-1 rounded text-sm">Approve</button>
                         <button id="batch-reject" class="bg-red-600 text-white px-3 py-1 rounded text-sm">Reject</button>
+                        <button id="auto-approve-btn" class="bg-emerald-700 text-white px-3 py-1 rounded text-sm font-semibold">Auto-Approve (80+)</button>
+                        <button id="auto-reject-btn" class="bg-rose-700 text-white px-3 py-1 rounded text-sm font-semibold">Auto-Reject (30-)</button>
                     </div>
                 </div>
 
                 <div class="overflow-x-auto border rounded-lg shadow-sm" style="-webkit-overflow-scrolling: touch;">
-                    <table class="w-full text-sm text-left text-gray-500 min-w-[900px]">
+                    <table class="w-full text-sm text-left text-gray-500 min-w-[1000px]">
                         <thead class="text-xs text-gray-700 uppercase bg-gray-50">
                             <tr>
-                                <th class="p-3 w-12"><input type="checkbox" id="select-all-checkbox"></th>
+                                <th class="p-3 w-10"><input type="checkbox" id="select-all-checkbox"></th>
                                 <th class="p-3 w-3/12">Headline</th>
-                                <th class="p-3 w-2/12">
+                                <th class="p-3 w-1/12">
                                     <select id="category-filter">
                                         <option value="All">CATEGORY (ALL)</option>
                                     </select>
                                 </th>
-                                <th class="p-3 w-4/12">Summary</th>
+                                <th class="p-3 w-3/12">Summary</th>
+                                <th class="p-3 w-1/12 cursor-pointer select-none hover:text-blue-600" id="score-sort-header">
+                                    Score <span id="score-sort-arrow" class="sort-arrow">▼</span>
+                                </th>
                                 <th class="p-3 w-1/12">Status</th>
-                                <th class="p-3 w-1/12">Actions</th>
+                                <th class="p-3 w-2/12">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="articles-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+
+        <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
+            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+                🏢 Source Management
+            </summary>
+            <div class="p-6">
+                <div class="flex gap-2 mb-4">
+                    <button id="seed-sources-btn" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700 font-semibold">Seed from Articles</button>
+                    <button id="recalc-sources-btn" class="bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 font-semibold">Recalculate Scores</button>
+                </div>
+
+                <form id="source-form" class="flex gap-2 mb-4 p-3 bg-gray-50 rounded border border-gray-200 items-end flex-wrap">
+                    <div class="flex-1 min-w-[150px]">
+                        <label class="block text-xs text-gray-500 mb-1">Name *</label>
+                        <input type="text" id="source-name" placeholder="e.g. Reuters" class="p-2 border rounded w-full text-sm" required>
+                    </div>
+                    <div class="flex-1 min-w-[150px]">
+                        <label class="block text-xs text-gray-500 mb-1">Domain</label>
+                        <input type="text" id="source-domain" placeholder="reuters.com" class="p-2 border rounded w-full text-sm">
+                    </div>
+                    <div class="w-24">
+                        <label class="block text-xs text-gray-500 mb-1">Score</label>
+                        <input type="number" id="source-credibility" value="50" min="0" max="100" class="p-2 border rounded w-full text-sm">
+                    </div>
+                    <div class="w-20">
+                        <label class="block text-xs text-gray-500 mb-1">Tier</label>
+                        <select id="source-tier" class="p-2 border rounded w-full text-sm">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3" selected>3</option>
+                        </select>
+                    </div>
+                    <div class="w-24">
+                        <label class="block text-xs text-gray-500 mb-1">Country</label>
+                        <input type="text" id="source-country" placeholder="US" class="p-2 border rounded w-full text-sm">
+                    </div>
+                    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700">Add Source</button>
+                </form>
+
+                <div class="overflow-x-auto border rounded-lg">
+                    <table class="w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th class="p-2">Name</th>
+                                <th class="p-2">Domain</th>
+                                <th class="p-2">Credibility</th>
+                                <th class="p-2">Tier</th>
+                                <th class="p-2">Articles</th>
+                                <th class="p-2">Approved</th>
+                                <th class="p-2">Rejected</th>
+                                <th class="p-2">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sources-tbody"></tbody>
                     </table>
                 </div>
             </div>

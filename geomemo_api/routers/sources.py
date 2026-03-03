@@ -8,7 +8,7 @@ import psycopg2.extras
 from fastapi import APIRouter, HTTPException
 
 from database import get_db_connection
-from models import Source, SourceUpdate
+from models import Source, SourceUpdate, SourceCreate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sources", tags=["sources"])
@@ -169,6 +169,56 @@ def recalculate_source_scores():
         updated = cursor.rowcount
         conn.commit()
         return {"message": f"Recalculated scores for {updated} sources"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- M2: Source CRUD ---
+
+@router.post("", status_code=201)
+def create_source(source: SourceCreate):
+    """Create a new source manually."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """INSERT INTO sources (name, domain, credibility_score, tier, country, language)
+               VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+            (source.name, source.domain, source.credibility_score,
+             source.tier, source.country, source.language)
+        )
+        new_id = cursor.fetchone()[0]
+        conn.commit()
+        return {"message": "Source created", "id": new_id}
+    except Exception as e:
+        conn.rollback()
+        if "duplicate key" in str(e).lower():
+            raise HTTPException(409, f"Source '{source.name}' already exists")
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/{source_id}")
+def delete_source(source_id: int):
+    """Delete a source. Nullifies source_id on linked articles first."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Nullify source_id on articles first
+        cursor.execute("UPDATE articles SET source_id = NULL WHERE source_id = %s", (source_id,))
+        cursor.execute("DELETE FROM sources WHERE id = %s", (source_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(404, "Source not found")
+        conn.commit()
+        return {"message": "Source deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
         raise HTTPException(500, str(e))

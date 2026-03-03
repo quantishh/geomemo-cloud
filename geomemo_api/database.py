@@ -130,6 +130,10 @@ def init_db():
             "ALTER TABLE tweets ADD COLUMN IF NOT EXISTS image_url TEXT",
             "ALTER TABLE tweets ADD COLUMN IF NOT EXISTS article_id INTEGER REFERENCES articles(id)",
             "ALTER TABLE tweets ADD COLUMN IF NOT EXISTS is_newsletter_tweet BOOLEAN DEFAULT FALSE",
+            # M2: Performance indexes for smart curation
+            "CREATE INDEX IF NOT EXISTS idx_articles_scraped_at ON articles (scraped_at)",
+            "CREATE INDEX IF NOT EXISTS idx_articles_status ON articles (status)",
+            "CREATE INDEX IF NOT EXISTS idx_articles_source_id ON articles (source_id)",
         ]
         for sql in migrations:
             try:
