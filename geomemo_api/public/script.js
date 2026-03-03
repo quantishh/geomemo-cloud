@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- CHANGE: Point explicitly to your Cloud API Port ---
-    const API_BASE_URL = "https://geomemo.news"; 
+    const API_BASE_URL = "";
 
     // --- DOM ELEMENTS ---
     const articlesTbody = document.getElementById('articles-tbody');

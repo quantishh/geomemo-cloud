@@ -53,7 +53,9 @@ BRIGHTDATA_USERNAME = os.getenv("BRIGHTDATA_USERNAME", "")
 BRIGHTDATA_PASSWORD = os.getenv("BRIGHTDATA_PASSWORD", "")
 BRIGHTDATA_HOST = os.getenv("BRIGHTDATA_HOST", "brd.superproxy.io")
 BRIGHTDATA_PORT = os.getenv("BRIGHTDATA_PORT", "33335")
-PROXY_URL = f'http://{BRIGHTDATA_USERNAME}:{BRIGHTDATA_PASSWORD}@{BRIGHTDATA_HOST}:{BRIGHTDATA_PORT}'
+# Support single BRIGHTDATA_PROXY_URL env var (used in production) or construct from parts
+PROXY_URL = os.getenv("BRIGHTDATA_PROXY_URL",
+    f'http://{BRIGHTDATA_USERNAME}:{BRIGHTDATA_PASSWORD}@{BRIGHTDATA_HOST}:{BRIGHTDATA_PORT}')
 
 # --- Path to your SSL certificate ---
 # Assumes brightdata_ca.crt is in the project's root folder (next to scrapy.cfg)
