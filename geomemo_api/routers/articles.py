@@ -19,6 +19,7 @@ from models import (
     ManualArticleSubmission, EnhanceRequest,
     ClusterAnalysisRequest, ClusterAnalysisResponse,
     AutoApproveRequest, AutoRejectRequest,
+    SmartSimilarArticle,
 )
 
 logger = logging.getLogger(__name__)
@@ -387,23 +388,49 @@ def auto_reject_articles(request: AutoRejectRequest = AutoRejectRequest()):
 # --- Similarity, Duplicates & Clustering ---
 
 @router.get("/articles/{article_id}/similar", response_model=List[Article])
-def get_similar_articles(article_id: int):
+def get_similar_articles(article_id: int, days: int = 2, threshold: float = 0.65):
+    """
+    Find similar articles within a time window.
+    M2 upgrade: 48h window (not just same day), similarity threshold,
+    excludes same-source dupes and already-clustered articles.
+    """
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
-        cursor.execute("SELECT embedding, scraped_at, category FROM articles WHERE id = %s", (article_id,))
+        cursor.execute(
+            "SELECT embedding, scraped_at, publication_name FROM articles WHERE id = %s",
+            (article_id,),
+        )
         target = cursor.fetchone()
         if not target:
             raise HTTPException(404, "Not found")
+        if not target['embedding']:
+            raise HTTPException(400, "Article has no embedding")
+
         cursor.execute(
             f"""SELECT {ARTICLE_COLUMNS},
-            embedding <=> %s AS distance
-            FROM articles WHERE id != %s AND embedding IS NOT NULL
-            AND scraped_at::date = %s::date AND category = %s
-            ORDER BY distance ASC LIMIT 5""",
-            (target['embedding'], article_id, target['scraped_at'], target['category']),
+            1 - (embedding <=> %s) AS similarity
+            FROM articles
+            WHERE id != %s
+              AND embedding IS NOT NULL
+              AND scraped_at >= %s::timestamp - INTERVAL '{int(days)} days'
+              AND parent_id IS NULL
+              AND (publication_name IS NULL OR publication_name != %s)
+              AND 1 - (embedding <=> %s) >= %s
+            ORDER BY similarity DESC
+            LIMIT 10""",
+            (
+                target['embedding'], article_id,
+                target['scraped_at'],
+                target['publication_name'] or '',
+                target['embedding'], threshold,
+            ),
         )
-        return [dict(row) for row in cursor.fetchall()]
+        results = [dict(row) for row in cursor.fetchall()]
+        # Map similarity to distance field for backward compatibility
+        for r in results:
+            r['distance'] = r.pop('similarity', None)
+        return results
     except HTTPException:
         raise
     except Exception as e:
@@ -446,6 +473,145 @@ def get_duplicate_articles(article_id: int, threshold: float = 0.85):
         conn.close()
 
 
+@router.post("/articles/{article_id}/smart-similar", response_model=List[SmartSimilarArticle])
+def get_smart_similar_articles(article_id: int, days: int = 2, threshold: float = 0.65):
+    """
+    Find similar articles and use Groq to classify each article's relationship
+    to the original: ADDS_DETAIL, DIFFERENT_ANGLE, CONTRARIAN, DUPLICATE, or RELATED.
+    Returns only articles that add editorial value (filters out DUPLICATE and RELATED).
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        # 1. Get original article
+        cursor.execute(
+            "SELECT embedding, scraped_at, publication_name, headline_en, summary FROM articles WHERE id = %s",
+            (article_id,),
+        )
+        target = cursor.fetchone()
+        if not target:
+            raise HTTPException(404, "Not found")
+        if not target['embedding']:
+            raise HTTPException(400, "Article has no embedding")
+
+        # 2. Find similar articles (same logic as GET /similar)
+        cursor.execute(
+            f"""SELECT {ARTICLE_COLUMNS},
+            1 - (embedding <=> %s) AS similarity
+            FROM articles
+            WHERE id != %s
+              AND embedding IS NOT NULL
+              AND scraped_at >= %s::timestamp - INTERVAL '{int(days)} days'
+              AND parent_id IS NULL
+              AND (publication_name IS NULL OR publication_name != %s)
+              AND 1 - (embedding <=> %s) >= %s
+            ORDER BY similarity DESC
+            LIMIT 10""",
+            (
+                target['embedding'], article_id,
+                target['scraped_at'],
+                target['publication_name'] or '',
+                target['embedding'], threshold,
+            ),
+        )
+        similar_rows = [dict(row) for row in cursor.fetchall()]
+
+        if not similar_rows:
+            return []
+
+        # 3. Build Groq prompt to classify relationships
+        candidates_txt = ""
+        for i, row in enumerate(similar_rows):
+            candidates_txt += (
+                f"{i+1}. ID:{row['id']} | "
+                f"Source: {row.get('publication_name') or 'Unknown'} | "
+                f"Headline: {row.get('headline') or row.get('headline_original') or 'N/A'} | "
+                f"Summary: {(row.get('summary') or 'N/A')[:200]}\n"
+            )
+
+        classify_prompt = f"""You are an editorial intelligence assistant. Given a MAIN article and several CANDIDATE articles, classify each candidate's relationship to the main article.
+
+MAIN ARTICLE:
+Headline: {target['headline_en'] or 'N/A'}
+Summary: {(target['summary'] or 'N/A')[:300]}
+
+CANDIDATES:
+{candidates_txt}
+
+For each candidate, respond with ONLY a JSON array (no other text):
+[
+  {{"id": 123, "relationship": "ADDS_DETAIL", "reason": "Brief reason"}},
+  ...
+]
+
+Relationship types:
+- DUPLICATE: Same story, same facts, no new information worth including
+- ADDS_DETAIL: Same story but includes additional facts, data, or context
+- DIFFERENT_ANGLE: Same topic but from a notably different editorial perspective
+- CONTRARIAN: Disagrees with or challenges the main article's framing
+- RELATED: Tangentially related but essentially a different story
+
+Be strict: only classify as ADDS_DETAIL/DIFFERENT_ANGLE/CONTRARIAN if the article genuinely provides value beyond the main. Most similar articles are DUPLICATE."""
+
+        chat = groq_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": "You classify article relationships. Respond with valid JSON only."},
+                {"role": "user", "content": classify_prompt},
+            ],
+            model="llama-3.3-70b-versatile",
+            temperature=0.1,
+        )
+
+        raw_response = chat.choices[0].message.content.strip()
+        # Strip markdown code fences if present
+        if raw_response.startswith("```"):
+            raw_response = raw_response.split("\n", 1)[1] if "\n" in raw_response else raw_response[3:]
+            if raw_response.endswith("```"):
+                raw_response = raw_response[:-3].strip()
+
+        try:
+            classifications = json.loads(raw_response)
+        except json.JSONDecodeError:
+            logger.warning(f"Smart-similar: Groq returned invalid JSON, falling back. Response: {raw_response[:200]}")
+            # Fallback: return all similar articles as ADDS_DETAIL
+            results = []
+            for row in similar_rows:
+                row['relationship'] = 'ADDS_DETAIL'
+                row['reason'] = 'AI classification unavailable'
+                row['distance'] = row.pop('similarity', 0.0)
+                results.append(row)
+            return results
+
+        # 4. Build classification map and filter out DUPLICATE and RELATED
+        class_map = {}
+        for c in classifications:
+            class_map[c.get('id')] = {
+                'relationship': c.get('relationship', 'DUPLICATE'),
+                'reason': c.get('reason', ''),
+            }
+
+        VALUABLE_TYPES = {'ADDS_DETAIL', 'DIFFERENT_ANGLE', 'CONTRARIAN'}
+        results = []
+        for row in similar_rows:
+            info = class_map.get(row['id'], {'relationship': 'DUPLICATE', 'reason': ''})
+            if info['relationship'] in VALUABLE_TYPES:
+                row['relationship'] = info['relationship']
+                row['reason'] = info['reason']
+                row['distance'] = row.pop('similarity', 0.0)
+                results.append(row)
+
+        return results
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Smart-similar error: {e}")
+        raise HTTPException(500, f"Error: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.post("/cluster/approve", response_model=ClusterAnalysisResponse)
 async def analyze_and_approve_cluster(request: ClusterAnalysisRequest):
     original_id = request.original_article_id
@@ -461,17 +627,40 @@ async def analyze_and_approve_cluster(request: ClusterAnalysisRequest):
         )
         articles = {row['id']: dict(row) for row in cursor.fetchall()}
 
-        txt = ""
+        # Build structured input for Groq
         orig = articles.get(original_id, {})
-        txt += f"--- MAIN ---\nHead: {orig.get('headline_en')}\nSum: {orig.get('summary')}\n\n"
+        related_txt = ""
         for i, aid in enumerate(cluster_ids):
             rel = articles.get(aid, {})
-            txt += f"--- REL {i+1} ---\nHead: {rel.get('headline_en')}\nSum: {rel.get('summary')}\n\n"
+            related_txt += (
+                f"--- RELATED {i+1} (Source: {rel.get('publication_name') or 'Unknown'}) ---\n"
+                f"Headline: {rel.get('headline_en')}\n"
+                f"Summary: {rel.get('summary')}\n\n"
+            )
+
+        cluster_system_prompt = """You are a senior geopolitical analyst writing for an intelligence newsletter read by investment bankers and policymakers.
+
+Synthesize these articles into a single comprehensive briefing. Requirements:
+1. Lead with the core story/event from the MAIN article
+2. Integrate additional facts, data points, and context from related articles
+3. When sources offer DIFFERENT perspectives, note the divergence (e.g., "While Reuters reports X, Al Jazeera emphasizes Y")
+4. When sources DISAGREE, highlight the disagreement clearly
+5. Include specific numbers, names, and dates when available
+6. Keep the tone professional and analytical — no editorializing
+7. Target 80-120 words
+8. Return HTML using <p> tags only. Use <strong> for key terms/names. No other HTML tags."""
+
+        cluster_user_prompt = (
+            f"--- MAIN ARTICLE (Source: {orig.get('publication_name') or 'Unknown'}) ---\n"
+            f"Headline: {orig.get('headline_en')}\n"
+            f"Summary: {orig.get('summary')}\n\n"
+            f"{related_txt}"
+        )
 
         chat = groq_client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "Synthesize these into a cohesive summary. Return HTML <p>...</p> only."},
-                {"role": "user", "content": txt},
+                {"role": "system", "content": cluster_system_prompt},
+                {"role": "user", "content": cluster_user_prompt},
             ],
             model="llama-3.3-70b-versatile",
             temperature=0.2,

@@ -460,55 +460,100 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- FIND SIMILAR & CLUSTERING ---
 
     async function handleFindSimilarLogic(id, headline) {
-         try { 
-             const res = await fetch(`${API_BASE_URL}/articles/${id}/similar`); 
-             if(!res.ok) throw new Error("Failed to fetch similar articles"); 
-             const data = await res.json(); 
-             showSimilarArticlesModal(id, headline, data); 
-         } catch(err){ 
-             alert("Error: " + err.message); 
-         }
+        try {
+            // Try smart-similar first (AI-classified relationships)
+            const res = await fetch(`${API_BASE_URL}/articles/${id}/smart-similar`, { method: 'POST' });
+            if (!res.ok) throw new Error("Smart-similar failed");
+            const data = await res.json();
+            showSimilarArticlesModal(id, headline, data, true);
+        } catch(err) {
+            // Fallback to basic similar if smart fails
+            try {
+                const res = await fetch(`${API_BASE_URL}/articles/${id}/similar`);
+                if (!res.ok) throw new Error("Failed to fetch similar articles");
+                const data = await res.json();
+                showSimilarArticlesModal(id, headline, data, false);
+            } catch(fallbackErr) {
+                alert("Error: " + fallbackErr.message);
+            }
+        }
     }
 
-    function showSimilarArticlesModal(originalArticleId, originalHeadline, similarArticles) {
-        const existingOverlay = document.querySelector('.similar-modal-overlay'); 
+    function formatRelationship(rel) {
+        const labels = {
+            'ADDS_DETAIL': 'Adds Detail',
+            'DIFFERENT_ANGLE': 'Different Angle',
+            'CONTRARIAN': 'Contrarian',
+        };
+        return labels[rel] || rel;
+    }
+
+    function showSimilarArticlesModal(originalArticleId, originalHeadline, similarArticles, isSmartMode) {
+        const existingOverlay = document.querySelector('.similar-modal-overlay');
         if(existingOverlay) document.body.removeChild(existingOverlay);
-        
-        const overlay = document.createElement('div'); 
+
+        const overlay = document.createElement('div');
         overlay.className = 'modal-overlay similar-modal-overlay';
-        
-        // ** Limit: 10 Recommendations Max **
+
         const displayArticles = similarArticles.slice(0, 10);
-        
+
         let articlesHtml = '';
         if (displayArticles.length > 0) {
-            articlesHtml = displayArticles.map(article => `
-                <div class="similar-article p-3 border-b border-gray-100 hover:bg-gray-50 flex items-start">
-                    <input type="checkbox" class="similar-article-checkbox mt-1 mr-3 h-4 w-4" data-id="${article.id}">
-                    <div class="similar-article-details flex-1">
-                        <a href="${article.url}" target="_blank" class="similar-article-headline text-blue-600 font-semibold hover:underline block">${article.headline || article.headline_original}</a>
-                        <div class="similar-article-meta text-xs text-gray-500 mt-1">
-                            <span class="font-bold">${article.publication_name || 'N/A'}</span> | ${article.category} | Status: ${article.status}
+            articlesHtml = displayArticles.map(article => {
+                // Similarity: smart-similar returns it in distance field, basic similar also uses distance
+                const similarity = article.distance || article.similarity || 0;
+                const simPct = Math.round(similarity * 100);
+
+                // Relationship labels (only in smart mode)
+                let relationshipHtml = '';
+                if (isSmartMode && article.relationship) {
+                    const relClass = article.relationship.toLowerCase();
+                    relationshipHtml = `
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="similarity-badge">${simPct}%</span>
+                            <span class="relationship-label rel-${relClass}">${formatRelationship(article.relationship)}</span>
+                        </div>`;
+                    if (article.reason) {
+                        relationshipHtml += `<p class="text-xs text-gray-400 italic mt-1">${article.reason}</p>`;
+                    }
+                } else if (similarity > 0) {
+                    relationshipHtml = `<span class="similarity-badge mt-1">${simPct}% match</span>`;
+                }
+
+                return `
+                    <div class="similar-article p-3 border-b border-gray-100 hover:bg-gray-50 flex items-start">
+                        <input type="checkbox" class="similar-article-checkbox mt-1 mr-3 h-4 w-4" data-id="${article.id}" checked>
+                        <div class="similar-article-details flex-1">
+                            <a href="${article.url}" target="_blank" class="similar-article-headline text-blue-600 font-semibold hover:underline block">${article.headline || article.headline_original}</a>
+                            <div class="similar-article-meta text-xs text-gray-500 mt-1">
+                                <span class="font-bold">${article.publication_name || 'N/A'}</span> | ${article.category || 'N/A'} | Status: ${article.status}
+                            </div>
+                            ${relationshipHtml}
                         </div>
-                    </div>
-                </div>
-            `).join('');
+                    </div>`;
+            }).join('');
         } else {
-            articlesHtml = '<p class="text-gray-500 p-4 text-center">No similar articles found in the database.</p>';
+            articlesHtml = isSmartMode
+                ? '<p class="text-gray-500 p-4 text-center">No articles with additional perspectives found. All similar articles appear to be duplicates.</p>'
+                : '<p class="text-gray-500 p-4 text-center">No similar articles found in the database.</p>';
         }
 
-        // ** Button Name: Cluster & Submit **
+        const modeLabel = isSmartMode ? '(AI-Filtered — duplicates removed)' : '';
+
         overlay.innerHTML = `
             <div class="modal-container bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col max-h-[90vh]">
                 <div class="modal-header bg-gray-100 p-4 border-b flex justify-between items-center">
-                    <h2 class="text-lg font-bold text-gray-800 truncate pr-4">Similar to: "${originalHeadline}"</h2>
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800 truncate pr-4">Similar to: "${originalHeadline}"</h2>
+                        ${modeLabel ? `<p class="text-xs text-green-600 font-semibold mt-1">${modeLabel}</p>` : ''}
+                    </div>
                     <button class="modal-close-btn text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
                 </div>
-                
+
                 <div class="modal-body p-0 overflow-y-auto flex-1">
                     ${articlesHtml}
                 </div>
-                
+
                 <div class="p-4 border-t bg-gray-50">
                     <div id="analysis-result-container" class="mb-3 hidden bg-blue-50 p-3 rounded text-sm text-gray-700">
                         <strong>AI Analysis:</strong> <span id="analysis-result-text">Initializing...</span>
@@ -519,17 +564,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
         `;
-        
+
         document.body.appendChild(overlay);
-        
-        const close = () => { 
-            overlay.classList.remove('visible'); 
-            setTimeout(() => { if(document.body.contains(overlay)) document.body.removeChild(overlay); }, 200); 
+
+        const close = () => {
+            overlay.classList.remove('visible');
+            setTimeout(() => { if(document.body.contains(overlay)) document.body.removeChild(overlay); }, 200);
         };
-        
+
         overlay.querySelector('.modal-close-btn').addEventListener('click', close);
         overlay.addEventListener('click', (e) => { if(e.target === overlay) close(); });
-        
+
         const analyzeBtn = overlay.querySelector('#analyze-cluster-btn');
         if(analyzeBtn) {
             analyzeBtn.addEventListener('click', () => handleAnalyzeCluster(overlay, originalArticleId));

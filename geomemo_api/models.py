@@ -81,6 +81,13 @@ class ClusterAnalysisResponse(BaseModel):
     is_top_story: bool
 
 
+class SmartSimilarArticle(Article):
+    """Article with AI-classified relationship to a target article."""
+    relationship: str = "ADDS_DETAIL"  # ADDS_DETAIL, DIFFERENT_ANGLE, CONTRARIAN
+    reason: str = ""                   # Brief explanation of what this article adds
+    similarity: float = 0.0           # Cosine similarity score (0-1)
+
+
 # --- Content Models ---
 class TweetSubmission(BaseModel):
     url: str
