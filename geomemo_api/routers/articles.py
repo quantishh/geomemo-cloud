@@ -11,9 +11,9 @@ from psycopg2.extras import execute_values
 from groq import Groq
 from sentence_transformers import SentenceTransformer
 
-from ..database import get_db_connection
-from ..config import VALID_CATEGORIES_SET
-from ..models import (
+from database import get_db_connection
+from config import VALID_CATEGORIES_SET
+from models import (
     Article, StatusUpdate, BatchStatusUpdate, CategoryUpdate,
     ManualArticleSubmission, EnhanceRequest,
     ClusterAnalysisRequest, ClusterAnalysisResponse,

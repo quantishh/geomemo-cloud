@@ -9,7 +9,7 @@ from psycopg2.extras import execute_values
 from pgvector.psycopg2 import register_vector
 from fastapi import HTTPException
 
-from .config import DB_CONFIG
+from config import DB_CONFIG
 
 logger = logging.getLogger(__name__)
 

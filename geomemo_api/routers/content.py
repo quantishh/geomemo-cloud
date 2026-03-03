@@ -14,9 +14,9 @@ import psycopg2.extras
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form
 from bs4 import BeautifulSoup
 
-from ..database import get_db_connection
-from ..config import UPLOAD_DIR
-from ..models import (
+from database import get_db_connection
+from config import UPLOAD_DIR
+from models import (
     Tweet, TweetSubmission, Sponsor, Podcast, ScrapeRequest,
 )
 

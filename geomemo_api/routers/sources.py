@@ -7,8 +7,8 @@ from typing import List
 import psycopg2.extras
 from fastapi import APIRouter, HTTPException
 
-from ..database import get_db_connection
-from ..models import Source, SourceUpdate
+from database import get_db_connection
+from models import Source, SourceUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sources", tags=["sources"])

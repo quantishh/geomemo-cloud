@@ -12,10 +12,10 @@ from fastapi.responses import JSONResponse
 from groq import Groq
 from sentence_transformers import SentenceTransformer
 
-from .config import UPLOAD_DIR, BEEHIIV_API_KEY, BEEHIIV_PUB_ID
-from .database import init_db
-from .models import NewsletterSignup
-from .routers import articles, content, sources
+from config import UPLOAD_DIR, BEEHIIV_API_KEY, BEEHIIV_PUB_ID
+from database import init_db
+from models import NewsletterSignup
+from routers import articles, content, sources
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
