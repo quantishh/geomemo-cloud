@@ -48,9 +48,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # PROJECT_ROOT is geomemo_scraper/
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 
-# --- NewsAPI.org Configuration ---
-NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
-
 # --- Bright Data Proxy Settings ---
 BRIGHTDATA_USERNAME = os.getenv("BRIGHTDATA_USERNAME", "")
 BRIGHTDATA_PASSWORD = os.getenv("BRIGHTDATA_PASSWORD", "")
