@@ -49,15 +49,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 
 # --- NewsAPI.org Configuration ---
-# !!! V-V-V  ADD YOUR API KEY HERE V-V-V !!!
-NEWS_API_KEY = "5243fc9f81a54faeb8e4ba5795782c1f" 
-# !!! A-A-A  ADD YOUR API KEY HERE A-A-A !!!
+NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
 
 # --- Bright Data Proxy Settings ---
-BRIGHTDATA_USERNAME = 'brd-customer-hl_9363c7cd-zone-residential_proxy1_geomemo' 
-BRIGHTDATA_PASSWORD = 'o9g31v2pc6cr'
-BRIGHTDATA_HOST = 'brd.superproxy.io'
-BRIGHTDATA_PORT = '33335'
+BRIGHTDATA_USERNAME = os.getenv("BRIGHTDATA_USERNAME", "")
+BRIGHTDATA_PASSWORD = os.getenv("BRIGHTDATA_PASSWORD", "")
+BRIGHTDATA_HOST = os.getenv("BRIGHTDATA_HOST", "brd.superproxy.io")
+BRIGHTDATA_PORT = os.getenv("BRIGHTDATA_PORT", "33335")
 PROXY_URL = f'http://{BRIGHTDATA_USERNAME}:{BRIGHTDATA_PASSWORD}@{BRIGHTDATA_HOST}:{BRIGHTDATA_PORT}'
 
 # --- Path to your SSL certificate ---
@@ -110,6 +108,6 @@ FEED_EXPORT_ENCODING = "utf-8"
 # These settings ensure the scraper can find the database container ('db')
 # when running in the cloud, while defaulting to 'localhost' for local testing.
 POSTGRES_HOST = os.getenv('POSTGRES_HOST', 'db')
-POSTGRES_DB = os.getenv('POSTGRES_DB', 'geomemo')
+POSTGRES_DB = os.getenv('POSTGRES_DB', 'postgres')
 POSTGRES_USER = os.getenv('POSTGRES_USER', 'postgres')
-POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'Quantishh@1979')
+POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', '')

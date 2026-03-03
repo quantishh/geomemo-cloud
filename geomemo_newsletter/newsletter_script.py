@@ -10,19 +10,13 @@ load_dotenv()
 BEEHIIV_API_KEY = os.getenv("BEEHIIV_API_KEY")
 BEEHIIV_PUBLICATION_ID = os.getenv("BEEHIIV_PUBLICATION_ID")
 
-# --- ADD THESE DEBUG LINES ---
-# This will print the exact values being read from your .env file
-print(f"DEBUG: API Key Loaded: '{BEEHIIV_API_KEY}'")
-print(f"DEBUG: Publication ID Loaded: '{BEEHIIV_PUBLICATION_ID}'")
-# ---------------------------
 
 # --- Database Configuration ---
-# !! IMPORTANT: Make sure this password is correct !!
 DB_CONFIG = {
-    "host": "localhost",
-    "database": "postgres",
-    "user": "postgres",
-    "password": "Quantishh@1979" 
+    "host": os.getenv("POSTGRES_HOST", "localhost"),
+    "database": os.getenv("POSTGRES_DB", "postgres"),
+    "user": os.getenv("POSTGRES_USER", "postgres"),
+    "password": os.getenv("POSTGRES_PASSWORD", ""),
 }
 
 # --- Main Functions ---

@@ -1,12 +1,16 @@
+import os
 import psycopg2
 from pgvector.psycopg2 import register_vector
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Config
 DB_CONFIG = {
-    "host": "localhost",
-    "database": "postgres",
-    "user": "postgres",
-    "password": "Quantishh@1979" 
+    "host": os.getenv("POSTGRES_HOST", "localhost"),
+    "database": os.getenv("POSTGRES_DB", "postgres"),
+    "user": os.getenv("POSTGRES_USER", "postgres"),
+    "password": os.getenv("POSTGRES_PASSWORD", ""),
 }
 
 def fix_database():

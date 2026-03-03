@@ -40,12 +40,12 @@ class GeomemoDatabasePipeline:
 
     def open_spider(self, spider):
         try:
-            # --- Smart Host Detection ---
+            # --- Database connection from environment ---
             self.connection = psycopg2.connect(
                 host=os.getenv("POSTGRES_HOST", "db"),
-                database="postgres",
-                user="postgres",
-                password="Quantishh@1979" 
+                database=os.getenv("POSTGRES_DB", "postgres"),
+                user=os.getenv("POSTGRES_USER", "postgres"),
+                password=os.getenv("POSTGRES_PASSWORD", ""),
             )
             self.cursor = self.connection.cursor()
             register_vector(self.connection)

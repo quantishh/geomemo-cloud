@@ -2,13 +2,16 @@ import psycopg2
 import psycopg2.extras
 from datetime import datetime
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- DB Config ---
 DB_CONFIG = {
-    "host": "localhost",
-    "database": "postgres",
-    "user": "postgres",
-    "password": "Quantishh@1979" 
+    "host": os.getenv("POSTGRES_HOST", "localhost"),
+    "database": os.getenv("POSTGRES_DB", "postgres"),
+    "user": os.getenv("POSTGRES_USER", "postgres"),
+    "password": os.getenv("POSTGRES_PASSWORD", ""),
 }
 
 def get_db_connection():
