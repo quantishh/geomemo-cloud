@@ -49,6 +49,8 @@ services:
       - ./geomemo_api:/app/geomemo_api
       - ./geomemo_scraper:/app/geomemo_scraper
       - ./geomemo_newsletter:/app/geomemo_newsletter
+      # BrightData SSL certificate for the scraper proxy
+      - ./geomemo_scraper/brightdata_ca.crt:/app/brightdata_ca.crt
     env_file: .env
     environment:
       # Force POSTGRES_HOST to the Docker service name regardless of .env
@@ -60,13 +62,15 @@ services:
 
   db:
     container_name: geomemo-db
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg15
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      # Auto-load backup SQL on first init (only runs if DB is empty)
+      - ./geomemo_full_backup.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     healthcheck:
@@ -77,4 +81,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  pgdata:
+  postgres_data:
