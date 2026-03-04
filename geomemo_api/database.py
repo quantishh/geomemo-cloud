@@ -134,6 +134,10 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_articles_scraped_at ON articles (scraped_at)",
             "CREATE INDEX IF NOT EXISTS idx_articles_status ON articles (status)",
             "CREATE INDEX IF NOT EXISTS idx_articles_source_id ON articles (source_id)",
+            # M3: Newsletter enhancement — extend daily_briefs table
+            "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS beehiiv_post_id TEXT",
+            "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS newsletter_html TEXT",
+            "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS subject_line TEXT",
         ]
         for sql in migrations:
             try:

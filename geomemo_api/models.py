@@ -134,6 +134,32 @@ class NewsletterSignup(BaseModel):
     field: str
 
 
+# --- M3: Newsletter Generation Models ---
+class DailyBrief(BaseModel):
+    id: int
+    date: str
+    summary_text: str
+    summary_html: Optional[str] = None
+    newsletter_html: Optional[str] = None
+    subject_line: Optional[str] = None
+    word_count: Optional[int] = None
+    generated_at: Optional[datetime] = None
+    published: bool = False
+    beehiiv_post_id: Optional[str] = None
+
+
+class NewsletterGenerateRequest(BaseModel):
+    """Optional overrides for newsletter generation."""
+    target_date: Optional[str] = None  # YYYY-MM-DD, defaults to today
+    regenerate: bool = False  # If True, overwrites existing brief for this date
+
+
+class NewsletterPublishResponse(BaseModel):
+    message: str
+    beehiiv_post_id: str
+    brief_id: int
+
+
 # --- Utility Models ---
 class ScrapeRequest(BaseModel):
     url: str

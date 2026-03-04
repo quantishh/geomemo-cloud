@@ -224,6 +224,19 @@ table.table-fixed {
 .rel-duplicate { background-color: #f3f4f6; color: #6b7280; }
 .rel-related { background-color: #f3f4f6; color: #6b7280; }
 
+/* --- M3: Newsletter Modal Enhancements --- */
+#newsletter-preview {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background-color: #ffffff;
+}
+#newsletter-modal button:hover:not(:disabled) {
+    opacity: 0.9;
+}
+#regenerate-btn:hover {
+    background: #ede9fe !important;
+}
+
 /* Source management table */
 #sources-tbody tr:hover { background-color: #f9fafb; }
 #sources-tbody td { padding: 8px; border-bottom: 1px solid #f3f4f6; }

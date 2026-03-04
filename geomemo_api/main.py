@@ -15,7 +15,7 @@ from sentence_transformers import SentenceTransformer
 from config import UPLOAD_DIR, BEEHIIV_API_KEY, BEEHIIV_PUB_ID
 from database import init_db
 from models import NewsletterSignup
-from routers import articles, content, sources
+from routers import articles, content, sources, newsletter
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +36,7 @@ except Exception as e:
 
 # --- Initialize shared models in article router ---
 articles.init_models(embedding_model, groq_client)
+newsletter.init_models(groq_client)
 
 # --- FastAPI App ---
 app = FastAPI(title="GeoMemo API", version="2.0.0")
@@ -55,6 +56,7 @@ init_db()
 app.include_router(articles.router)
 app.include_router(content.router)
 app.include_router(sources.router)
+app.include_router(newsletter.router)
 
 
 # --- Newsletter Signup (Beehiiv) ---

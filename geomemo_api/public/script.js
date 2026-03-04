@@ -21,13 +21,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // ** Button Name: Enhance & Submit **
     if(confirmEnhanceBtn) confirmEnhanceBtn.textContent = "Enhance & Submit";
 
-    // Newsletter Elements
+    // Newsletter Elements (M3 Upgrade)
     const generateNewsletterBtn = document.getElementById('generate-newsletter-btn');
     const newsletterModal = document.getElementById('newsletter-modal');
     const newsletterOutput = document.getElementById('newsletter-output');
     const newsletterSubject = document.getElementById('newsletter-subject');
     const copyHtmlBtn = document.getElementById('copy-html-btn');
     const closeNewsletterBtn = document.getElementById('close-newsletter-btn');
+    const newsletterPreview = document.getElementById('newsletter-preview');
+    const togglePreviewBtn = document.getElementById('toggle-preview-btn');
+    const toggleHtmlBtn = document.getElementById('toggle-html-btn');
+    const pushBeehiivBtn = document.getElementById('push-beehiiv-btn');
+    const newsletterWordCount = document.getElementById('newsletter-word-count');
+    const newsletterStatus = document.getElementById('newsletter-status');
+    const newsletterHistoryList = document.getElementById('newsletter-history-list');
+    const regenerateBtn = document.getElementById('regenerate-btn');
 
     // Other Managers
     const tweetForm = document.getElementById('tweet-entry-form');
@@ -42,6 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- STATE ---
     let allArticlesCache = [];
     let currentEnhanceId = null;
+    let currentBriefId = null;
     let currentSortBy = 'scraped_at';
     let currentSortOrder = 'desc';
     
@@ -103,14 +112,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (seedSourcesBtn) seedSourcesBtn.addEventListener('click', handleSeedSources);
     if (recalcSourcesBtn) recalcSourcesBtn.addEventListener('click', handleRecalcSources);
 
-    // Newsletter Listeners
-    if (generateNewsletterBtn) generateNewsletterBtn.addEventListener('click', generateNewsletter);
-    if (closeNewsletterBtn) closeNewsletterBtn.addEventListener('click', () => newsletterModal.classList.add('hidden'));
-    if (copyHtmlBtn) copyHtmlBtn.addEventListener('click', () => {
-        newsletterOutput.select();
-        document.execCommand('copy');
-        alert('HTML Copied!');
+    // Newsletter Listeners (M3 Upgrade)
+    if (generateNewsletterBtn) generateNewsletterBtn.addEventListener('click', () => generateNewsletter(false));
+    if (regenerateBtn) regenerateBtn.addEventListener('click', () => generateNewsletter(true));
+    if (closeNewsletterBtn) closeNewsletterBtn.addEventListener('click', () => {
+        newsletterModal.classList.add('hidden');
+        if (newsletterStatus) newsletterStatus.style.display = 'none';
     });
+    if (copyHtmlBtn) copyHtmlBtn.addEventListener('click', () => {
+        if (newsletterOutput && newsletterOutput.value) {
+            navigator.clipboard.writeText(newsletterOutput.value).then(() => {
+                copyHtmlBtn.textContent = 'Copied!';
+                setTimeout(() => { copyHtmlBtn.textContent = 'Copy HTML'; }, 2000);
+            }).catch(() => {
+                newsletterOutput.select();
+                document.execCommand('copy');
+                copyHtmlBtn.textContent = 'Copied!';
+                setTimeout(() => { copyHtmlBtn.textContent = 'Copy HTML'; }, 2000);
+            });
+        }
+    });
+    if (togglePreviewBtn) togglePreviewBtn.addEventListener('click', showPreviewMode);
+    if (toggleHtmlBtn) toggleHtmlBtn.addEventListener('click', showHtmlMode);
+    if (pushBeehiivBtn) pushBeehiivBtn.addEventListener('click', handlePushToBeehiiv);
 
     // --- GLOBAL HELPERS ---
     window.deleteItem = async (endpoint, id) => {
@@ -645,104 +669,231 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================
-    // NEWSLETTER GENERATOR (FIXED TECHMEME FORMATTING + COLORS)
+    // NEWSLETTER GENERATOR (M3: SERVER-DRIVEN + AI BRIEF)
     // =========================================
-    function generateNewsletter() {
-        const articles = allArticlesCache.filter(a => a.status === 'approved' && isToday(a.scraped_at)); 
-        
-        if (articles.length === 0) { 
-            alert("No approved articles found for TODAY."); 
-            return; 
-        }
-
-        // Separate Parents and Children
-        const parents = articles.filter(a => !a.parent_id);
-        const children = articles.filter(a => a.parent_id);
-        
-        const childMap = {};
-        children.forEach(c => {
-            if(!childMap[c.parent_id]) childMap[c.parent_id] = [];
-            childMap[c.parent_id].push(c);
-        });
-
-        // Top News Logic
-        const topStories = parents.filter(a => a.is_top_story);
-        const otherParents = parents.filter(a => !a.is_top_story);
-        
-        let subject = topStories.length ? "GeoMemo: " + (topStories[0].summary || topStories[0].headline || "Daily Update") : "GeoMemo Daily Update";
-        subject = subject.replace(/<[^>]*>?/gm, '');
-        newsletterSubject.value = subject;
-        
-        // --- 1. Top Header (NO BOOKMARKS) ---
-        let html = `<div style="font-family:${FONT_STACK};color:#111;max-width:600px;margin:0 auto;">
-            <div style="border-bottom:2px solid #eee;padding-bottom:15px;margin-bottom:20px;">
-                <span style="font-size:24px;font-weight:800;color:#430297;letter-spacing:-0.5px;text-transform:uppercase;">GeoMemo</span><br>
-                <span style="color:#666;font-size:13px;font-weight:400;">Daily Intelligence • ${new Date().toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'})}</span>
-            </div>`;
-        
-        // --- 2. Top News Section ---
-        if (topStories.length) { 
-            html += `<h3 style="color:#b00;font-size:14px;border-bottom:2px solid #b00;margin-bottom:15px;text-transform:uppercase;margin-top:0;">Top News</h3>`; 
-            topStories.forEach(p => html += renderNewsletterCluster(p, childMap[p.id] || [])); 
-        }
-        
-        // --- 3. Category Sections ---
-        VALID_CATEGORIES.forEach(cat => {
-            const group = otherParents.filter(p => (VALID_CATEGORIES.includes(p.category) ? p.category : 'Other') === cat);
-            
-            if (group.length) { 
-                const anchorId = cat.replace(/\s+/g, '-').toLowerCase();
-                html += `<h3 id="${anchorId}" style="color:#b00;font-size:14px;border-bottom:1px solid #ddd;margin-top:25px;margin-bottom:15px;text-transform:uppercase;">${cat}</h3>`; 
-                group.forEach(p => html += renderNewsletterCluster(p, childMap[p.id] || [])); 
-            }
-        });
-        
-        html += `<div style="margin-top:40px;border-top:1px solid #eee;padding-top:20px;text-align:center;color:#888;font-size:12px;">&copy; 2025 GeoMemo.</div></div>`;
-        
-        html = html.replace(/\s+/g, ' ').trim();
-        
-        newsletterOutput.value = html; 
+    async function generateNewsletter(regenerate = false) {
+        // Show modal immediately with loading state
         newsletterModal.classList.remove('hidden');
-    }
+        showNewsletterLoading(true);
 
-    // Helper to render one Parent + its Children (PREMIUM COLORS)
-    function renderNewsletterCluster(parent, children) {
-        // COLOR PALETTE UPDATE
-        const C_HEAD_LINK = "#111827"; // Dark Blue-Black (Tailwind Gray-900)
-        const C_META = "#888"; 
-        const C_CHILD_PUB = "#008000"; // Techmeme Green
-        const C_CHILD_TEXT = "#666666"; // Light Grey
-        
-        let parentText = parent.summary || parent.headline || "No Content";
-        parentText = parentText.replace(/<[^>]*>?/gm, '');
-
-        // Parent Row: Dark Blue-Black
-        let html = `
-            <div style="margin-bottom:15px; padding-bottom:15px; border-bottom:1px solid #eee;">
-                <div style="line-height:1.4; font-size:16px;">
-                    <a href="${parent.url}" style="color:${C_HEAD_LINK}; text-decoration:none; font-weight:700;">${parentText}</a>
-                    <span style="color:${C_META}; font-size:12px; margin-left:6px;">(${parent.publication_name || ''} ${parent.author ? '- ' + parent.author : ''})</span>
-                </div>
-        `;
-
-        // Children Rows: Light Grey & Normal Weight
-        if (children && children.length > 0) {
-            children.forEach(child => {
-                const childPub = child.publication_name || 'Source';
-                let childSum = child.summary || child.headline;
-                childSum = childSum.replace(/<[^>]*>?/gm, '');
-                
-                html += `
-                    <div style="margin-top:8px; font-size:13px; color:${C_CHILD_TEXT}; line-height:1.4; margin-left:0px;">
-                        <a href="${child.url}" style="color:${C_CHILD_PUB}; font-weight:bold; text-decoration:none;">${childPub}</a>: ${childSum}
-                    </div>
-                `;
-            });
+        if (newsletterStatus) {
+            newsletterStatus.style.display = 'block';
+            newsletterStatus.textContent = 'Generating AI brief and building newsletter...';
+            newsletterStatus.style.color = '#2563eb';
         }
 
-        html += `</div>`;
-        return html;
+        // Reset Beehiiv button
+        if (pushBeehiivBtn) {
+            pushBeehiivBtn.disabled = false;
+            pushBeehiivBtn.textContent = 'Push to Beehiiv (Draft)';
+            pushBeehiivBtn.style.background = '#7c3aed';
+            pushBeehiivBtn.style.cursor = 'pointer';
+        }
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/newsletter/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ regenerate: regenerate })
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Generation failed');
+            }
+            const data = await res.json();
+            currentBriefId = data.id;
+
+            // Populate subject
+            if (newsletterSubject) newsletterSubject.value = data.subject_line || '';
+
+            // Populate preview iframe + raw HTML
+            const fullHtml = data.newsletter_html || data.summary_html || '';
+            if (newsletterPreview) newsletterPreview.srcdoc = fullHtml;
+            if (newsletterOutput) newsletterOutput.value = fullHtml;
+
+            // Word count
+            if (newsletterWordCount && data.word_count) {
+                newsletterWordCount.textContent = `AI Brief: ${data.word_count} words`;
+            }
+
+            // Update status
+            if (newsletterStatus) {
+                newsletterStatus.textContent = regenerate ? 'Newsletter regenerated with fresh AI brief.' : 'Newsletter generated successfully.';
+                newsletterStatus.style.color = '#16a34a';
+            }
+
+            // Show preview mode by default
+            showPreviewMode();
+
+            // Update Beehiiv button state
+            if (pushBeehiivBtn && data.published) {
+                pushBeehiivBtn.disabled = true;
+                pushBeehiivBtn.textContent = 'Already Published';
+                pushBeehiivBtn.style.background = '#9ca3af';
+                pushBeehiivBtn.style.cursor = 'not-allowed';
+            }
+
+            // Refresh history sidebar
+            fetchNewsletterHistory();
+
+        } catch (e) {
+            if (newsletterStatus) {
+                newsletterStatus.textContent = 'Error: ' + e.message;
+                newsletterStatus.style.color = '#dc2626';
+            }
+        } finally {
+            showNewsletterLoading(false);
+        }
     }
+
+    function showNewsletterLoading(show) {
+        if (!newsletterPreview) return;
+        if (show) {
+            newsletterPreview.srcdoc = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:Inter,system-ui,sans-serif;color:#666;">
+                <div style="text-align:center;">
+                    <div style="width:40px;height:40px;border:4px solid #e5e7eb;border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px;"></div>
+                    <p style="margin:0 0 4px;">Generating newsletter with AI brief...</p>
+                    <p style="font-size:12px;color:#999;margin:0;">This may take 10-15 seconds</p>
+                </div>
+                <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+            </div>`;
+            newsletterPreview.classList.remove('hidden');
+            if (newsletterOutput) newsletterOutput.classList.add('hidden');
+        }
+    }
+
+    function showPreviewMode() {
+        if (newsletterPreview) newsletterPreview.style.display = '';
+        if (newsletterOutput) newsletterOutput.style.display = 'none';
+        if (togglePreviewBtn) { togglePreviewBtn.style.background = '#f3e8ff'; togglePreviewBtn.style.color = '#7c3aed'; }
+        if (toggleHtmlBtn) { toggleHtmlBtn.style.background = '#f3f4f6'; toggleHtmlBtn.style.color = '#6b7280'; }
+    }
+
+    function showHtmlMode() {
+        if (newsletterPreview) newsletterPreview.style.display = 'none';
+        if (newsletterOutput) newsletterOutput.style.display = '';
+        if (toggleHtmlBtn) { toggleHtmlBtn.style.background = '#f3e8ff'; toggleHtmlBtn.style.color = '#7c3aed'; }
+        if (togglePreviewBtn) { togglePreviewBtn.style.background = '#f3f4f6'; togglePreviewBtn.style.color = '#6b7280'; }
+    }
+
+    async function handlePushToBeehiiv() {
+        if (!currentBriefId) return alert('No newsletter generated yet. Click "Generate Newsletter" first.');
+        if (!confirm('Push this newsletter to Beehiiv as a draft?')) return;
+
+        if (pushBeehiivBtn) {
+            pushBeehiivBtn.disabled = true;
+            pushBeehiivBtn.textContent = 'Publishing...';
+        }
+        if (newsletterStatus) {
+            newsletterStatus.style.display = 'block';
+            newsletterStatus.style.color = '#2563eb';
+            newsletterStatus.textContent = 'Pushing to Beehiiv...';
+        }
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/newsletter/${currentBriefId}/publish`, {
+                method: 'POST'
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Publish failed');
+            }
+            const data = await res.json();
+
+            if (newsletterStatus) {
+                newsletterStatus.textContent = `Draft created in Beehiiv! Post ID: ${data.beehiiv_post_id}`;
+                newsletterStatus.style.color = '#16a34a';
+            }
+            if (pushBeehiivBtn) {
+                pushBeehiivBtn.textContent = 'Published';
+                pushBeehiivBtn.style.background = '#9ca3af';
+                pushBeehiivBtn.style.cursor = 'not-allowed';
+            }
+            fetchNewsletterHistory();
+        } catch (e) {
+            if (newsletterStatus) {
+                newsletterStatus.textContent = 'Error: ' + e.message;
+                newsletterStatus.style.color = '#dc2626';
+            }
+            if (pushBeehiivBtn) {
+                pushBeehiivBtn.disabled = false;
+                pushBeehiivBtn.textContent = 'Push to Beehiiv (Draft)';
+            }
+        }
+    }
+
+    async function fetchNewsletterHistory() {
+        if (!newsletterHistoryList) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/newsletter/history?limit=15`);
+            if (!res.ok) return;
+            const briefs = await res.json();
+
+            if (briefs.length === 0) {
+                newsletterHistoryList.innerHTML = '<div style="color:#999; font-size:0.75rem;">No newsletters yet.</div>';
+                return;
+            }
+
+            newsletterHistoryList.innerHTML = briefs.map(b => {
+                const isActive = b.id === currentBriefId;
+                const borderColor = isActive ? '#7c3aed' : '#e5e7eb';
+                const bgColor = isActive ? '#f3e8ff' : '#fff';
+                const pubLabel = b.published
+                    ? '<span style="color:#16a34a; font-weight:700; margin-left:4px;">Published</span>'
+                    : '<span style="color:#d97706; margin-left:4px;">Draft</span>';
+                return `
+                    <div onclick="loadHistoryBrief(${b.id})" style="padding:8px; border-radius:4px; border:1px solid ${borderColor}; background:${bgColor}; cursor:pointer; transition:background 0.15s;">
+                        <div style="font-weight:600; color:#374151;">${b.date}</div>
+                        <div style="font-size:0.7rem; color:#6b7280;">${b.word_count || 0} words ${pubLabel}</div>
+                    </div>`;
+            }).join('');
+        } catch (e) {
+            console.error('Error fetching newsletter history:', e);
+        }
+    }
+
+    window.loadHistoryBrief = async (briefId) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/newsletter/${briefId}`);
+            if (!res.ok) throw new Error('Failed to load');
+            const data = await res.json();
+            currentBriefId = data.id;
+
+            if (newsletterSubject) newsletterSubject.value = data.subject_line || '';
+            const fullHtml = data.newsletter_html || data.summary_html || '';
+            if (newsletterPreview) newsletterPreview.srcdoc = fullHtml;
+            if (newsletterOutput) newsletterOutput.value = fullHtml;
+            if (newsletterWordCount && data.word_count) newsletterWordCount.textContent = `AI Brief: ${data.word_count} words`;
+
+            showPreviewMode();
+
+            // Update Beehiiv button state
+            if (pushBeehiivBtn) {
+                if (data.published) {
+                    pushBeehiivBtn.disabled = true;
+                    pushBeehiivBtn.textContent = 'Already Published';
+                    pushBeehiivBtn.style.background = '#9ca3af';
+                    pushBeehiivBtn.style.cursor = 'not-allowed';
+                } else {
+                    pushBeehiivBtn.disabled = false;
+                    pushBeehiivBtn.textContent = 'Push to Beehiiv (Draft)';
+                    pushBeehiivBtn.style.background = '#7c3aed';
+                    pushBeehiivBtn.style.cursor = 'pointer';
+                }
+            }
+
+            if (newsletterStatus) {
+                newsletterStatus.style.display = 'block';
+                newsletterStatus.textContent = `Loaded newsletter from ${data.date}`;
+                newsletterStatus.style.color = '#2563eb';
+            }
+
+            // Re-render history to highlight active
+            fetchNewsletterHistory();
+        } catch (e) {
+            alert('Error loading brief: ' + e.message);
+        }
+    };
 
     // ... (Remainder of file: Podcast Metadata, Batch, Managers) ...
     // =========================================

@@ -227,7 +227,55 @@
 
     <div id="enhance-modal" class="modal-overlay hidden"><div class="modal-container max-w-2xl"><div class="modal-header"><h2>Enhance</h2><button class="modal-close-btn">&times;</button></div><div class="modal-body space-y-3"><div class="grid grid-cols-2 gap-4"><input type="text" id="enhance-publication" placeholder="Publication" class="p-2 border rounded w-full"><input type="text" id="enhance-author" placeholder="Author" class="p-2 border rounded w-full"></div><textarea id="enhance-text-input" class="p-2 border rounded w-full h-40" placeholder="Content..."></textarea><button id="confirm-enhance-btn" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Enhance & Approve</button></div></div></div>
     
-    <div id="newsletter-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div class="bg-white rounded-lg w-full max-w-4xl h-[90vh] flex flex-col p-6"><div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Newsletter Preview</h2><button id="close-newsletter-btn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button></div><div class="mb-4"><label class="block font-bold mb-1">Subject Line:</label><input type="text" id="newsletter-subject" class="w-full p-2 border rounded bg-gray-50" readonly></div><textarea id="newsletter-output" class="flex-grow w-full p-4 border rounded font-mono text-sm mb-4" readonly></textarea><button id="copy-html-btn" class="bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-700 font-bold w-full">Copy HTML to Clipboard</button></div></div>
+    <!-- NEWSLETTER MODAL (M3 Upgrade: AI Brief + Preview + Beehiiv) -->
+    <div id="newsletter-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg w-full max-w-5xl" style="height:95vh; display:flex; flex-direction:column;">
+            <!-- Header -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #e5e7eb; flex-shrink:0;">
+                <h2 style="font-size:1.25rem; font-weight:700; color:#1f2937; margin:0;">Newsletter Generator</h2>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button id="regenerate-btn" style="padding:6px 12px; font-size:0.75rem; font-weight:600; color:#7c3aed; background:#f3e8ff; border:1px solid #ddd6fe; border-radius:4px; cursor:pointer;" title="Re-generate with fresh AI brief">Regenerate</button>
+                    <button id="close-newsletter-btn" style="color:#9ca3af; font-size:1.5rem; cursor:pointer; background:none; border:none; line-height:1;">&times;</button>
+                </div>
+            </div>
+
+            <div style="display:flex; flex:1; overflow:hidden;">
+                <!-- Left: Preview panel -->
+                <div style="flex:1; display:flex; flex-direction:column; padding:16px; overflow:hidden;">
+                    <!-- Subject line -->
+                    <div style="margin-bottom:10px;">
+                        <label style="display:block; font-size:0.7rem; font-weight:700; color:#6b7280; text-transform:uppercase; margin-bottom:4px;">Subject Line</label>
+                        <input type="text" id="newsletter-subject" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:4px; background:#f9fafb; font-size:0.85rem; box-sizing:border-box;" readonly>
+                    </div>
+
+                    <!-- View toggle + word count -->
+                    <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+                        <button id="toggle-preview-btn" style="padding:4px 12px; font-size:0.75rem; font-weight:600; border-radius:4px; cursor:pointer; background:#f3e8ff; color:#7c3aed; border:none;">Preview</button>
+                        <button id="toggle-html-btn" style="padding:4px 12px; font-size:0.75rem; font-weight:600; border-radius:4px; cursor:pointer; background:#f3f4f6; color:#6b7280; border:none;">HTML</button>
+                        <span id="newsletter-word-count" style="margin-left:auto; font-size:0.7rem; color:#9ca3af;"></span>
+                    </div>
+
+                    <!-- Rendered preview (iframe) -->
+                    <iframe id="newsletter-preview" style="flex:1; width:100%; border:1px solid #e5e7eb; border-radius:6px; background:#fff; min-height:200px;"></iframe>
+                    <!-- Raw HTML (hidden by default) -->
+                    <textarea id="newsletter-output" style="flex:1; width:100%; padding:12px; border:1px solid #e5e7eb; border-radius:6px; font-family:monospace; font-size:0.7rem; display:none; resize:none; box-sizing:border-box;" readonly></textarea>
+
+                    <!-- Action buttons -->
+                    <div style="display:flex; gap:8px; margin-top:12px; flex-shrink:0;">
+                        <button id="copy-html-btn" style="flex:1; padding:10px; font-size:0.85rem; font-weight:700; color:#fff; background:#4b5563; border:none; border-radius:6px; cursor:pointer;">Copy HTML</button>
+                        <button id="push-beehiiv-btn" style="flex:1; padding:10px; font-size:0.85rem; font-weight:700; color:#fff; background:#7c3aed; border:none; border-radius:6px; cursor:pointer;">Push to Beehiiv (Draft)</button>
+                    </div>
+                    <div id="newsletter-status" style="margin-top:8px; font-size:0.8rem; text-align:center; display:none;"></div>
+                </div>
+
+                <!-- Right: History sidebar -->
+                <div style="width:220px; border-left:1px solid #e5e7eb; background:#f9fafb; padding:16px; overflow-y:auto; flex-shrink:0;">
+                    <h3 style="font-size:0.7rem; font-weight:700; color:#6b7280; text-transform:uppercase; margin:0 0 12px 0;">History</h3>
+                    <div id="newsletter-history-list" style="display:flex; flex-direction:column; gap:6px; font-size:0.8rem;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
