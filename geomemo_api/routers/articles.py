@@ -582,7 +582,8 @@ Be strict: only classify as ADDS_DETAIL/DIFFERENT_ANGLE/CONTRARIAN if the articl
                 results.append(row)
             return results
 
-        # 4. Build classification map and filter out DUPLICATE and RELATED
+        # 4. Build classification map — return ALL articles with labels (don't filter)
+        #    Let the frontend pre-check valuable ones and uncheck duplicates.
         class_map = {}
         for c in classifications:
             class_map[c.get('id')] = {
@@ -590,15 +591,13 @@ Be strict: only classify as ADDS_DETAIL/DIFFERENT_ANGLE/CONTRARIAN if the articl
                 'reason': c.get('reason', ''),
             }
 
-        VALUABLE_TYPES = {'ADDS_DETAIL', 'DIFFERENT_ANGLE', 'CONTRARIAN'}
         results = []
         for row in similar_rows:
             info = class_map.get(row['id'], {'relationship': 'DUPLICATE', 'reason': ''})
-            if info['relationship'] in VALUABLE_TYPES:
-                row['relationship'] = info['relationship']
-                row['reason'] = info['reason']
-                row['distance'] = row.pop('similarity', 0.0)
-                results.append(row)
+            row['relationship'] = info['relationship']
+            row['reason'] = info['reason']
+            row['distance'] = row.pop('similarity', 0.0)
+            results.append(row)
 
         return results
 

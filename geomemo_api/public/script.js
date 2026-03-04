@@ -484,6 +484,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'ADDS_DETAIL': 'Adds Detail',
             'DIFFERENT_ANGLE': 'Different Angle',
             'CONTRARIAN': 'Contrarian',
+            'DUPLICATE': 'Duplicate',
+            'RELATED': 'Related',
         };
         return labels[rel] || rel;
     }
@@ -496,13 +498,18 @@ document.addEventListener('DOMContentLoaded', () => {
         overlay.className = 'modal-overlay similar-modal-overlay';
 
         const displayArticles = similarArticles.slice(0, 10);
+        const VALUABLE_TYPES = ['ADDS_DETAIL', 'DIFFERENT_ANGLE', 'CONTRARIAN'];
 
         let articlesHtml = '';
         if (displayArticles.length > 0) {
             articlesHtml = displayArticles.map(article => {
-                // Similarity: smart-similar returns it in distance field, basic similar also uses distance
                 const similarity = article.distance || article.similarity || 0;
                 const simPct = Math.round(similarity * 100);
+
+                // In smart mode: pre-check valuable articles, uncheck duplicates
+                const isValuable = isSmartMode && VALUABLE_TYPES.includes(article.relationship);
+                const isDuplicate = isSmartMode && (article.relationship === 'DUPLICATE' || article.relationship === 'RELATED');
+                const isChecked = isSmartMode ? isValuable : true;
 
                 // Relationship labels (only in smart mode)
                 let relationshipHtml = '';
@@ -520,9 +527,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     relationshipHtml = `<span class="similarity-badge mt-1">${simPct}% match</span>`;
                 }
 
+                const rowOpacity = isDuplicate ? 'opacity-60' : '';
+
                 return `
-                    <div class="similar-article p-3 border-b border-gray-100 hover:bg-gray-50 flex items-start">
-                        <input type="checkbox" class="similar-article-checkbox mt-1 mr-3 h-4 w-4" data-id="${article.id}" checked>
+                    <div class="similar-article p-3 border-b border-gray-100 hover:bg-gray-50 flex items-start ${rowOpacity}">
+                        <input type="checkbox" class="similar-article-checkbox mt-1 mr-3 h-4 w-4" data-id="${article.id}" ${isChecked ? 'checked' : ''}>
                         <div class="similar-article-details flex-1">
                             <a href="${article.url}" target="_blank" class="similar-article-headline text-blue-600 font-semibold hover:underline block">${article.headline || article.headline_original}</a>
                             <div class="similar-article-meta text-xs text-gray-500 mt-1">
@@ -533,33 +542,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>`;
             }).join('');
         } else {
-            articlesHtml = isSmartMode
-                ? '<p class="text-gray-500 p-4 text-center">No articles with additional perspectives found. All similar articles appear to be duplicates.</p>'
-                : '<p class="text-gray-500 p-4 text-center">No similar articles found in the database.</p>';
+            articlesHtml = '<p class="text-gray-500 p-4 text-center">No similar articles found.</p>';
         }
 
-        const modeLabel = isSmartMode ? '(AI-Filtered — duplicates removed)' : '';
+        // Truncate headline for modal title
+        const shortHeadline = originalHeadline.length > 60 ? originalHeadline.substring(0, 60) + '...' : originalHeadline;
+        const modeLabel = isSmartMode ? 'AI-labeled — valuable pre-checked, duplicates unchecked' : '';
 
         overlay.innerHTML = `
             <div class="modal-container bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col max-h-[90vh]">
-                <div class="modal-header bg-gray-100 p-4 border-b flex justify-between items-center">
-                    <div>
-                        <h2 class="text-lg font-bold text-gray-800 truncate pr-4">Similar to: "${originalHeadline}"</h2>
+                <div class="modal-header bg-gray-100 p-4 border-b flex justify-between items-center gap-3">
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-lg font-bold text-gray-800 truncate">Similar to: "${shortHeadline}"</h2>
                         ${modeLabel ? `<p class="text-xs text-green-600 font-semibold mt-1">${modeLabel}</p>` : ''}
                     </div>
-                    <button class="modal-close-btn text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+                    <button class="modal-close-btn text-gray-500 hover:text-gray-700 text-2xl leading-none flex-shrink-0 px-2">&times;</button>
                 </div>
 
                 <div class="modal-body p-0 overflow-y-auto flex-1">
                     ${articlesHtml}
                 </div>
 
-                <div class="p-4 border-t bg-gray-50">
+                <div class="p-4 border-t bg-gray-50 space-y-2">
                     <div id="analysis-result-container" class="mb-3 hidden bg-blue-50 p-3 rounded text-sm text-gray-700">
                         <strong>AI Analysis:</strong> <span id="analysis-result-text">Initializing...</span>
                     </div>
                     <button id="analyze-cluster-btn" class="w-full bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-700 transition font-bold disabled:opacity-50" ${displayArticles.length === 0 ? 'disabled' : ''}>
                         Cluster & Submit
+                    </button>
+                    <button id="close-similar-btn" class="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded hover:bg-gray-300 transition font-semibold">
+                        Cancel
                     </button>
                 </div>
             </div>
@@ -573,6 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         overlay.querySelector('.modal-close-btn').addEventListener('click', close);
+        overlay.querySelector('#close-similar-btn').addEventListener('click', close);
         overlay.addEventListener('click', (e) => { if(e.target === overlay) close(); });
 
         const analyzeBtn = overlay.querySelector('#analyze-cluster-btn');
