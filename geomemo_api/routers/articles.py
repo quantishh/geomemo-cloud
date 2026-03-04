@@ -234,7 +234,7 @@ def get_map_articles(days: int = Query(7, ge=1, le=30)):
             SELECT id, url, headline_en, summary, summary_long, category,
                    publication_name, scraped_at, confidence_score, country_codes
             FROM articles
-            WHERE scraped_at >= NOW() - INTERVAL '%s days'
+            WHERE scraped_at >= NOW() - %s::int * INTERVAL '1 day'
               AND country_codes IS NOT NULL
               AND array_length(country_codes, 1) > 0
             ORDER BY scraped_at DESC
