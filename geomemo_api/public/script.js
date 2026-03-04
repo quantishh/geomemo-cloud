@@ -697,10 +697,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ regenerate: regenerate })
             });
             if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Generation failed');
+                let errMsg = 'Generation failed';
+                try {
+                    const err = await res.json();
+                    errMsg = err.detail || errMsg;
+                } catch {
+                    const text = await res.text();
+                    if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+                        errMsg = `Server returned HTML instead of JSON (status ${res.status}). The newsletter endpoint may not be loaded — try rebuilding the container.`;
+                    } else {
+                        errMsg = `Server error (${res.status}): ${text.substring(0, 200)}`;
+                    }
+                }
+                throw new Error(errMsg);
             }
-            const data = await res.json();
+            let data;
+            try {
+                data = await res.json();
+            } catch {
+                const text = await res.text();
+                throw new Error(`Invalid response from server. Expected JSON but got: ${text.substring(0, 200)}`);
+            }
             currentBriefId = data.id;
 
             // Populate subject
@@ -795,8 +812,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST'
             });
             if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Publish failed');
+                let errMsg = 'Publish failed';
+                try {
+                    const err = await res.json();
+                    errMsg = err.detail || errMsg;
+                } catch {
+                    errMsg = `Server error (${res.status})`;
+                }
+                throw new Error(errMsg);
             }
             const data = await res.json();
 
