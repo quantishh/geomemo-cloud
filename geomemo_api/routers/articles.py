@@ -404,7 +404,7 @@ def get_similar_articles(article_id: int, days: int = 2, threshold: float = 0.65
         target = cursor.fetchone()
         if not target:
             raise HTTPException(404, "Not found")
-        if not target['embedding']:
+        if target['embedding'] is None:
             raise HTTPException(400, "Article has no embedding")
 
         cursor.execute(
@@ -491,7 +491,7 @@ def get_smart_similar_articles(article_id: int, days: int = 2, threshold: float 
         target = cursor.fetchone()
         if not target:
             raise HTTPException(404, "Not found")
-        if not target['embedding']:
+        if target['embedding'] is None:
             raise HTTPException(400, "Article has no embedding")
 
         # 2. Find similar articles (same logic as GET /similar)
