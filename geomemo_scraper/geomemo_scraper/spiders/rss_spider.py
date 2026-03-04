@@ -241,7 +241,7 @@ class RssSpider(scrapy.Spider):
         'https://news.google.com/rss/search?q=(AI+OR+"Artificial+Intelligence")+AND+(labor+OR+displacement+OR+unemployment+OR+"economic+revolution"+OR+regulation)+AND+(geopolitics+OR+global)+when:1d&hl=en-US&gl=US&ceid=US:en',
         'https://news.google.com/rss/search?q=("global+economy"+OR+GDP+OR+recession+OR+inflation+OR+"central+bank")+AND+(Asia+OR+India+OR+Europe+OR+"South+America"+OR+Africa+OR+Australia)+when:1d&hl=en-US&gl=US&ceid=US:en',
         'https://news.google.com/rss/search?q=("foreign+policy"+OR+"international+relations"+OR+diplomacy)+AND+("United+States"+OR+US)+AND+(impact+OR+implication+OR+effect)+when:1d&hl=en-US&gl=US&ceid=US:en',
-        'https://news.google.com/rss/search?q=("think+tank"+OR+"policy+brief"+OR+"strategic+analysis")+AND+(geopolitics+OR+global)+when:1d&hl=en-US&gl=US&ceid=US:en'
+        'https://news.google.com/rss/search?q=("think+tank"+OR+"policy+brief"+OR+"strategic+analysis")+AND+(geopolitics+OR+global)+when:1d&hl=en-US&gl=US&ceid=US:en',
         'https://news.google.com/rss/search?q=("S%26P+500"+OR+"Nasdaq"+OR+"Dow+Jones"+OR+"Russell+2000"+OR+"TSX+Composite"+OR+"S%26P/TSX"+OR+"IPC+Index")+AND+(forecast+OR+performance+OR+outlook)+when:1d&hl=en-US&gl=US&ceid=US:en',
         # Add more keyword searches as desired
     ]

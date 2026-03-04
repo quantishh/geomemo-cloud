@@ -14,6 +14,7 @@ class ArticleItem(scrapy.Item):
     # Fields to be filled by the LLM
     headline_en = scrapy.Field() # The translated headline
     summary = scrapy.Field()
+    summary_long = scrapy.Field()  # M5: 100-word analytical summary for map layer
     category = scrapy.Field()
     embedding = scrapy.Field()
     confidence_score = scrapy.Field()
