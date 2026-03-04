@@ -125,7 +125,8 @@ STEP 4: Output valid JSON:
     "is_relevant": "yes/no",
     "confidence_score": <integer 0-100>,
     "headline_en": "Formal English Headline",
-    "summary": "Detailed 50-word summary based on text.",
+    "summary": "Concise 50-word summary of the key facts.",
+    "summary_long": "Detailed 100-word analytical summary. Include key facts, figures, names, country implications, and market/policy impact.",
     "category": "Category Name",
     "countries": ["Country1", "Country2"]
 }}
@@ -372,6 +373,7 @@ Content: "{content_snippet}"
             # 4. Assign Data from Groq
             adapter['headline_en'] = processed_data.get('headline_en', headline)
             adapter['summary'] = processed_data.get('summary', 'No summary.')
+            adapter['summary_long'] = processed_data.get('summary_long', adapter['summary'])
             adapter['category'] = processed_data.get('category', 'Other')
             adapter['confidence_score'] = processed_data.get('confidence_score', 50)
 
@@ -416,17 +418,18 @@ Content: "{content_snippet}"
                 """
                 INSERT INTO articles
                 (url, headline, publication_name, author, headline_en, summary,
-                 category, status, scraped_at, embedding, confidence_score,
+                 summary_long, category, status, scraped_at, embedding, confidence_score,
                  source_id, repetition_score, auto_approval_score,
                  country_codes, region)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending', NOW(), %s, %s,
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', NOW(), %s, %s,
                         %s, %s, %s, %s, %s)
                 ON CONFLICT (url) DO NOTHING
                 """,
                 (
                     adapter['url'], adapter['headline'], publication_name,
                     adapter.get('author'),
-                    adapter['headline_en'], adapter['summary'], adapter['category'],
+                    adapter['headline_en'], adapter['summary'],
+                    adapter['summary_long'], adapter['category'],
                     adapter['embedding'], adapter['confidence_score'],
                     source_id, repetition_score, auto_approval_score,
                     country_codes if country_codes else None,

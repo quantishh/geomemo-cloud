@@ -187,6 +187,105 @@ def get_approved_articles():
         conn.close()
 
 
+# --- M5: Map Layer Endpoint (all scraped articles for WorldMonitor fork) ---
+
+# Capital city coordinates for country code → lat/lon mapping
+COUNTRY_COORDS = {
+    "US": [-77.04, 38.90], "GB": [-0.12, 51.51], "FR": [2.35, 48.86], "DE": [13.38, 52.52],
+    "CN": [116.40, 39.90], "RU": [37.62, 55.76], "JP": [139.69, 35.69], "IN": [77.21, 28.61],
+    "BR": [-47.88, -15.79], "AU": [149.13, -35.28], "CA": [-75.70, 45.42], "KR": [126.98, 37.57],
+    "MX": [-99.13, 19.43], "ID": [106.85, -6.21], "TR": [32.87, 39.93], "SA": [46.72, 24.69],
+    "ZA": [28.19, -25.75], "AR": [-58.38, -34.60], "EG": [31.24, 30.04], "NG": [7.49, 9.06],
+    "PK": [73.05, 33.69], "IL": [35.22, 31.77], "IR": [51.39, 35.69], "IQ": [44.37, 33.31],
+    "UA": [30.52, 50.45], "PL": [21.01, 52.23], "IT": [12.50, 41.90], "ES": [-3.70, 40.42],
+    "NL": [4.90, 52.37], "BE": [4.35, 50.85], "SE": [18.07, 59.33], "NO": [10.75, 59.91],
+    "FI": [24.94, 60.17], "DK": [12.57, 55.68], "CH": [7.45, 46.95], "AT": [16.37, 48.21],
+    "PT": [-9.14, 38.74], "GR": [23.73, 37.97], "CZ": [14.42, 50.08], "RO": [26.10, 44.43],
+    "HU": [19.04, 47.50], "TH": [100.50, 13.76], "VN": [105.83, 21.03], "PH": [120.98, 14.60],
+    "MY": [101.69, 3.14], "SG": [103.82, 1.35], "TW": [121.57, 25.03], "HK": [114.17, 22.32],
+    "NZ": [174.78, -41.29], "CL": [-70.65, -33.45], "CO": [-74.08, 4.71], "PE": [-77.04, -12.05],
+    "VE": [-66.92, 10.49], "CU": [-82.38, 23.11], "KE": [36.82, -1.29], "ET": [38.75, 9.02],
+    "GH": [-0.19, 5.56], "TZ": [39.27, -6.81], "MA": [-6.84, 34.02], "DZ": [3.06, 36.75],
+    "TN": [10.17, 36.81], "LY": [13.18, 32.90], "SD": [32.53, 15.59], "AE": [54.37, 24.45],
+    "QA": [51.53, 25.29], "KW": [47.98, 29.37], "OM": [58.39, 23.61], "BH": [50.58, 26.23],
+    "JO": [35.95, 31.95], "LB": [35.50, 33.89], "SY": [36.29, 33.51], "YE": [44.21, 15.35],
+    "AF": [69.17, 34.53], "MM": [96.17, 16.87], "KP": [125.75, 39.02], "BD": [90.39, 23.81],
+    "LK": [79.86, 6.93], "NP": [85.32, 27.72], "KH": [104.92, 11.55], "LA": [102.63, 17.97],
+    "PS": [35.23, 31.90], "GE": [44.78, 41.72], "AM": [44.51, 40.18], "AZ": [49.87, 40.41],
+    "KZ": [71.43, 51.13], "UZ": [69.28, 41.31], "RS": [20.47, 44.80], "HR": [15.98, 45.81],
+    "BA": [18.41, 43.86], "XK": [21.17, 42.67], "ME": [19.26, 42.44], "MK": [21.43, 42.00],
+    "BG": [23.32, 42.70], "SK": [17.11, 48.15], "SI": [14.51, 46.06], "LT": [25.28, 54.69],
+    "LV": [24.11, 56.95], "EE": [24.75, 59.44], "IE": [-6.26, 53.35], "IS": [-21.90, 64.14],
+    "CY": [33.38, 35.17], "MT": [14.51, 35.90], "LU": [6.13, 49.61],
+}
+
+
+@router.get("/api/articles/map")
+def get_map_articles(days: int = Query(7, ge=1, le=30)):
+    """
+    Return all scraped articles with country data for the map layer.
+    No curation filter — ALL articles regardless of status.
+    Returns GeoJSON FeatureCollection.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("""
+            SELECT id, url, headline_en, summary, summary_long, category,
+                   publication_name, scraped_at, confidence_score, country_codes
+            FROM articles
+            WHERE scraped_at >= NOW() - INTERVAL '%s days'
+              AND country_codes IS NOT NULL
+              AND array_length(country_codes, 1) > 0
+            ORDER BY scraped_at DESC
+            LIMIT 500
+        """, (days,))
+
+        features = []
+        for row in cursor.fetchall():
+            article = dict(row)
+            # Use summary_long if available, fall back to summary
+            display_summary = article.get('summary_long') or article.get('summary') or ''
+
+            # Create one feature per country code
+            for code in (article.get('country_codes') or []):
+                code_upper = code.upper().strip()
+                coords = COUNTRY_COORDS.get(code_upper)
+                if not coords:
+                    continue
+
+                features.append({
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": coords  # [lon, lat]
+                    },
+                    "properties": {
+                        "id": article['id'],
+                        "headline": article.get('headline_en') or '',
+                        "summary": display_summary,
+                        "category": article.get('category') or 'Other',
+                        "source": article.get('publication_name') or '',
+                        "url": article.get('url') or '',
+                        "timestamp": article['scraped_at'].isoformat() if article.get('scraped_at') else '',
+                        "confidence": article.get('confidence_score') or 0,
+                        "country": code_upper,
+                    }
+                })
+
+        return {
+            "type": "FeatureCollection",
+            "features": features
+        }
+
+    except Exception as e:
+        logger.error(f"Map articles error: {e}")
+        raise HTTPException(500, "Failed to fetch map articles")
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # --- Article Actions ---
 
 @router.post("/articles/manual-submission", status_code=201)

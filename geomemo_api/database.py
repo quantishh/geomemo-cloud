@@ -138,6 +138,8 @@ def init_db():
             "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS beehiiv_post_id TEXT",
             "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS newsletter_html TEXT",
             "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS subject_line TEXT",
+            # M5: Map layer — 100-word summary for WorldMonitor fork
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS summary_long TEXT",
         ]
         for sql in migrations:
             try:
