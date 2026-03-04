@@ -3,7 +3,7 @@ Pydantic models for request/response validation.
 """
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 
 
 # --- Article Models ---
@@ -137,7 +137,7 @@ class NewsletterSignup(BaseModel):
 # --- M3: Newsletter Generation Models ---
 class DailyBrief(BaseModel):
     id: int
-    date: str
+    date: date
     summary_text: str
     summary_html: Optional[str] = None
     newsletter_html: Optional[str] = None
