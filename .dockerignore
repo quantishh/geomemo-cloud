@@ -1,0 +1,44 @@
+# =============================================================================
+# GeoMemo — Docker Build Context Exclusions
+# Keeps the build context small and fast. Prevents secrets from leaking.
+# =============================================================================
+
+# Git
+.git
+.gitignore
+
+# Environment (secrets)
+.env
+*.env
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Node.js (Next.js website — not used by the backend container)
+geomemo-website/
+node_modules/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database backups
+*.sql
+*.sql.bak
+
+# Logs
+*.log
+
+# Uploaded images (runtime data, not build-time)
+uploaded_images/
+
+# Claude project files
+.claude/

@@ -1,0 +1,36 @@
+# =============================================================================
+# GeoMemo — Python Dependencies
+# Used by both the FastAPI backend (geomemo_api) and the Scrapy scraper.
+# =============================================================================
+
+# --- Web Framework ---
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# --- Database ---
+psycopg2-binary>=2.9.9
+pgvector>=0.2.4
+
+# --- AI / ML ---
+groq>=0.4.0
+sentence-transformers>=2.2.0
+# NOTE: sentence-transformers pulls in torch automatically.
+# For a smaller image on CPU-only servers, you can pre-install CPU torch:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+# Then install sentence-transformers after.
+
+# --- Scraper ---
+scrapy>=2.11.0
+pycountry>=23.12.11
+pyOpenSSL>=23.3.0
+itemadapter>=0.9.0
+lxml>=5.1.0
+
+# --- HTTP & Parsing ---
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+
+# --- Utilities ---
+python-dotenv>=1.0.0
+pydantic>=2.5.0

@@ -1,0 +1,60 @@
+# =============================================================================
+# GeoMemo — Docker Compose PRODUCTION Overrides
+#
+# Use this ALONGSIDE docker-compose.yml for production deployment:
+#
+#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# DIFFERENCES FROM DEV:
+#   - NO volume mounts: code is baked into the Docker image via COPY
+#   - Uvicorn runs with multiple workers for performance
+#   - Database port NOT exposed externally (security)
+#   - Stricter restart policy
+#
+# PRODUCTION DEPLOYMENT WORKFLOW:
+#
+#   FIRST TIME:
+#     cd ~/geomemo-cloud
+#     git checkout main
+#     cp .env.example .env   # fill in production API keys + strong DB password
+#     docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+#   UPDATING CODE:
+#     cd ~/geomemo-cloud
+#     git pull origin main
+#     docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build web
+#     # Rebuilds the image with latest code + deps, zero-downtime restart.
+#
+#   SCRAPER CRON (add to crontab -e):
+#     0 1 * * * docker exec geomemo-web bash -c "cd /app/geomemo_scraper && scrapy crawl rss_spider" >> /home/ubuntu/scraper.log 2>&1
+#
+# PRE-MIGRATION CHECKLIST:
+#   1. Ensure .env has ALL keys from .env.example (especially POSTGRES_PASSWORD)
+#   2. Ensure requirements.txt is up-to-date (all packages listed)
+#   3. Build once with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml build
+#      This downloads/installs ALL packages into the image (~2-5 min first time)
+#   4. Verify image size: docker images geomemo-cloud-web
+#   5. Test: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   6. Verify: curl http://localhost:8000/api/health
+# =============================================================================
+
+version: '3.8'
+
+services:
+  web:
+    # Override: NO volume mounts — code is baked into the image.
+    # This means every deploy requires a rebuild (--build flag).
+    volumes: []
+    # Production uses multiple Uvicorn workers for concurrency
+    command: >
+      uvicorn main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 2
+      --app-dir /app/geomemo_api
+    restart: always
+
+  db:
+    # Override: Don't expose database port externally in production
+    ports: []
+    restart: always

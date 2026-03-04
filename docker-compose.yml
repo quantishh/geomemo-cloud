@@ -1,0 +1,80 @@
+# =============================================================================
+# GeoMemo — Docker Compose (Dev / Sandbox)
+#
+# DEPLOYMENT WORKFLOW (this is the only thing you need to remember):
+#
+#   FIRST TIME:
+#     cd ~/geomemo-cloud
+#     cp .env.example .env   # fill in your API keys
+#     docker-compose up -d --build
+#
+#   UPDATING CODE (after git pull):
+#     cd ~/geomemo-cloud
+#     git pull origin dev
+#     docker-compose restart web
+#     # That's it! Volume mounts mean the container always uses the latest code.
+#
+#   UPDATING DEPENDENCIES (after requirements.txt changes):
+#     docker-compose up -d --build web
+#     # Rebuilds the image with new packages, then restarts.
+#
+#   RUNNING THE SCRAPER MANUALLY:
+#     docker exec geomemo-web bash -c "cd /app/geomemo_scraper && scrapy crawl rss_spider"
+#
+#   VIEWING LOGS:
+#     docker logs geomemo-web --tail=50 -f
+#
+# WHY VOLUME MOUNTS FIX THE RECURRING BUG:
+#   Before: Code was baked into the Docker image at build time. Running
+#           'docker-compose restart' just restarted the OLD image with OLD code.
+#           New files (like newsletter.py) never made it into the container.
+#   Now:    Code directories are mounted as volumes. The container always reads
+#           directly from the host filesystem. 'git pull' updates the files,
+#           'docker-compose restart web' restarts the Python process, and the
+#           new code is immediately loaded. No rebuild needed for code changes.
+# =============================================================================
+
+version: '3.8'
+
+services:
+  web:
+    container_name: geomemo-web
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # --- CODE VOLUME MOUNTS (the fix for the recurring mismatch bug) ---
+      # These bind-mount the host code into the container.
+      # git pull updates the host files → container sees changes immediately.
+      - ./geomemo_api:/app/geomemo_api
+      - ./geomemo_scraper:/app/geomemo_scraper
+      - ./geomemo_newsletter:/app/geomemo_newsletter
+    env_file: .env
+    environment:
+      # Force POSTGRES_HOST to the Docker service name regardless of .env
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    container_name: geomemo-db
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
