@@ -120,16 +120,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newsletterStatus) newsletterStatus.style.display = 'none';
     });
     if (copyHtmlBtn) copyHtmlBtn.addEventListener('click', () => {
-        if (newsletterOutput && newsletterOutput.value) {
-            navigator.clipboard.writeText(newsletterOutput.value).then(() => {
-                copyHtmlBtn.textContent = 'Copied!';
-                setTimeout(() => { copyHtmlBtn.textContent = 'Copy HTML'; }, 2000);
-            }).catch(() => {
-                newsletterOutput.select();
-                document.execCommand('copy');
-                copyHtmlBtn.textContent = 'Copied!';
-                setTimeout(() => { copyHtmlBtn.textContent = 'Copy HTML'; }, 2000);
-            });
+        const htmlContent = newsletterOutput && newsletterOutput.value;
+        if (!htmlContent) return;
+        const onSuccess = () => {
+            copyHtmlBtn.textContent = 'Copied!';
+            setTimeout(() => { copyHtmlBtn.textContent = 'Copy HTML'; }, 2000);
+        };
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(htmlContent).then(onSuccess).catch(onSuccess);
+        } else {
+            const tmp = document.createElement('textarea');
+            tmp.value = htmlContent;
+            tmp.style.position = 'fixed';
+            tmp.style.opacity = '0';
+            document.body.appendChild(tmp);
+            tmp.select();
+            document.execCommand('copy');
+            document.body.removeChild(tmp);
+            onSuccess();
         }
     });
     if (togglePreviewBtn) togglePreviewBtn.addEventListener('click', showPreviewMode);
