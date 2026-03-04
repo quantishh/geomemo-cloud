@@ -42,31 +42,49 @@ def generate_newsletter(request: NewsletterGenerateRequest = NewsletterGenerateR
     Generate today's newsletter: AI brief + full article HTML.
     Saves to daily_briefs table. Returns generated content for preview.
     """
-    target = request.target_date or date.today().isoformat()
-
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
-        # 0. Check if brief already exists (unless regenerate=True)
+        # 1. Fetch approved articles — use specific date if provided,
+        #    otherwise find the latest approved batch (same as /articles/approved)
+        if request.target_date:
+            target = request.target_date
+            cursor.execute("""
+                SELECT id, url, headline, headline_en, summary, category,
+                       publication_name, author, scraped_at, is_top_story, parent_id
+                FROM articles
+                WHERE status = 'approved'
+                  AND scraped_at::date = %s::date
+                ORDER BY is_top_story DESC, scraped_at DESC
+            """, (target,))
+        else:
+            cursor.execute("""
+                WITH LatestBatch AS (
+                    SELECT MAX(scraped_at::date) as max_date
+                    FROM articles WHERE status = 'approved'
+                )
+                SELECT id, url, headline, headline_en, summary, category,
+                       publication_name, author, scraped_at, is_top_story, parent_id
+                FROM articles
+                WHERE status = 'approved'
+                  AND scraped_at::date = (SELECT max_date FROM LatestBatch)
+                ORDER BY is_top_story DESC, scraped_at DESC
+            """)
+
+        articles = [dict(row) for row in cursor.fetchall()]
+
+        if not articles:
+            raise HTTPException(404, "No approved articles found")
+
+        # Determine the actual date from the articles (for daily_briefs storage)
+        target = articles[0]['scraped_at'].strftime('%Y-%m-%d')
+
+        # 0. Check if brief already exists for this date (unless regenerate=True)
         if not request.regenerate:
             cursor.execute("SELECT * FROM daily_briefs WHERE date = %s", (target,))
             existing = cursor.fetchone()
             if existing:
                 return dict(existing)
-
-        # 1. Fetch approved articles for this date
-        cursor.execute("""
-            SELECT id, url, headline, headline_en, summary, category,
-                   publication_name, author, scraped_at, is_top_story, parent_id
-            FROM articles
-            WHERE status = 'approved'
-              AND scraped_at::date = %s::date
-            ORDER BY is_top_story DESC, scraped_at DESC
-        """, (target,))
-        articles = [dict(row) for row in cursor.fetchall()]
-
-        if not articles:
-            raise HTTPException(404, f"No approved articles found for {target}")
 
         # 2. Separate parents and children
         parents = [a for a in articles if not a['parent_id']]
