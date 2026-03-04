@@ -8,3 +8,5 @@ geomemo_production_backup.sql
 uploaded_images/
 geomemo_scraper/geomemo_scraper/auth.json
 venv/
+*.pem
+*.pdf

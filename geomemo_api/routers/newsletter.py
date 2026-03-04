@@ -329,6 +329,15 @@ def _build_subject_line(top_stories: list, parents: list) -> str:
     return f"GeoMemo: {text}"
 
 
+def _minify_html(html: str) -> str:
+    """Strip unnecessary whitespace from HTML to minimize size for Beehiiv."""
+    # Collapse runs of whitespace (newlines, tabs, spaces) into single space
+    html = re.sub(r'\s+', ' ', html)
+    # Remove space between tags
+    html = re.sub(r'>\s+<', '><', html)
+    return html.strip()
+
+
 def _build_newsletter_html(
     brief_html: str,
     top_stories: list,
@@ -336,35 +345,46 @@ def _build_newsletter_html(
     child_map: dict,
     target_date: str,
 ) -> str:
-    """Build the complete newsletter HTML with AI brief and all article sections."""
+    """Build the complete newsletter HTML with AI brief and all article sections.
+    Output is minified for Beehiiv compatibility (shortest possible HTML)."""
     try:
         date_formatted = datetime.strptime(target_date, "%Y-%m-%d").strftime("%B %d, %Y")
     except ValueError:
         date_formatted = target_date
 
+    parts = []
+
+    # --- Envelope ---
+    parts.append(
+        f'<html><head><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>'
+        f'<body style="font-family:{FONT_STACK};color:#111;margin:0;padding:0;background:#fff">'
+        f'<div style="max-width:600px;margin:0 auto;padding:20px">'
+    )
+
     # --- Header ---
-    html = f"""<html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="font-family:{FONT_STACK};color:#111;margin:0;padding:0;background-color:#fff;">
-<div style="max-width:600px;width:100%;margin:0 auto;padding:20px;">
+    parts.append(
+        f'<div style="border-bottom:2px solid #eee;padding-bottom:15px;margin-bottom:20px">'
+        f'<span style="font-size:24px;font-weight:800;color:#430297;letter-spacing:-0.5px;text-transform:uppercase">GeoMemo</span><br>'
+        f'<span style="color:#666;font-size:13px">Daily Intelligence &bull; {date_formatted}</span>'
+        f'</div>'
+    )
 
-<div style="border-bottom:2px solid #eee;padding-bottom:15px;margin-bottom:20px;">
-    <span style="font-size:24px;font-weight:800;color:#430297;letter-spacing:-0.5px;text-transform:uppercase;">GeoMemo</span><br>
-    <span style="color:#666;font-size:13px;font-weight:400;">Daily Intelligence &bull; {date_formatted}</span>
-</div>"""
-
-    # --- AI Daily Brief (NEW in M3) ---
+    # --- AI Daily Brief ---
     if brief_html and brief_html.strip():
-        html += f"""
-<div style="background-color:#f8f6ff;border-left:4px solid #430297;padding:16px 20px;margin-bottom:25px;border-radius:0 6px 6px 0;">
-    <div style="font-size:14px;font-weight:700;color:#430297;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Daily Brief</div>
-    <div style="font-size:14px;line-height:1.6;color:#1f2937;">{brief_html}</div>
-</div>"""
+        parts.append(
+            f'<div style="background:#f8f6ff;border-left:4px solid #430297;padding:16px 20px;margin-bottom:25px;border-radius:0 6px 6px 0">'
+            f'<div style="font-size:14px;font-weight:700;color:#430297;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Daily Brief</div>'
+            f'<div style="font-size:14px;line-height:1.6">{brief_html}</div>'
+            f'</div>'
+        )
 
     # --- Top News ---
     if top_stories:
-        html += f"""<div style="color:#b00;font-family:{FONT_STACK};font-weight:700;font-size:14px;border-bottom:2px solid #b00;margin-bottom:15px;text-transform:uppercase;letter-spacing:0.5px;">Top News</div>"""
+        parts.append(
+            '<div style="color:#b00;font-weight:700;font-size:14px;border-bottom:2px solid #b00;margin-bottom:15px;text-transform:uppercase;letter-spacing:0.5px">Top News</div>'
+        )
         for a in top_stories:
-            html += _format_article_item(a, child_map.get(a['id'], []))
+            parts.append(_format_article_item(a, child_map.get(a['id'], [])))
 
     # --- Category Sections ---
     categories = {}
@@ -376,56 +396,48 @@ def _build_newsletter_html(
 
     for cat in VALID_CATEGORIES + ['Other']:
         if cat in categories and categories[cat]:
-            html += f"""<div style="color:#b00;font-family:{FONT_STACK};font-weight:700;font-size:14px;border-bottom:1px solid #ddd;margin-top:30px;margin-bottom:15px;text-transform:uppercase;letter-spacing:0.5px;">{cat}</div>"""
+            parts.append(
+                f'<div style="color:#b00;font-weight:700;font-size:14px;border-bottom:1px solid #ddd;margin-top:30px;margin-bottom:15px;text-transform:uppercase;letter-spacing:0.5px">{cat}</div>'
+            )
             for a in categories[cat]:
-                html += _format_article_item(a, child_map.get(a['id'], []))
+                parts.append(_format_article_item(a, child_map.get(a['id'], [])))
 
     # --- Footer ---
-    html += """
-<div style="margin-top:50px;padding-top:20px;border-top:1px solid #eee;color:#999;font-size:11px;text-align:center;line-height:1.6;">
-    &copy; 2025 GeoMemo.<br>Briefing the world's decision makers.<br>
-    <a href="{{unsubscribe_url}}" style="color:#999;text-decoration:underline;">Unsubscribe</a>
-</div>
-</div></body></html>"""
+    parts.append(
+        '<div style="margin-top:50px;padding-top:20px;border-top:1px solid #eee;color:#999;font-size:11px;text-align:center;line-height:1.6">'
+        '&copy; 2026 GeoMemo.<br>Briefing the world\'s decision makers.<br>'
+        '<a href="{{unsubscribe_url}}" style="color:#999;text-decoration:underline">Unsubscribe</a>'
+        '</div></div></body></html>'
+    )
 
-    return html
+    return _minify_html(''.join(parts))
 
 
 def _format_article_item(article: dict, children: list) -> str:
-    """Render one article (parent + children) in newsletter HTML."""
+    """Render one article (parent + children) in compact newsletter HTML."""
     text = article.get('summary') or article.get('headline_en') or article.get('headline') or 'No Content'
-    # Strip HTML tags
     text_clean = re.sub(r'<[^>]*>', '', text)
 
-    time_str = ''
-    if article.get('scraped_at'):
-        try:
-            time_str = article['scraped_at'].strftime("%I:%M %p")
-        except AttributeError:
-            # scraped_at might be a string
-            pass
-
     pub_name = article.get('publication_name') or ''
-    author = article.get('author') or ''
-    meta = f"({pub_name}" + (f" - {author}" if author else "") + f") {time_str}"
+    meta = f' <span style="color:#888;font-size:12px">({pub_name})</span>' if pub_name else ''
 
-    html = f"""
-<div style="border-bottom:1px solid #eee;padding-bottom:15px;margin-bottom:15px;">
-    <div style="line-height:1.4;font-size:16px;">
-        <a href="{article['url']}" style="color:#1f2937;text-decoration:none;font-weight:700;">{text_clean}</a>
-        <span style="color:#888;font-size:12px;font-weight:300;margin-left:6px;">{meta}</span>
-    </div>"""
+    html = (
+        f'<div style="border-bottom:1px solid #eee;padding:0 0 12px;margin-bottom:12px">'
+        f'<a href="{article["url"]}" style="color:#111;text-decoration:none;font-weight:700;font-size:15px;line-height:1.4">{text_clean}</a>'
+        f'{meta}'
+    )
 
-    # Render children (cluster items)
+    # Render children (cluster items) — compact
     if children:
         for child in children:
             child_pub = child.get('publication_name') or 'Source'
             child_text = child.get('summary') or child.get('headline_en') or child.get('headline') or ''
             child_text = re.sub(r'<[^>]*>', '', child_text)
-            html += f"""
-    <div style="margin-top:8px;font-size:13px;color:#666;line-height:1.4;">
-        <a href="{child['url']}" style="color:#008000;font-weight:bold;text-decoration:none;">{child_pub}</a>: {child_text}
-    </div>"""
+            html += (
+                f'<div style="margin-top:6px;font-size:13px;color:#666;line-height:1.4">'
+                f'<a href="{child["url"]}" style="color:#008000;font-weight:bold;text-decoration:none">{child_pub}</a>: {child_text}'
+                f'</div>'
+            )
 
-    html += "\n</div>"
+    html += '</div>'
     return html

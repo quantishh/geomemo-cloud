@@ -696,27 +696,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ regenerate: regenerate })
             });
+            // Read body ONCE as text, then parse — prevents "Body already consumed" errors
+            const rawText = await res.text();
             if (!res.ok) {
                 let errMsg = 'Generation failed';
                 try {
-                    const err = await res.json();
+                    const err = JSON.parse(rawText);
                     errMsg = err.detail || errMsg;
                 } catch {
-                    const text = await res.text();
-                    if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+                    if (rawText.includes('<!DOCTYPE') || rawText.includes('<html')) {
                         errMsg = `Server returned HTML instead of JSON (status ${res.status}). The newsletter endpoint may not be loaded — try rebuilding the container.`;
                     } else {
-                        errMsg = `Server error (${res.status}): ${text.substring(0, 200)}`;
+                        errMsg = `Server error (${res.status}): ${rawText.substring(0, 200)}`;
                     }
                 }
                 throw new Error(errMsg);
             }
             let data;
             try {
-                data = await res.json();
+                data = JSON.parse(rawText);
             } catch {
-                const text = await res.text();
-                throw new Error(`Invalid response from server. Expected JSON but got: ${text.substring(0, 200)}`);
+                throw new Error(`Invalid response from server. Expected JSON but got: ${rawText.substring(0, 200)}`);
             }
             currentBriefId = data.id;
 
@@ -811,17 +811,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_BASE_URL}/newsletter/${currentBriefId}/publish`, {
                 method: 'POST'
             });
+            const rawText = await res.text();
             if (!res.ok) {
                 let errMsg = 'Publish failed';
                 try {
-                    const err = await res.json();
+                    const err = JSON.parse(rawText);
                     errMsg = err.detail || errMsg;
                 } catch {
                     errMsg = `Server error (${res.status})`;
                 }
                 throw new Error(errMsg);
             }
-            const data = await res.json();
+            const data = JSON.parse(rawText);
 
             if (newsletterStatus) {
                 newsletterStatus.textContent = `Draft created in Beehiiv! Post ID: ${data.beehiiv_post_id}`;
