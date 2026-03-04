@@ -144,6 +144,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (toggleHtmlBtn) toggleHtmlBtn.addEventListener('click', showHtmlMode);
     if (pushBeehiivBtn) pushBeehiivBtn.addEventListener('click', handlePushToBeehiiv);
 
+    // M6: Social media event listeners
+    const checkBreakingBtn = document.getElementById('check-breaking-btn');
+    const postNewsletterTelegramBtn = document.getElementById('post-newsletter-telegram-btn');
+    if (checkBreakingBtn) checkBreakingBtn.addEventListener('click', handleCheckBreakingNews);
+    if (postNewsletterTelegramBtn) postNewsletterTelegramBtn.addEventListener('click', handlePostNewsletterTelegram);
+    fetchSocialStatus();
+    fetchSocialHistory();
+
     // --- GLOBAL HELPERS ---
     window.deleteItem = async (endpoint, id) => {
         if(!confirm("Delete this item?")) return;
@@ -168,6 +176,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.handleFindSimilarClick = (id, headline) => {
         handleFindSimilarLogic(id, headline);
+    };
+
+    window.postArticleToTelegram = async (articleId) => {
+        if (!confirm('Post this article to Telegram?')) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/social/post/article`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ article_id: articleId, platforms: ['telegram'] })
+            });
+            const data = await res.json();
+            if (data.posted && data.posted.length > 0) {
+                alert('Posted to Telegram!');
+                fetchSocialHistory();
+            } else if (data.errors && data.errors.length > 0) {
+                alert('Error: ' + data.errors.map(e => e.error).join(', '));
+            }
+        } catch (e) { alert('Failed: ' + e.message); }
     };
 
     function isToday(dateString) {
@@ -407,6 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     data-id="${article.id}"
                     data-pub="${article.publication_name || ''}"
                     data-auth="${article.author || ''}">✨ Enhance</button>
+                <button class="telegram-btn w-full text-xs" style="background:#0088cc;color:#fff;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;margin-top:4px;" onclick="postArticleToTelegram(${article.id})">📢 Telegram</button>
             </td>
         `;
         
@@ -1220,6 +1247,101 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchSourcesList();
         } catch (e) {
             alert("Error: " + e.message);
+        }
+    }
+
+    // =========================================
+    // M6: SOCIAL MEDIA FUNCTIONS
+    // =========================================
+
+    async function fetchSocialStatus() {
+        const container = document.getElementById('social-status');
+        if (!container) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/social/status`);
+            if (!res.ok) return;
+            const data = await res.json();
+            container.innerHTML = Object.entries(data).map(([platform, info]) => {
+                const dot = info.configured ? '🟢' : '🔴';
+                return `<span>${dot} <b>${platform}</b>: ${info.configured ? 'Connected' : 'Not configured'}</span>`;
+            }).join('');
+        } catch (e) {
+            container.innerHTML = '<span class="text-red-500">Failed to load status</span>';
+        }
+    }
+
+    async function fetchSocialHistory() {
+        const tbody = document.getElementById('social-posts-tbody');
+        if (!tbody) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/social/history?limit=20`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.posts || data.posts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">No posts yet</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.posts.map(p => {
+                const statusColor = p.status === 'sent' ? 'text-green-600' : 'text-red-600';
+                const contentPreview = (p.content_text || '').replace(/<[^>]*>/g, '').slice(0, 80) + '...';
+                const headline = p.article_headline || contentPreview;
+                const time = p.posted_at ? new Date(p.posted_at).toLocaleString() : '—';
+                return `<tr class="border-b">
+                    <td class="p-2 font-semibold">${p.platform === 'telegram' ? '📢' : '🐦'} ${p.platform}</td>
+                    <td class="p-2">${p.post_type}</td>
+                    <td class="p-2 text-xs">${headline.slice(0, 60)}</td>
+                    <td class="p-2 ${statusColor} font-semibold">${p.status}</td>
+                    <td class="p-2 text-xs text-gray-500">${time}</td>
+                </tr>`;
+            }).join('');
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-500">Failed to load history</td></tr>';
+        }
+    }
+
+    async function handleCheckBreakingNews() {
+        const btn = document.getElementById('check-breaking-btn');
+        const result = document.getElementById('breaking-result');
+        if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
+        try {
+            const res = await fetch(`${API_BASE_URL}/social/breaking-news/check`, { method: 'POST' });
+            const data = await res.json();
+            if (result) {
+                result.textContent = `Found ${data.articles_found} articles, posted ${data.articles_posted}`;
+                result.style.color = data.articles_posted > 0 ? '#16a34a' : '#6b7280';
+            }
+            fetchSocialHistory();
+        } catch (e) {
+            if (result) { result.textContent = 'Error: ' + e.message; result.style.color = '#dc2626'; }
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = '🔴 Check Breaking News Now'; }
+        }
+    }
+
+    async function handlePostNewsletterTelegram() {
+        if (!currentBriefId) return alert('No newsletter generated yet. Generate one first.');
+        if (!confirm('Post this newsletter digest to Telegram?')) return;
+
+        const btn = document.getElementById('post-newsletter-telegram-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Posting...'; }
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/social/post/newsletter/${currentBriefId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ platforms: ['telegram'] })
+            });
+            const data = await res.json();
+            if (data.posted && data.posted.length > 0) {
+                if (btn) { btn.textContent = '✅ Posted!'; btn.style.background = '#16a34a'; }
+                fetchSocialHistory();
+            } else if (data.errors && data.errors.length > 0) {
+                alert('Error: ' + data.errors.map(e => e.error).join(', '));
+                if (btn) { btn.disabled = false; btn.textContent = '📢 Post to Telegram'; }
+            }
+        } catch (e) {
+            alert('Failed: ' + e.message);
+            if (btn) { btn.disabled = false; btn.textContent = '📢 Post to Telegram'; }
         }
     }
 

@@ -193,3 +193,35 @@ class SourceCreate(BaseModel):
     tier: int = 3
     country: Optional[str] = None
     language: str = 'en'
+
+
+# --- M6: Social Media Models ---
+class SocialPost(BaseModel):
+    id: int
+    platform: str
+    post_type: str
+    platform_post_id: Optional[str] = None
+    article_id: Optional[int] = None
+    brief_id: Optional[int] = None
+    content_text: Optional[str] = None
+    status: str = "sent"
+    error_message: Optional[str] = None
+    posted_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+
+class SocialPostArticleRequest(BaseModel):
+    """Manual trigger to post a specific article."""
+    article_id: int
+    platforms: List[str] = ["telegram"]
+
+
+class SocialPostNewsletterRequest(BaseModel):
+    """Manual trigger to post a newsletter digest."""
+    platforms: List[str] = ["telegram"]
+
+
+class BreakingNewsCheckResponse(BaseModel):
+    articles_found: int
+    articles_posted: int
+    posts: List[dict] = []

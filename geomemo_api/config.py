@@ -61,3 +61,19 @@ AUTO_REJECT_THRESHOLD = 30
 
 # Default source credibility for unknown sources
 DEFAULT_SOURCE_CREDIBILITY = 50
+
+# --- Social Media: Telegram ---
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "")
+
+# --- Social Media: Twitter/X (Phase 2) ---
+TWITTER_API_KEY = os.getenv("TWITTER_API_KEY", "")
+TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET", "")
+TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN", "")
+TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET", "")
+TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN", "")
+
+# --- Breaking News Auto-Post Thresholds ---
+BREAKING_NEWS_MIN_APPROVAL_SCORE = float(os.getenv("BREAKING_NEWS_MIN_APPROVAL_SCORE", "85"))
+BREAKING_NEWS_MIN_CONFIDENCE = float(os.getenv("BREAKING_NEWS_MIN_CONFIDENCE", "80"))
+BREAKING_NEWS_MAX_AGE_MINUTES = int(os.getenv("BREAKING_NEWS_MAX_AGE_MINUTES", "30"))

@@ -3,6 +3,8 @@ GeoMemo API — Geopolitical Intelligence Platform
 Main application entry point. Routes are organized into modular routers.
 """
 import logging
+import threading
+import time
 import requests
 
 from fastapi import FastAPI, HTTPException
@@ -15,7 +17,7 @@ from sentence_transformers import SentenceTransformer
 from config import UPLOAD_DIR, BEEHIIV_API_KEY, BEEHIIV_PUB_ID
 from database import init_db
 from models import NewsletterSignup
-from routers import articles, content, sources, newsletter
+from routers import articles, content, sources, newsletter, social
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
@@ -57,6 +59,7 @@ app.include_router(articles.router)
 app.include_router(content.router)
 app.include_router(sources.router)
 app.include_router(newsletter.router)
+app.include_router(social.router)
 
 
 # --- Newsletter Signup (Beehiiv) ---
@@ -100,6 +103,28 @@ def subscribe_newsletter(signup: NewsletterSignup):
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "version": "2.0.0"}
+
+
+# --- M6: Background Breaking News Checker ---
+def _breaking_news_loop():
+    """Check for breaking news every 15 minutes and auto-post to configured platforms."""
+    while True:
+        time.sleep(900)  # 15 minutes
+        try:
+            from services.social.breaking_news import check_and_post_breaking_news
+            result = check_and_post_breaking_news()
+            if result.get("articles_posted", 0) > 0:
+                logger.info(f"Breaking news auto-post: {result['articles_posted']} articles posted")
+        except Exception as e:
+            logger.error(f"Breaking news background check error: {e}")
+
+
+@app.on_event("startup")
+def start_breaking_news_checker():
+    """Start the breaking news background thread on app startup."""
+    thread = threading.Thread(target=_breaking_news_loop, daemon=True)
+    thread.start()
+    logger.info("Breaking news checker started (15-minute interval)")
 
 
 # --- Static File Mounts (must be LAST — catch-all routes) ---

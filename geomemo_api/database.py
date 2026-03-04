@@ -118,6 +118,23 @@ def init_db():
             );
         """)
 
+        # --- M6: Social media tracking ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS social_posts (
+                id SERIAL PRIMARY KEY,
+                platform TEXT NOT NULL,
+                post_type TEXT NOT NULL,
+                platform_post_id TEXT,
+                article_id INTEGER REFERENCES articles(id),
+                brief_id INTEGER REFERENCES daily_briefs(id),
+                content_text TEXT,
+                status TEXT DEFAULT 'sent',
+                error_message TEXT,
+                posted_at TIMESTAMPTZ DEFAULT NOW(),
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+
         # --- Migrations (safe ADD COLUMN IF NOT EXISTS) ---
         migrations = [
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS parent_id INTEGER",
@@ -140,6 +157,11 @@ def init_db():
             "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS subject_line TEXT",
             # M5: Map layer — 100-word summary for WorldMonitor fork
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS summary_long TEXT",
+            # M6: Social media dedup index
+            """CREATE UNIQUE INDEX IF NOT EXISTS idx_social_posts_dedup
+               ON social_posts (platform, article_id) WHERE article_id IS NOT NULL""",
+            "CREATE INDEX IF NOT EXISTS idx_social_posts_platform ON social_posts (platform)",
+            "CREATE INDEX IF NOT EXISTS idx_social_posts_posted_at ON social_posts (posted_at)",
         ]
         for sql in migrations:
             try:
