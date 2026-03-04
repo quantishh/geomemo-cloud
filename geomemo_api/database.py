@@ -144,10 +144,10 @@ def init_db():
         for sql in migrations:
             try:
                 cursor.execute(sql)
-            except Exception:
+                conn.commit()  # Commit each migration individually so one failure doesn't roll back others
+            except Exception as e:
                 conn.rollback()
-
-        conn.commit()
+                logger.warning(f"Migration skipped (already applied or failed): {e}")
         logger.info("Database initialized successfully.")
     except Exception as e:
         conn.rollback()
