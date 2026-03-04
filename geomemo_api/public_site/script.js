@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- CHANGE: Point explicitly to your Cloud API Port ---
-    const API_BASE_URL = "https://geomemo.news";
+    // --- API URL: empty = same origin (works on both sandbox and production) ---
+    const API_BASE_URL = "";
     
     // Containers
     const jumpBar = document.getElementById('category-jump-bar');
@@ -56,22 +56,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function processAndRenderArticles(articles) {
-        // 1. Filter for TODAY (Local Time)
-        // Note: You might want to adjust this logic if server/client timezones differ significantly
-        const todayString = new Date().toLocaleDateString();
-        const todaysArticles = articles.filter(a => {
-            if (!a.scraped_at) return false;
-            return new Date(a.scraped_at).toLocaleDateString() === todayString;
-        });
-
-        if (todaysArticles.length === 0) {
-            if(topNewsContainer) topNewsContainer.innerHTML = `<div style="padding:20px; color:#666;">No news published for ${todayString}.</div>`;
+        // The /articles/approved endpoint already returns the latest batch only.
+        // No client-side date filtering needed (avoids timezone mismatch issues).
+        if (articles.length === 0) {
+            if(topNewsContainer) topNewsContainer.innerHTML = `<div style="padding:20px; color:#666;">No approved articles available.</div>`;
             return;
         }
 
-        // 2. Cluster Logic (Map Children to Parents)
-        const parents = todaysArticles.filter(a => !a.parent_id);
-        const children = todaysArticles.filter(a => a.parent_id);
+        // 1. Cluster Logic (Map Children to Parents)
+        const parents = articles.filter(a => !a.parent_id);
+        const children = articles.filter(a => a.parent_id);
         const childMap = {};
         children.forEach(c => {
             if(!childMap[c.parent_id]) childMap[c.parent_id] = [];
