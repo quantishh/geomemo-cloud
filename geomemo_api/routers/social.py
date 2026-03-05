@@ -73,11 +73,12 @@ def get_social_status():
 
 @router.get("/history")
 def get_social_history(
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     platform: Optional[str] = Query(None),
     post_type: Optional[str] = Query(None),
 ):
-    """Get recent social media post history."""
+    """Get social media post history with pagination."""
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
@@ -92,8 +93,13 @@ def get_social_history(
             params.append(post_type)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        params.append(limit)
 
+        # Get total count for pagination
+        cursor.execute(f"SELECT COUNT(*) FROM social_posts sp {where}", params)
+        total_count = cursor.fetchone()[0]
+
+        # Fetch page
+        page_params = params + [limit, offset]
         cursor.execute(f"""
             SELECT sp.id, sp.platform, sp.post_type, sp.platform_post_id,
                    sp.article_id, sp.brief_id, sp.content_text,
@@ -103,11 +109,17 @@ def get_social_history(
             LEFT JOIN articles a ON sp.article_id = a.id
             {where}
             ORDER BY sp.posted_at DESC
-            LIMIT %s
-        """, params)
+            LIMIT %s OFFSET %s
+        """, page_params)
 
         posts = [dict(row) for row in cursor.fetchall()]
-        return {"posts": posts, "count": len(posts)}
+        return {
+            "posts": posts,
+            "count": len(posts),
+            "total": total_count,
+            "offset": offset,
+            "limit": limit,
+        }
 
     finally:
         cursor.close()

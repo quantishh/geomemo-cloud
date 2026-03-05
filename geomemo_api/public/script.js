@@ -53,6 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentBriefId = null;
     let currentSortBy = 'scraped_at';
     let currentSortOrder = 'desc';
+    let socialHistoryOffset = 0;
+    const SOCIAL_PAGE_SIZE = 10;
     
     // ** UPDATED CATEGORY ORDER **
     const VALID_CATEGORIES = [
@@ -151,6 +153,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (postNewsletterTelegramBtn) postNewsletterTelegramBtn.addEventListener('click', handlePostNewsletterTelegram);
     fetchSocialStatus();
     fetchSocialHistory();
+
+    // Social history pagination
+    const socialPrevBtn = document.getElementById('social-prev-btn');
+    const socialNextBtn = document.getElementById('social-next-btn');
+    if (socialPrevBtn) socialPrevBtn.addEventListener('click', () => {
+        socialHistoryOffset = Math.max(0, socialHistoryOffset - SOCIAL_PAGE_SIZE);
+        fetchSocialHistory();
+    });
+    if (socialNextBtn) socialNextBtn.addEventListener('click', () => {
+        socialHistoryOffset += SOCIAL_PAGE_SIZE;
+        fetchSocialHistory();
+    });
 
     // --- GLOBAL HELPERS ---
     window.deleteItem = async (endpoint, id) => {
@@ -435,7 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     data-auth="${article.author || ''}">✨ Enhance</button>
                 <button class="telegram-btn w-full text-xs" style="background:#0088cc;color:#fff;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;margin-top:4px;" onclick="postArticleToTelegram(${article.id})">📢 Telegram</button>
                 <button class="twitter-btn w-full text-xs" style="background:#000;color:#fff;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;margin-top:2px;" onclick="postArticleToTwitter(${article.id})">𝕏 Post</button>
-                <button class="xposts-btn w-full text-xs" style="background:#f3f4f6;color:#374151;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;margin-top:2px;" onclick="openFindXPosts(${article.id}, \`${dashboardHeadline.replace(/`/g, '')}\`)">🔍 Find X Posts</button>
+                <button class="xposts-btn w-full text-xs" style="background:#f3f4f6;color:#374151;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;margin-top:2px;" onclick="openFindXPosts(${article.id}, \`${dashboardHeadline.replace(/`/g, '')}\`, \`${(displaySummary || '').replace(/`/g, '').replace(/\\/g, '').slice(0, 300)}\`)">🔍 Find X Posts</button>
             </td>
         `;
         
@@ -1280,9 +1294,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.getElementById('social-posts-tbody');
         if (!tbody) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/social/history?limit=20`);
+            const res = await fetch(`${API_BASE_URL}/social/history?limit=${SOCIAL_PAGE_SIZE}&offset=${socialHistoryOffset}`);
             if (!res.ok) return;
             const data = await res.json();
+            const total = data.total || 0;
+            const totalPages = Math.max(1, Math.ceil(total / SOCIAL_PAGE_SIZE));
+            const currentPage = Math.floor(socialHistoryOffset / SOCIAL_PAGE_SIZE) + 1;
+
+            // Update pagination controls
+            const prevBtn = document.getElementById('social-prev-btn');
+            const nextBtn = document.getElementById('social-next-btn');
+            const pageInfo = document.getElementById('social-page-info');
+            if (prevBtn) prevBtn.disabled = socialHistoryOffset === 0;
+            if (nextBtn) nextBtn.disabled = (socialHistoryOffset + SOCIAL_PAGE_SIZE) >= total;
+            if (pageInfo) pageInfo.textContent = `Page ${currentPage} of ${totalPages} (${total} posts)`;
+
             if (!data.posts || data.posts.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">No posts yet</td></tr>';
                 return;
@@ -1293,7 +1319,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const headline = p.article_headline || contentPreview;
                 const time = p.posted_at ? new Date(p.posted_at).toLocaleString() : '—';
                 return `<tr class="border-b">
-                    <td class="p-2 font-semibold">${p.platform === 'telegram' ? '📢' : '🐦'} ${p.platform}</td>
+                    <td class="p-2 font-semibold">${p.platform === 'telegram' ? '📢' : '𝕏'} ${p.platform}</td>
                     <td class="p-2">${p.post_type}</td>
                     <td class="p-2 text-xs">${headline.slice(0, 60)}</td>
                     <td class="p-2 ${statusColor} font-semibold">${p.status}</td>
@@ -1414,8 +1440,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Find X Posts modal
     let currentXPostsArticleId = null;
-    window.openFindXPosts = (articleId, headline) => {
+    let currentXPostsArticleSummary = '';
+    window.openFindXPosts = (articleId, headline, summary) => {
         currentXPostsArticleId = articleId;
+        currentXPostsArticleSummary = summary || headline || '';
         const modal = document.getElementById('xposts-modal');
         const queryInput = document.getElementById('xposts-search-query');
         const results = document.getElementById('xposts-results');
@@ -1476,9 +1504,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                         <p style="margin:8px 0; font-size:0.85rem; line-height:1.4;">${t.text}</p>
-                        <div style="display:flex; gap:6px; margin-top:6px;">
+                        <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
                             <a href="${t.url}" target="_blank" style="font-size:0.75rem; color:#1d4ed8;">View on 𝕏</a>
                             <button onclick="includeXPostInNewsletter('${t.url}', '${t.author_username}', \`${t.text.replace(/`/g, '').replace(/\\/g, '\\\\').slice(0, 200)}\`)" style="font-size:0.75rem; padding:2px 8px; background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe; border-radius:4px; cursor:pointer;">Include in Newsletter</button>
+                            <button onclick="repostOnX('${t.author_username}')" style="font-size:0.75rem; padding:2px 8px; background:#000; color:#fff; border:none; border-radius:4px; cursor:pointer;">Repost on 𝕏</button>
                         </div>
                     </div>
                 `).join('');
@@ -1510,6 +1539,45 @@ document.addEventListener('DOMContentLoaded', () => {
             document.execCommand('copy');
             document.body.removeChild(tmp);
             alert('Tweet embed HTML copied to clipboard! Paste into the newsletter where needed.');
+        }
+    };
+
+    // Repost on X: builds tweet from article summary + h/t author, loads into composer
+    window.repostOnX = (authorUsername) => {
+        const summary = currentXPostsArticleSummary || '';
+        if (!summary) return alert('No article summary available.');
+
+        // Build tweet: emoji + summary + h/t + CTA (no links, no hashtags)
+        const cta = '\u{1F310} Follow @GeoMemoNews for daily geopolitical intel';
+        const ht = `h/t @${authorUsername}`;
+        // Calculate max summary length to fit in 280 chars
+        const fixedParts = `\u{1F4CA} \n\n${ht}\n\n${cta}`;
+        const maxSummary = 280 - fixedParts.length - 2;
+        let trimmedSummary = summary;
+        if (trimmedSummary.length > maxSummary) {
+            trimmedSummary = trimmedSummary.slice(0, maxSummary - 3).replace(/\s+\S*$/, '') + '...';
+        }
+        const tweetText = `\u{1F4CA} ${trimmedSummary}\n\n${ht}\n\n${cta}`;
+
+        // Expand Social Media section and load into composer
+        const socialDetails = document.querySelector('details:has(#tweet-compose-text)');
+        if (socialDetails && !socialDetails.open) socialDetails.open = true;
+
+        const composer = document.getElementById('tweet-compose-text');
+        const charCount = document.getElementById('tweet-char-count');
+        if (composer) {
+            composer.value = tweetText;
+            composer.dataset.articleId = currentXPostsArticleId || '';
+            if (charCount) {
+                charCount.textContent = `${tweetText.length}/280`;
+                charCount.style.color = tweetText.length > 260 ? (tweetText.length > 280 ? '#dc2626' : '#f59e0b') : '#9ca3af';
+            }
+            // Close modal and scroll to composer
+            document.getElementById('xposts-modal')?.classList.add('hidden');
+            setTimeout(() => {
+                composer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                composer.focus();
+            }, 100);
         }
     };
 

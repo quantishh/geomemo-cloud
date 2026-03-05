@@ -6,6 +6,7 @@ Requires: pip install tweepy>=4.14.0
 API: X Basic tier ($200/month) — 100 posts/month, tweet search included.
 """
 import logging
+import re
 from datetime import datetime, timezone
 
 import tweepy
@@ -54,6 +55,52 @@ def _get_client_v2() -> tweepy.Client:
     return _client_v2
 
 
+def _sanitize_x_search_query(raw_query: str) -> str:
+    """
+    Sanitize a headline/text for use as an X API v2 search query.
+    Handles all known causes of 400 errors:
+    - Reserved operators: AND, OR, NOT (case-insensitive)
+    - Colons (reserved for operators like from:, is:, lang:)
+    - Parentheses (reserved for grouping — unmatched = 400)
+    - Quotes (reserved for exact match — unmatched = 400)
+    - Apostrophes/single quotes (token delimiter, causes parse errors)
+    - Hyphens (token delimiter; leading hyphen = negation operator)
+    - Hash/at/dollar signs (reserved for hashtag/mention/cashtag operators)
+    - Limits to 8 keywords to avoid complexity errors
+    """
+    query = raw_query.strip()
+
+    # 1. Remove reserved boolean operators as standalone words
+    query = re.sub(r'\b(?:AND|OR|NOT)\b', ' ', query, flags=re.IGNORECASE)
+
+    # 2. Strip all problematic punctuation and special characters
+    #    Colons, parens, quotes, apostrophes, hyphens, operators, etc.
+    query = re.sub(
+        r"[:()\"\'\u2018\u2019\u201c\u201d\-#$@!?;/\\|{}\[\]<>*+^~`]",
+        ' ',
+        query,
+    )
+
+    # 3. Collapse multiple spaces
+    query = re.sub(r'\s+', ' ', query).strip()
+
+    # 4. Remove very short words (1-2 chars) that add noise
+    words = [w for w in query.split() if len(w) > 2]
+
+    # 5. Limit to 8 keywords to avoid X API complexity errors
+    words = words[:8]
+
+    query = ' '.join(words)
+
+    # 6. Ensure query is not empty after cleaning
+    if not query or len(query) < 3:
+        # Fallback: extract first few alphanumeric words from original
+        fallback_words = re.findall(r'[a-zA-Z]{3,}', raw_query)
+        query = ' '.join(fallback_words[:5])
+
+    return query
+
+
 def post_tweet(text: str) -> dict:
     """
     Post a single tweet. Returns dict with tweet_id.
@@ -81,15 +128,8 @@ def search_recent_tweets(query: str, max_results: int = 10) -> list:
 
     client = _get_client_v2()
 
-    # Sanitize query: remove X API reserved operators that cause "Ambiguous use" errors
-    # Words like "and", "or", "not" are reserved search operators in X API
-    import re
-    clean_query = re.sub(r'\b(AND|OR|NOT|and|or|not)\b', ' ', query)
-    # Collapse multiple spaces
-    clean_query = re.sub(r'\s+', ' ', clean_query).strip()
-    # If query is too short after cleaning, use original without reserved words
-    if len(clean_query) < 3:
-        clean_query = query.replace('"', '')
+    # Sanitize the query for X API search
+    clean_query = _sanitize_x_search_query(query)
 
     # Filter out retweets and replies, require English
     search_query = f'({clean_query}) -is:retweet -is:reply lang:en'
