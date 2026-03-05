@@ -101,15 +101,22 @@ def _sanitize_x_search_query(raw_query: str) -> str:
     return query
 
 
-def post_tweet(text: str) -> dict:
+def post_tweet(text: str, quote_tweet_id: str = None) -> dict:
     """
     Post a single tweet. Returns dict with tweet_id.
     Max 280 chars for Basic tier.
+
+    If quote_tweet_id is provided, the tweet becomes a "Quote Tweet"
+    (repost with comment) — the original tweet is embedded below the text.
     """
     client = _get_client_v2()
-    response = client.create_tweet(text=text)
+    kwargs = {"text": text}
+    if quote_tweet_id:
+        kwargs["quote_tweet_id"] = quote_tweet_id
+        logger.info(f"Posting quote tweet of {quote_tweet_id}")
+    response = client.create_tweet(**kwargs)
     tweet_id = response.data['id']
-    logger.info(f"Tweet posted: {tweet_id}")
+    logger.info(f"Tweet posted: {tweet_id}" + (f" (quote of {quote_tweet_id})" if quote_tweet_id else ""))
     return {"tweet_id": tweet_id}
 
 

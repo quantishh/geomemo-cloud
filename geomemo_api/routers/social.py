@@ -32,6 +32,7 @@ class TweetPostRequest(BaseModel):
     text: str
     article_id: Optional[int] = None
     brief_id: Optional[int] = None
+    quote_tweet_id: Optional[str] = None  # If set, posts as a Quote Tweet (repost with comment)
 
 
 class TweetSearchRequest(BaseModel):
@@ -284,9 +285,11 @@ def post_custom_tweet(request: TweetPostRequest):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        tw_result = twitter.post_tweet(request.text)
+        tw_result = twitter.post_tweet(request.text, quote_tweet_id=request.quote_tweet_id)
 
-        post_type = 'newsletter_digest' if request.brief_id else 'breaking_news'
+        post_type = 'quote_tweet' if request.quote_tweet_id else (
+            'newsletter_digest' if request.brief_id else 'breaking_news'
+        )
         cursor.execute("""
             INSERT INTO social_posts
                 (platform, post_type, platform_post_id, article_id, brief_id,
@@ -298,6 +301,7 @@ def post_custom_tweet(request: TweetPostRequest):
         return {
             "posted": True,
             "tweet_id": tw_result['tweet_id'],
+            "is_quote_tweet": bool(request.quote_tweet_id),
             "monthly_count": monthly + 1,
         }
     except Exception as e:

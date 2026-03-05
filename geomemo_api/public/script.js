@@ -1402,28 +1402,37 @@ document.addEventListener('DOMContentLoaded', () => {
             if (text.length > 280) return alert('Tweet exceeds 280 characters.');
             if (!confirm('Post this tweet to X?')) return;
 
-            const articleId = document.getElementById('tweet-compose-text')?.dataset.articleId || null;
+            const composerEl = document.getElementById('tweet-compose-text');
+            const articleId = composerEl?.dataset.articleId || null;
+            const quoteTweetId = composerEl?.dataset.quoteTweetId || null;
             postTweetBtn.disabled = true;
-            postTweetBtn.textContent = 'Posting...';
+            postTweetBtn.textContent = quoteTweetId ? 'Quoting...' : 'Posting...';
 
             try {
+                const payload = {
+                    text: text,
+                    article_id: articleId ? parseInt(articleId) : null,
+                };
+                if (quoteTweetId) payload.quote_tweet_id = quoteTweetId;
+
                 const res = await fetch(`${API_BASE_URL}/social/post/tweet`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        text: text,
-                        article_id: articleId ? parseInt(articleId) : null,
-                    })
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
                 if (data.posted) {
                     const result = document.getElementById('tweet-compose-result');
+                    const label = data.is_quote_tweet ? 'Quote tweeted' : 'Posted';
                     if (result) {
-                        result.textContent = `✅ Posted! Tweet ID: ${data.tweet_id} (${data.monthly_count}/100 this month)`;
+                        result.textContent = `✅ ${label}! Tweet ID: ${data.tweet_id} (${data.monthly_count}/100 this month)`;
                         result.style.color = '#16a34a';
                     }
                     document.getElementById('tweet-compose-text').value = '';
                     document.getElementById('tweet-compose-text').dataset.articleId = '';
+                    delete document.getElementById('tweet-compose-text').dataset.quoteTweetId;
+                    const quoteIndicator = document.getElementById('quote-tweet-indicator');
+                    if (quoteIndicator) quoteIndicator.innerHTML = '';
                     if (tweetCharCount) tweetCharCount.textContent = '0/280';
                     fetchSocialHistory();
                 } else {
@@ -1507,7 +1516,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
                             <a href="${t.url}" target="_blank" style="font-size:0.75rem; color:#1d4ed8;">View on 𝕏</a>
                             <button onclick="includeXPostInNewsletter('${t.url}', '${t.author_username}', \`${t.text.replace(/`/g, '').replace(/\\/g, '\\\\').slice(0, 200)}\`)" style="font-size:0.75rem; padding:2px 8px; background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe; border-radius:4px; cursor:pointer;">Include in Newsletter</button>
-                            <button onclick="repostOnX('${t.author_username}')" style="font-size:0.75rem; padding:2px 8px; background:#000; color:#fff; border:none; border-radius:4px; cursor:pointer;">Repost on 𝕏</button>
+                            <button onclick="repostOnX('${t.id}', '${t.author_username}')" style="font-size:0.75rem; padding:2px 8px; background:#000; color:#fff; border:none; border-radius:4px; cursor:pointer;">Quote on 𝕏</button>
                         </div>
                     </div>
                 `).join('');
@@ -1542,22 +1551,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Repost on X: builds tweet from article summary + h/t author, loads into composer
-    window.repostOnX = (authorUsername) => {
+    // Quote on X: posts as a real Quote Tweet (repost with comment) using tweet ID
+    window.repostOnX = (tweetId, authorUsername) => {
         const summary = currentXPostsArticleSummary || '';
         if (!summary) return alert('No article summary available.');
 
-        // Build tweet: emoji + summary + h/t + CTA (no links, no hashtags)
+        // Build quote tweet text: emoji + summary + CTA (no h/t needed — X embeds the original)
         const cta = '\u{1F310} Follow @GeoMemoNews for daily geopolitical intel';
-        const ht = `h/t @${authorUsername}`;
         // Calculate max summary length to fit in 280 chars
-        const fixedParts = `\u{1F4CA} \n\n${ht}\n\n${cta}`;
+        const fixedParts = `\u{1F4CA} \n\n${cta}`;
         const maxSummary = 280 - fixedParts.length - 2;
         let trimmedSummary = summary;
         if (trimmedSummary.length > maxSummary) {
             trimmedSummary = trimmedSummary.slice(0, maxSummary - 3).replace(/\s+\S*$/, '') + '...';
         }
-        const tweetText = `\u{1F4CA} ${trimmedSummary}\n\n${ht}\n\n${cta}`;
+        const tweetText = `\u{1F4CA} ${trimmedSummary}\n\n${cta}`;
 
         // Expand Social Media section and load into composer
         const socialDetails = document.querySelector('details:has(#tweet-compose-text)');
@@ -1568,10 +1576,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (composer) {
             composer.value = tweetText;
             composer.dataset.articleId = currentXPostsArticleId || '';
+            composer.dataset.quoteTweetId = tweetId;  // Store tweet ID for quote tweet
             if (charCount) {
                 charCount.textContent = `${tweetText.length}/280`;
                 charCount.style.color = tweetText.length > 260 ? (tweetText.length > 280 ? '#dc2626' : '#f59e0b') : '#9ca3af';
             }
+            // Show quote tweet indicator above composer
+            let quoteIndicator = document.getElementById('quote-tweet-indicator');
+            if (!quoteIndicator) {
+                quoteIndicator = document.createElement('div');
+                quoteIndicator.id = 'quote-tweet-indicator';
+                composer.parentElement.insertBefore(quoteIndicator, composer);
+            }
+            quoteIndicator.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;font-size:0.8rem;color:#0369a1;margin-bottom:6px;">
+                <span>🔁 Quote tweet of @${authorUsername}</span>
+                <button onclick="clearQuoteTweet()" style="margin-left:auto;font-size:0.7rem;color:#dc2626;background:none;border:none;cursor:pointer;">✕ Cancel quote</button>
+            </div>`;
+
             // Close modal and scroll to composer
             document.getElementById('xposts-modal')?.classList.add('hidden');
             setTimeout(() => {
@@ -1579,6 +1600,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 composer.focus();
             }, 100);
         }
+    };
+
+    // Clear quote tweet mode (switch back to regular tweet)
+    window.clearQuoteTweet = () => {
+        const composer = document.getElementById('tweet-compose-text');
+        if (composer) delete composer.dataset.quoteTweetId;
+        const indicator = document.getElementById('quote-tweet-indicator');
+        if (indicator) indicator.innerHTML = '';
     };
 
     async function handlePostNewsletterTelegram() {
