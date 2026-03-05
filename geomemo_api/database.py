@@ -162,6 +162,8 @@ def init_db():
                ON social_posts (platform, article_id) WHERE article_id IS NOT NULL""",
             "CREATE INDEX IF NOT EXISTS idx_social_posts_platform ON social_posts (platform)",
             "CREATE INDEX IF NOT EXISTS idx_social_posts_posted_at ON social_posts (posted_at)",
+            # M6 Phase 2: Store embedded X posts for newsletter (JSON array of tweet URLs/data)
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedded_tweets JSONB",
         ]
         for sql in migrations:
             try:

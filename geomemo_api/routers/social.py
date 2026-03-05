@@ -7,6 +7,7 @@ from typing import Optional
 
 import psycopg2.extras
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from database import get_db_connection
 from models import SocialPostArticleRequest, SocialPostNewsletterRequest, BreakingNewsCheckResponse
@@ -14,11 +15,29 @@ from services.social import telegram
 from services.social.content_generator import (
     generate_breaking_telegram,
     generate_newsletter_telegram,
+    generate_breaking_tweet,
 )
 from services.social.breaking_news import check_and_post_breaking_news
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/social", tags=["social"])
+
+
+# ============================================================
+# Request Models
+# ============================================================
+
+class TweetPostRequest(BaseModel):
+    """Manual tweet posting — user composes/edits text in dashboard."""
+    text: str
+    article_id: Optional[int] = None
+    brief_id: Optional[int] = None
+
+
+class TweetSearchRequest(BaseModel):
+    """Search X for tweets related to a headline."""
+    query: str
+    max_results: int = 10
 
 
 # ============================================================
@@ -28,14 +47,26 @@ router = APIRouter(prefix="/social", tags=["social"])
 @router.get("/status")
 def get_social_status():
     """Check which social platforms are configured and ready."""
+    from services.social import twitter
+
+    twitter_configured = twitter.is_configured()
+    monthly_count = 0
+    if twitter_configured:
+        try:
+            monthly_count = twitter.get_monthly_post_count()
+        except Exception:
+            pass
+
     return {
         "telegram": {
             "configured": telegram.is_configured(),
             "description": "Telegram Bot API → channel posting",
         },
         "twitter": {
-            "configured": False,  # Phase 2
-            "description": "X/Twitter API (not yet configured)",
+            "configured": twitter_configured,
+            "description": "X/Twitter API → manual posting",
+            "monthly_posts": monthly_count,
+            "monthly_limit": 100,
         },
     }
 
@@ -91,8 +122,10 @@ def get_social_history(
 def post_article_to_social(request: SocialPostArticleRequest):
     """
     Manually post a specific article to social media.
-    Called from the admin dashboard "Post to Telegram" button.
+    Called from the admin dashboard "Post to Telegram" / "Post to X" buttons.
     """
+    from services.social import twitter
+
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     results = {"posted": [], "errors": []}
@@ -150,7 +183,52 @@ def post_article_to_social(request: SocialPostArticleRequest):
                     logger.error(f"Telegram post failed: {e}")
                     results["errors"].append({"platform": "telegram", "error": str(e)})
 
-            # Phase 2: elif platform == "twitter": ...
+            elif platform == "twitter":
+                if not twitter.is_configured():
+                    results["errors"].append({"platform": "twitter", "error": "Not configured. Add X API keys to .env"})
+                    continue
+
+                # Check monthly quota
+                monthly = twitter.get_monthly_post_count()
+                if monthly >= 95:  # Leave 5 buffer
+                    results["errors"].append({
+                        "platform": "twitter",
+                        "error": f"Monthly limit approaching ({monthly}/100). Post manually on x.com.",
+                    })
+                    continue
+
+                # Check dedup
+                cursor.execute("""
+                    SELECT id FROM social_posts
+                    WHERE platform = 'twitter' AND article_id = %s
+                """, (request.article_id,))
+                if cursor.fetchone():
+                    results["errors"].append({
+                        "platform": "twitter",
+                        "error": "Already posted to X",
+                    })
+                    continue
+
+                try:
+                    text = generate_breaking_tweet(article)
+                    tw_result = twitter.post_tweet(text)
+
+                    cursor.execute("""
+                        INSERT INTO social_posts
+                            (platform, post_type, platform_post_id, article_id,
+                             content_text, status, posted_at)
+                        VALUES ('twitter', 'breaking_news', %s, %s, %s, 'sent', NOW())
+                    """, (tw_result['tweet_id'], request.article_id, text))
+                    conn.commit()
+
+                    results["posted"].append({
+                        "platform": "twitter",
+                        "tweet_id": tw_result['tweet_id'],
+                    })
+                except Exception as e:
+                    conn.rollback()
+                    logger.error(f"X/Twitter post failed: {e}")
+                    results["errors"].append({"platform": "twitter", "error": str(e)})
 
             else:
                 results["errors"].append({
@@ -160,6 +238,60 @@ def post_article_to_social(request: SocialPostArticleRequest):
 
         return results
 
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================
+# Manual Tweet Posting (custom text)
+# ============================================================
+
+@router.post("/post/tweet")
+def post_custom_tweet(request: TweetPostRequest):
+    """
+    Post a manually composed tweet from the dashboard.
+    User writes/edits the tweet text before posting.
+    """
+    from services.social import twitter
+
+    if not twitter.is_configured():
+        raise HTTPException(status_code=400, detail="X/Twitter not configured. Add API keys to .env")
+
+    if len(request.text) > 280:
+        raise HTTPException(status_code=400, detail=f"Tweet too long ({len(request.text)}/280 chars)")
+
+    # Check monthly quota
+    monthly = twitter.get_monthly_post_count()
+    if monthly >= 95:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Monthly tweet limit approaching ({monthly}/100). Post manually on x.com."
+        )
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        tw_result = twitter.post_tweet(request.text)
+
+        post_type = 'newsletter_digest' if request.brief_id else 'breaking_news'
+        cursor.execute("""
+            INSERT INTO social_posts
+                (platform, post_type, platform_post_id, article_id, brief_id,
+                 content_text, status, posted_at)
+            VALUES ('twitter', %s, %s, %s, %s, %s, 'sent', NOW())
+        """, (post_type, tw_result['tweet_id'], request.article_id, request.brief_id, request.text))
+        conn.commit()
+
+        return {
+            "posted": True,
+            "tweet_id": tw_result['tweet_id'],
+            "monthly_count": monthly + 1,
+        }
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Custom tweet failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
         conn.close()
@@ -243,8 +375,6 @@ def post_newsletter_to_social(
                     logger.error(f"Telegram newsletter post failed: {e}")
                     results["errors"].append({"platform": "telegram", "error": str(e)})
 
-            # Phase 2: elif platform == "twitter": ...
-
             else:
                 results["errors"].append({
                     "platform": platform,
@@ -273,6 +403,74 @@ def trigger_breaking_news_check():
 
 
 # ============================================================
+# X/Twitter: Tweet Search (Techmeme-style "Find X Posts")
+# ============================================================
+
+@router.post("/twitter/search")
+def search_tweets(request: TweetSearchRequest):
+    """
+    Search X for tweets related to a headline.
+    Returns top tweets ranked by engagement for embedding in the newsletter.
+    """
+    from services.social import twitter
+
+    if not twitter.is_configured():
+        raise HTTPException(status_code=400, detail="X/Twitter not configured. Add API keys to .env")
+
+    try:
+        tweets = twitter.search_recent_tweets(
+            query=request.query,
+            max_results=request.max_results,
+        )
+        return {
+            "query": request.query,
+            "count": len(tweets),
+            "tweets": tweets,
+        }
+    except Exception as e:
+        logger.error(f"Tweet search failed: {e}")
+        raise HTTPException(status_code=502, detail=f"Tweet search failed: {e}")
+
+
+# ============================================================
+# X/Twitter: Save Selected Tweets to Article
+# ============================================================
+
+@router.post("/twitter/embed/{article_id}")
+def save_tweet_embeds(article_id: int, tweet_ids: list[str]):
+    """
+    Save selected tweet IDs to an article for newsletter embedding.
+    Stores in articles.embedded_tweets JSON column.
+    """
+    from services.social import twitter
+
+    if not twitter.is_configured():
+        raise HTTPException(status_code=400, detail="X/Twitter not configured")
+
+    # Fetch full tweet data for the selected IDs
+    try:
+        # We already have the tweet data from search, just store the IDs
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Store tweet IDs as JSON array in a new column (or use existing structure)
+        cursor.execute("""
+            UPDATE articles
+            SET embedded_tweets = %s::jsonb
+            WHERE id = %s
+        """, (str(tweet_ids).replace("'", '"'), article_id))
+        conn.commit()
+
+        return {"saved": True, "article_id": article_id, "tweet_count": len(tweet_ids)}
+    except Exception as e:
+        logger.error(f"Save tweet embeds failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================
 # Preview (generate content without posting)
 # ============================================================
 
@@ -294,6 +492,8 @@ def preview_article_post(article_id: int, platform: str = "telegram"):
 
         if platform == "telegram":
             text = generate_breaking_telegram(article)
+        elif platform == "twitter":
+            text = generate_breaking_tweet(article)
         else:
             raise HTTPException(status_code=400, detail=f"Unknown platform: {platform}")
 

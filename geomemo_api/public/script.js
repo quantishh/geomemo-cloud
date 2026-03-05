@@ -434,6 +434,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     data-pub="${article.publication_name || ''}"
                     data-auth="${article.author || ''}">✨ Enhance</button>
                 <button class="telegram-btn w-full text-xs" style="background:#0088cc;color:#fff;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;margin-top:4px;" onclick="postArticleToTelegram(${article.id})">📢 Telegram</button>
+                <button class="twitter-btn w-full text-xs" style="background:#000;color:#fff;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;margin-top:2px;" onclick="postArticleToTwitter(${article.id})">𝕏 Post</button>
+                <button class="xposts-btn w-full text-xs" style="background:#f3f4f6;color:#374151;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;margin-top:2px;" onclick="openFindXPosts(${article.id}, \`${dashboardHeadline.replace(/`/g, '')}\`)">🔍 Find X Posts</button>
             </td>
         `;
         
@@ -1263,7 +1265,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             container.innerHTML = Object.entries(data).map(([platform, info]) => {
                 const dot = info.configured ? '🟢' : '🔴';
-                return `<span>${dot} <b>${platform}</b>: ${info.configured ? 'Connected' : 'Not configured'}</span>`;
+                let label = info.configured ? 'Connected' : 'Not configured';
+                if (platform === 'twitter' && info.configured && info.monthly_posts !== undefined) {
+                    label += ` (${info.monthly_posts}/${info.monthly_limit} posts this month)`;
+                }
+                return `<span>${dot} <b>${platform}</b>: ${label}</span>`;
             }).join('');
         } catch (e) {
             container.innerHTML = '<span class="text-red-500">Failed to load status</span>';
@@ -1317,6 +1323,186 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btn) { btn.disabled = false; btn.textContent = '🔴 Check Breaking News Now'; }
         }
     }
+
+    // M6 Phase 2: X/Twitter posting
+    window.postArticleToTwitter = async (articleId) => {
+        // First get a preview of the tweet
+        try {
+            const previewRes = await fetch(`${API_BASE_URL}/social/preview/article/${articleId}?platform=twitter`);
+            const previewData = await previewRes.json();
+            const tweetText = previewData.content || '';
+
+            // Show in composer for editing before posting
+            const composer = document.getElementById('tweet-compose-text');
+            const charCount = document.getElementById('tweet-char-count');
+            if (composer) {
+                composer.value = tweetText;
+                composer.dataset.articleId = articleId;
+                if (charCount) charCount.textContent = `${tweetText.length}/280`;
+                composer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                composer.focus();
+            }
+        } catch (e) {
+            alert('Failed to generate tweet preview: ' + e.message);
+        }
+    };
+
+    // Tweet composer character counter
+    const tweetComposeText = document.getElementById('tweet-compose-text');
+    const tweetCharCount = document.getElementById('tweet-char-count');
+    if (tweetComposeText && tweetCharCount) {
+        tweetComposeText.addEventListener('input', () => {
+            const len = tweetComposeText.value.length;
+            tweetCharCount.textContent = `${len}/280`;
+            tweetCharCount.style.color = len > 260 ? (len > 280 ? '#dc2626' : '#f59e0b') : '#9ca3af';
+        });
+    }
+
+    // Post tweet button
+    const postTweetBtn = document.getElementById('post-tweet-btn');
+    if (postTweetBtn) {
+        postTweetBtn.addEventListener('click', async () => {
+            const text = document.getElementById('tweet-compose-text')?.value;
+            if (!text) return alert('Write a tweet first.');
+            if (text.length > 280) return alert('Tweet exceeds 280 characters.');
+            if (!confirm('Post this tweet to X?')) return;
+
+            const articleId = document.getElementById('tweet-compose-text')?.dataset.articleId || null;
+            postTweetBtn.disabled = true;
+            postTweetBtn.textContent = 'Posting...';
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/social/post/tweet`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        article_id: articleId ? parseInt(articleId) : null,
+                    })
+                });
+                const data = await res.json();
+                if (data.posted) {
+                    const result = document.getElementById('tweet-compose-result');
+                    if (result) {
+                        result.textContent = `✅ Posted! Tweet ID: ${data.tweet_id} (${data.monthly_count}/100 this month)`;
+                        result.style.color = '#16a34a';
+                    }
+                    document.getElementById('tweet-compose-text').value = '';
+                    document.getElementById('tweet-compose-text').dataset.articleId = '';
+                    if (tweetCharCount) tweetCharCount.textContent = '0/280';
+                    fetchSocialHistory();
+                } else {
+                    alert('Error: ' + (data.detail || JSON.stringify(data)));
+                }
+            } catch (e) {
+                alert('Failed: ' + e.message);
+            } finally {
+                postTweetBtn.disabled = false;
+                postTweetBtn.textContent = '𝕏 Post Tweet';
+            }
+        });
+    }
+
+    // Find X Posts modal
+    let currentXPostsArticleId = null;
+    window.openFindXPosts = (articleId, headline) => {
+        currentXPostsArticleId = articleId;
+        const modal = document.getElementById('xposts-modal');
+        const queryInput = document.getElementById('xposts-search-query');
+        const results = document.getElementById('xposts-results');
+        if (queryInput) queryInput.value = headline;
+        if (results) results.innerHTML = '<p style="color:#9ca3af; font-size:0.85rem;">Click "Search 𝕏" to find related tweets.</p>';
+        if (modal) modal.classList.remove('hidden');
+    };
+
+    const closeXPostsBtn = document.getElementById('close-xposts-btn');
+    if (closeXPostsBtn) closeXPostsBtn.addEventListener('click', () => {
+        document.getElementById('xposts-modal')?.classList.add('hidden');
+    });
+    const xpostsModal = document.getElementById('xposts-modal');
+    if (xpostsModal) xpostsModal.addEventListener('click', (e) => {
+        if (e.target === xpostsModal) xpostsModal.classList.add('hidden');
+    });
+
+    const xpostsSearchBtn = document.getElementById('xposts-search-btn');
+    if (xpostsSearchBtn) {
+        xpostsSearchBtn.addEventListener('click', async () => {
+            const query = document.getElementById('xposts-search-query')?.value;
+            if (!query) return alert('Enter a search query.');
+            const status = document.getElementById('xposts-search-status');
+            const results = document.getElementById('xposts-results');
+            if (status) { status.textContent = 'Searching...'; status.style.color = '#6b7280'; }
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/social/twitter/search`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, max_results: 10 })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    if (status) { status.textContent = data.detail || 'Search failed'; status.style.color = '#dc2626'; }
+                    return;
+                }
+
+                if (status) status.textContent = `Found ${data.count} tweets`;
+                if (!results) return;
+
+                if (data.count === 0) {
+                    results.innerHTML = '<p style="color:#9ca3af; font-size:0.85rem;">No tweets found for this query.</p>';
+                    return;
+                }
+
+                results.innerHTML = data.tweets.map(t => `
+                    <div style="border:1px solid #e5e7eb; border-radius:8px; padding:12px; background:#fff;">
+                        <div style="display:flex; justify-content:space-between; align-items:start;">
+                            <div>
+                                <span style="font-weight:600; font-size:0.85rem;">${t.author_name}</span>
+                                <span style="color:#6b7280; font-size:0.8rem;">@${t.author_username}</span>
+                            </div>
+                            <div style="display:flex; gap:8px; font-size:0.7rem; color:#6b7280;">
+                                <span>❤️ ${t.like_count}</span>
+                                <span>🔁 ${t.retweet_count}</span>
+                            </div>
+                        </div>
+                        <p style="margin:8px 0; font-size:0.85rem; line-height:1.4;">${t.text}</p>
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <a href="${t.url}" target="_blank" style="font-size:0.75rem; color:#1d4ed8;">View on 𝕏</a>
+                            <button onclick="includeXPostInNewsletter('${t.url}', '${t.author_username}', \`${t.text.replace(/`/g, '').replace(/\\/g, '\\\\').slice(0, 200)}\`)" style="font-size:0.75rem; padding:2px 8px; background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe; border-radius:4px; cursor:pointer;">Include in Newsletter</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                if (status) { status.textContent = 'Error: ' + e.message; status.style.color = '#dc2626'; }
+            }
+        });
+    }
+
+    window.includeXPostInNewsletter = (url, username, text) => {
+        // For now, copy the embed format to clipboard.
+        // When the embedded_tweets column is ready, this will save to DB instead.
+        const embedHtml = `<div style="border-left:3px solid #1d9bf0;padding:8px 12px;margin:8px 0;background:#f8fafc;border-radius:0 6px 6px 0;">` +
+            `<div style="font-size:12px;color:#536471;">@${username} on 𝕏</div>` +
+            `<div style="font-size:13px;margin:4px 0;">${text}</div>` +
+            `<a href="${url}" style="font-size:11px;color:#1d9bf0;">View post</a></div>`;
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(embedHtml).then(() => {
+                alert('Tweet embed HTML copied to clipboard! Paste into the newsletter where needed.');
+            });
+        } else {
+            const tmp = document.createElement('textarea');
+            tmp.value = embedHtml;
+            tmp.style.position = 'fixed';
+            tmp.style.opacity = '0';
+            document.body.appendChild(tmp);
+            tmp.select();
+            document.execCommand('copy');
+            document.body.removeChild(tmp);
+            alert('Tweet embed HTML copied to clipboard! Paste into the newsletter where needed.');
+        }
+    };
 
     async function handlePostNewsletterTelegram() {
         if (!currentBriefId) return alert('No newsletter generated yet. Generate one first.');

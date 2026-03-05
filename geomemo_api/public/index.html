@@ -122,6 +122,17 @@
                     <span id="breaking-result" class="text-sm text-gray-600 self-center"></span>
                 </div>
 
+                <!-- Manual Tweet Composer -->
+                <div class="mb-4 p-4 bg-gray-50 rounded border border-gray-200">
+                    <h3 class="font-bold text-gray-700 mb-2">✍️ Compose Tweet</h3>
+                    <textarea id="tweet-compose-text" placeholder="Write your tweet here... (280 chars max)" maxlength="280" class="w-full p-2 border rounded text-sm h-20 resize-none"></textarea>
+                    <div class="flex justify-between items-center mt-2">
+                        <span id="tweet-char-count" class="text-xs text-gray-400">0/280</span>
+                        <button id="post-tweet-btn" class="bg-black text-white px-4 py-1.5 rounded text-sm font-semibold hover:bg-gray-800">𝕏 Post Tweet</button>
+                    </div>
+                    <div id="tweet-compose-result" class="text-xs mt-1"></div>
+                </div>
+
                 <h3 class="font-bold text-gray-700 mb-2">Recent Posts</h3>
                 <table class="w-full text-sm text-left text-gray-500">
                     <thead class="text-xs text-gray-700 uppercase bg-gray-50">
@@ -304,6 +315,24 @@
                     <h3 style="font-size:0.7rem; font-weight:700; color:#6b7280; text-transform:uppercase; margin:0 0 12px 0;">History</h3>
                     <div id="newsletter-history-list" style="display:flex; flex-direction:column; gap:6px; font-size:0.8rem;"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FIND X POSTS MODAL -->
+    <div id="xposts-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg w-full max-w-2xl" style="max-height:80vh; display:flex; flex-direction:column;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #e5e7eb; flex-shrink:0;">
+                <h2 style="font-size:1.1rem; font-weight:700; color:#1f2937; margin:0;">🔍 Find X Posts</h2>
+                <button id="close-xposts-btn" style="color:#9ca3af; font-size:1.5rem; cursor:pointer; background:none; border:none;">&times;</button>
+            </div>
+            <div style="padding:16px 20px; overflow-y:auto; flex:1;">
+                <div style="margin-bottom:12px;">
+                    <input type="text" id="xposts-search-query" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:4px; font-size:0.85rem; box-sizing:border-box;" placeholder="Search query (auto-filled from headline)...">
+                    <button id="xposts-search-btn" style="margin-top:6px; padding:6px 16px; font-size:0.8rem; font-weight:600; background:#000; color:#fff; border:none; border-radius:4px; cursor:pointer;">Search 𝕏</button>
+                    <span id="xposts-search-status" style="font-size:0.75rem; color:#6b7280; margin-left:8px;"></span>
+                </div>
+                <div id="xposts-results" style="display:flex; flex-direction:column; gap:10px;"></div>
             </div>
         </div>
     </div>
