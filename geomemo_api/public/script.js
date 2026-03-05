@@ -1332,6 +1332,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const previewData = await previewRes.json();
             const tweetText = previewData.content || '';
 
+            // Expand the Social Media <details> section if collapsed
+            const socialDetails = document.querySelector('details:has(#tweet-compose-text)');
+            if (socialDetails && !socialDetails.open) {
+                socialDetails.open = true;
+            }
+
             // Show in composer for editing before posting
             const composer = document.getElementById('tweet-compose-text');
             const charCount = document.getElementById('tweet-char-count');
@@ -1339,8 +1345,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 composer.value = tweetText;
                 composer.dataset.articleId = articleId;
                 if (charCount) charCount.textContent = `${tweetText.length}/280`;
-                composer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                composer.focus();
+                // Small delay to let the details section expand before scrolling
+                setTimeout(() => {
+                    composer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    composer.focus();
+                }, 100);
             }
         } catch (e) {
             alert('Failed to generate tweet preview: ' + e.message);

@@ -81,8 +81,18 @@ def search_recent_tweets(query: str, max_results: int = 10) -> list:
 
     client = _get_client_v2()
 
-    # Filter out retweets and replies, require English, exclude very short tweets
-    search_query = f'({query}) -is:retweet -is:reply lang:en'
+    # Sanitize query: remove X API reserved operators that cause "Ambiguous use" errors
+    # Words like "and", "or", "not" are reserved search operators in X API
+    import re
+    clean_query = re.sub(r'\b(AND|OR|NOT|and|or|not)\b', ' ', query)
+    # Collapse multiple spaces
+    clean_query = re.sub(r'\s+', ' ', clean_query).strip()
+    # If query is too short after cleaning, use original without reserved words
+    if len(clean_query) < 3:
+        clean_query = query.replace('"', '')
+
+    # Filter out retweets and replies, require English
+    search_query = f'({clean_query}) -is:retweet -is:reply lang:en'
 
     # Truncate query to X API limit (512 chars for recent search)
     if len(search_query) > 512:
