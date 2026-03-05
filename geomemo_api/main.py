@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from groq import Groq
 from sentence_transformers import SentenceTransformer
 
-from config import UPLOAD_DIR, BEEHIIV_API_KEY, BEEHIIV_PUB_ID
+from config import UPLOAD_DIR, BEEHIIV_API_KEY, BEEHIIV_PUB_ID, DRIP_INTERVAL_MINUTES
 from database import init_db
 from models import NewsletterSignup
 from routers import articles, content, sources, newsletter, social
@@ -105,26 +105,33 @@ def health_check():
     return {"status": "ok", "version": "2.0.0"}
 
 
-# --- M6: Background Breaking News Checker ---
-def _breaking_news_loop():
-    """Check for breaking news every 15 minutes and auto-post to configured platforms."""
+# --- M6: Background Article Drip Feed ---
+def _drip_feed_loop():
+    """
+    Drip feed approved articles to Telegram every DRIP_INTERVAL_MINUTES.
+    Only posts during configured posting hours (default 7AM-10PM ET).
+    Posts 1 article per cycle to keep the channel active throughout the day.
+    """
+    interval_seconds = DRIP_INTERVAL_MINUTES * 60
     while True:
-        time.sleep(900)  # 15 minutes
+        time.sleep(interval_seconds)
         try:
-            from services.social.breaking_news import check_and_post_breaking_news
-            result = check_and_post_breaking_news()
+            from services.social.breaking_news import drip_feed_articles
+            result = drip_feed_articles()
             if result.get("articles_posted", 0) > 0:
-                logger.info(f"Breaking news auto-post: {result['articles_posted']} articles posted")
+                logger.info(f"Drip feed: {result['articles_posted']} article(s) posted")
+            elif result.get("skipped_reason"):
+                logger.debug(f"Drip feed skipped: {result['skipped_reason']}")
         except Exception as e:
-            logger.error(f"Breaking news background check error: {e}")
+            logger.error(f"Drip feed background error: {e}")
 
 
 @app.on_event("startup")
-def start_breaking_news_checker():
-    """Start the breaking news background thread on app startup."""
-    thread = threading.Thread(target=_breaking_news_loop, daemon=True)
+def start_drip_feed():
+    """Start the article drip feed background thread on app startup."""
+    thread = threading.Thread(target=_drip_feed_loop, daemon=True)
     thread.start()
-    logger.info("Breaking news checker started (15-minute interval)")
+    logger.info(f"Article drip feed started ({DRIP_INTERVAL_MINUTES}-minute interval, posts during ET business hours)")
 
 
 # --- Static File Mounts (must be LAST — catch-all routes) ---

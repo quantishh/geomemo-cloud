@@ -73,7 +73,23 @@ TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN", "")
 TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET", "")
 TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN", "")
 
-# --- Breaking News Auto-Post Thresholds ---
-BREAKING_NEWS_MIN_APPROVAL_SCORE = float(os.getenv("BREAKING_NEWS_MIN_APPROVAL_SCORE", "85"))
-BREAKING_NEWS_MIN_CONFIDENCE = float(os.getenv("BREAKING_NEWS_MIN_CONFIDENCE", "80"))
-BREAKING_NEWS_MAX_AGE_MINUTES = int(os.getenv("BREAKING_NEWS_MAX_AGE_MINUTES", "30"))
+# --- Social Media: Drip Feed Settings ---
+# Minimum scores for articles to be eligible for auto-posting
+DRIP_MIN_APPROVAL_SCORE = float(os.getenv("DRIP_MIN_APPROVAL_SCORE", "85"))
+DRIP_MIN_CONFIDENCE = float(os.getenv("DRIP_MIN_CONFIDENCE", "80"))
+
+# How many articles to post per drip cycle (1 = one article every interval)
+DRIP_ARTICLES_PER_CYCLE = int(os.getenv("DRIP_ARTICLES_PER_CYCLE", "1"))
+
+# Interval between drip posts in minutes
+DRIP_INTERVAL_MINUTES = int(os.getenv("DRIP_INTERVAL_MINUTES", "30"))
+
+# Posting hours in Eastern Time (24h format). Bot only posts during this window.
+DRIP_START_HOUR_ET = int(os.getenv("DRIP_START_HOUR_ET", "7"))   # 7 AM ET
+DRIP_END_HOUR_ET = int(os.getenv("DRIP_END_HOUR_ET", "22"))      # 10 PM ET
+
+# Only post articles scraped within the last N hours (default 24 = today's batch)
+DRIP_LOOKBACK_HOURS = int(os.getenv("DRIP_LOOKBACK_HOURS", "24"))
+
+# Auto-post newsletter digest to Telegram after generation
+SOCIAL_AUTO_POST_NEWSLETTER = os.getenv("SOCIAL_AUTO_POST_NEWSLETTER", "true").lower() == "true"

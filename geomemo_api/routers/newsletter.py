@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Query
 from groq import Groq
 
 from database import get_db_connection
-from config import BEEHIIV_API_KEY, BEEHIIV_PUB_ID, VALID_CATEGORIES
+from config import BEEHIIV_API_KEY, BEEHIIV_PUB_ID, VALID_CATEGORIES, SOCIAL_AUTO_POST_NEWSLETTER
 from models import DailyBrief, NewsletterGenerateRequest, NewsletterPublishResponse
 
 logger = logging.getLogger(__name__)
@@ -123,6 +123,40 @@ def generate_newsletter(request: NewsletterGenerateRequest = NewsletterGenerateR
 
         result = dict(cursor.fetchone())
         conn.commit()
+
+        # Auto-post newsletter digest to Telegram
+        if SOCIAL_AUTO_POST_NEWSLETTER:
+            try:
+                from services.social import telegram
+                from services.social.content_generator import generate_newsletter_telegram
+
+                if telegram.is_configured():
+                    brief_for_tg = dict(result)
+                    tg_text = generate_newsletter_telegram(brief_for_tg, articles)
+                    tg_result = telegram.send_message(tg_text, disable_web_page_preview=True)
+
+                    # Record in social_posts (dedup by brief_id)
+                    cursor.execute("""
+                        SELECT id FROM social_posts
+                        WHERE platform = 'telegram' AND brief_id = %s
+                    """, (result['id'],))
+                    if not cursor.fetchone():
+                        cursor.execute("""
+                            INSERT INTO social_posts
+                                (platform, post_type, platform_post_id, brief_id,
+                                 content_text, status, posted_at)
+                            VALUES ('telegram', 'newsletter_digest', %s, %s, %s, 'sent', NOW())
+                        """, (str(tg_result['message_id']), result['id'], tg_text))
+                        conn.commit()
+                        logger.info(f"Newsletter auto-posted to Telegram (brief_id={result['id']})")
+            except Exception as tg_err:
+                logger.error(f"Newsletter auto-post to Telegram failed: {tg_err}")
+                # Don't fail the newsletter generation because of a Telegram error
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
         return result
 
     except HTTPException:
