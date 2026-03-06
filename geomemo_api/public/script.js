@@ -1729,6 +1729,278 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================
+    // GOOGLE NEWS INTELLIGENCE BUILDER
+    // =========================================
+
+    let currentPreviewFeedData = null;
+
+    // --- Event Listeners ---
+    const generateGnewsBtn = document.getElementById('generate-gnews-btn');
+    const migrateGnewsBtn = document.getElementById('migrate-gnews-btn');
+    const gnewsManualPreviewBtn = document.getElementById('gnews-manual-preview-btn');
+    const gnewsManualAddBtn = document.getElementById('gnews-manual-add-btn');
+    const closeGnewsPreviewBtn = document.getElementById('close-gnews-preview-btn');
+    const gnewsPreviewModal = document.getElementById('gnews-preview-modal');
+
+    if (generateGnewsBtn) generateGnewsBtn.addEventListener('click', handleGenerateGnewsFeeds);
+    if (migrateGnewsBtn) migrateGnewsBtn.addEventListener('click', handleMigrateGnewsFeeds);
+    if (gnewsManualPreviewBtn) gnewsManualPreviewBtn.addEventListener('click', handleManualGnewsPreview);
+    if (gnewsManualAddBtn) gnewsManualAddBtn.addEventListener('click', handleManualGnewsAdd);
+    if (closeGnewsPreviewBtn) closeGnewsPreviewBtn.addEventListener('click', () => gnewsPreviewModal?.classList.add('hidden'));
+    if (gnewsPreviewModal) gnewsPreviewModal.addEventListener('click', (e) => { if (e.target === gnewsPreviewModal) gnewsPreviewModal.classList.add('hidden'); });
+
+    document.getElementById('gnews-preview-add-btn')?.addEventListener('click', async () => {
+        if (!currentPreviewFeedData) return;
+        await addFeedAsSource(currentPreviewFeedData.label, currentPreviewFeedData.rss_url);
+        gnewsPreviewModal?.classList.add('hidden');
+    });
+
+    // Manual builder: live URL preview
+    const manualQueryInput = document.getElementById('gnews-manual-query');
+    const manualFreshnessSelect = document.getElementById('gnews-manual-freshness');
+    if (manualQueryInput) {
+        const updateManualUrl = () => {
+            const q = manualQueryInput.value.trim();
+            const f = manualFreshnessSelect?.value || '1d';
+            const preview = document.getElementById('gnews-manual-url-preview');
+            if (preview) {
+                if (q) {
+                    const encoded = encodeURIComponent(`${q} when:${f}`);
+                    preview.textContent = `https://news.google.com/rss/search?q=${encoded}&hl=en-US&gl=US&ceid=US:en`;
+                } else {
+                    preview.textContent = 'URL will appear here...';
+                }
+            }
+        };
+        manualQueryInput.addEventListener('input', updateManualUrl);
+        manualFreshnessSelect?.addEventListener('change', updateManualUrl);
+    }
+
+    // --- Init ---
+    fetchActiveGnewsFeeds();
+    checkGnewsMigrationNeeded();
+
+    // --- Core Functions ---
+
+    async function handleGenerateGnewsFeeds() {
+        const description = document.getElementById('gnews-description')?.value?.trim();
+        if (!description) return alert('Please describe the intelligence you want to track.');
+
+        const region = document.getElementById('gnews-region')?.value || null;
+        const focus = document.getElementById('gnews-focus')?.value || null;
+        const freshness = document.getElementById('gnews-freshness')?.value || '1d';
+        const statusEl = document.getElementById('gnews-generate-status');
+        const resultsEl = document.getElementById('gnews-results');
+        const btn = document.getElementById('generate-gnews-btn');
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Generating...';
+        if (statusEl) { statusEl.textContent = 'Asking AI to craft optimized search queries...'; statusEl.style.color = ''; }
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources/generate-google-feeds`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ description, region, focus, freshness })
+            });
+            if (!res.ok) throw new Error((await res.json()).detail || 'Generation failed');
+            const data = await res.json();
+
+            if (statusEl) statusEl.textContent = `Generated ${data.feeds.length} feed suggestions`;
+            window._gnewsGeneratedFeeds = data.feeds;
+
+            resultsEl.innerHTML = data.feeds.map((feed, i) => `
+                <div class="p-4 rounded border" style="background: var(--bg-card, #fff); border-color: var(--border-default);">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex-1 min-w-0 mr-3">
+                            <span class="font-bold text-sm" style="color: var(--text-primary);">${feed.label}</span>
+                            <p class="text-xs mt-1" style="color: var(--text-muted);">${feed.rationale}</p>
+                        </div>
+                        <div class="flex gap-2 flex-shrink-0">
+                            <button onclick="previewGnewsFeed(${i})" class="text-xs font-semibold px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700">Preview</button>
+                            <button onclick="addGnewsFeedToSources(${i})" class="text-xs font-semibold px-3 py-1.5 rounded bg-green-600 hover:bg-green-700 text-white">+ Add</button>
+                        </div>
+                    </div>
+                    <div class="text-xs font-mono p-2 rounded mt-2 break-all" style="background: var(--bg-section); color: var(--text-muted);">${feed.rss_url}</div>
+                </div>
+            `).join('');
+        } catch (e) {
+            if (statusEl) { statusEl.textContent = `Error: ${e.message}`; statusEl.style.color = '#dc2626'; }
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '✨ Generate Feeds';
+        }
+    }
+
+    window.previewGnewsFeed = async (index) => {
+        const feed = window._gnewsGeneratedFeeds?.[index];
+        if (!feed) return;
+        currentPreviewFeedData = feed;
+        showGnewsPreview(feed.rss_url, feed.label);
+    };
+
+    window.addGnewsFeedToSources = async (index) => {
+        const feed = window._gnewsGeneratedFeeds?.[index];
+        if (!feed) return;
+        await addFeedAsSource(feed.label, feed.rss_url);
+    };
+
+    async function showGnewsPreview(rssUrl, label) {
+        const modal = document.getElementById('gnews-preview-modal');
+        const titleEl = document.getElementById('gnews-preview-title');
+        const contentEl = document.getElementById('gnews-preview-content');
+        const countEl = document.getElementById('gnews-preview-count');
+
+        if (titleEl) titleEl.textContent = `Preview: ${label || 'Feed'}`;
+        if (contentEl) contentEl.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">⏳ Fetching headlines...</p>';
+        if (modal) modal.classList.remove('hidden');
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources/preview-feed`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rss_url: rssUrl })
+            });
+            if (!res.ok) throw new Error((await res.json()).detail || 'Preview failed');
+            const data = await res.json();
+
+            if (countEl) countEl.textContent = `${data.total_items} articles found`;
+
+            if (data.headlines.length === 0) {
+                contentEl.innerHTML = '<p style="color: #dc2626; font-size: 0.85rem;">No articles found. Try adjusting the query.</p>';
+                return;
+            }
+
+            contentEl.innerHTML = data.headlines.map(h => `
+                <div class="py-2" style="border-bottom: 1px solid var(--border-light, #eee);">
+                    <a href="${h.url}" target="_blank" class="text-sm font-medium hover:underline" style="color: var(--accent-blue, #2563eb);">${h.title}</a>
+                    <div class="flex gap-3 text-xs mt-1" style="color: var(--text-muted);">
+                        ${h.source ? `<span>${h.source}</span>` : ''}
+                        ${h.published ? `<span>${h.published}</span>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            contentEl.innerHTML = `<p style="color: #dc2626; font-size: 0.85rem;">Error: ${e.message}</p>`;
+        }
+    }
+
+    async function addFeedAsSource(name, rssUrl) {
+        const sourceName = name.startsWith('GNews:') ? name : `GNews: ${name}`;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: sourceName,
+                    domain: 'news.google.com',
+                    credibility_score: 50,
+                    tier: 2,
+                    country: 'Global',
+                    language: 'en',
+                    rss_feed_url: rssUrl,
+                    twitter_handle: null,
+                })
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Failed');
+            }
+            alert(`Added "${sourceName}" to sources! It will be active on the next scraper run.`);
+            fetchSourcesList();
+            fetchActiveGnewsFeeds();
+        } catch (e) {
+            alert(`Error: ${e.message}`);
+        }
+    }
+
+    async function fetchActiveGnewsFeeds() {
+        const container = document.getElementById('gnews-active-feeds');
+        if (!container) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources`);
+            if (!res.ok) return;
+            const sources = await res.json();
+            const gnewsFeeds = sources.filter(s => s.rss_feed_url && s.rss_feed_url.includes('news.google.com/rss/search'));
+            if (gnewsFeeds.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted);">No Google News feeds in database yet. Use the AI Generator or migrate hardcoded feeds above.</p>';
+                return;
+            }
+            container.innerHTML = gnewsFeeds.map(s => {
+                const safeName = s.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const safeUrl = encodeURIComponent(s.rss_feed_url);
+                return `
+                    <div class="flex justify-between items-center py-1.5 px-2 rounded hover:bg-gray-50" style="border-bottom: 1px solid var(--border-light, #eee);">
+                        <div class="flex-1 min-w-0">
+                            <span class="text-sm font-medium" style="color: var(--text-primary);">${s.name}</span>
+                            <span class="text-xs block truncate" style="color: var(--text-muted);">${s.rss_feed_url.length > 80 ? s.rss_feed_url.substring(0, 80) + '...' : s.rss_feed_url}</span>
+                        </div>
+                        <div class="flex gap-2 flex-shrink-0 ml-2">
+                            <button onclick="previewExistingGnewsFeed('${safeUrl}', '${safeName}')" class="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700">Preview</button>
+                            <button onclick="deleteSource(${s.id})" class="text-xs px-2 py-1 rounded text-red-500 hover:text-red-700 font-semibold">Remove</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (e) {
+            container.innerHTML = '<p style="color: #dc2626;">Error loading feeds</p>';
+        }
+    }
+
+    window.previewExistingGnewsFeed = (encodedUrl, label) => {
+        const url = decodeURIComponent(encodedUrl);
+        currentPreviewFeedData = { label, rss_url: url };
+        showGnewsPreview(url, label);
+    };
+
+    async function handleMigrateGnewsFeeds() {
+        if (!confirm('Migrate 13 hardcoded Google News feeds into the database? This is a one-time operation.')) return;
+        const statusEl = document.getElementById('migrate-gnews-status');
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources/migrate-google-feeds`, { method: 'POST' });
+            const data = await res.json();
+            if (statusEl) statusEl.textContent = data.message;
+            fetchSourcesList();
+            fetchActiveGnewsFeeds();
+            document.getElementById('gnews-migrate-banner')?.classList.add('hidden');
+        } catch (e) {
+            if (statusEl) statusEl.textContent = `Error: ${e.message}`;
+        }
+    }
+
+    async function checkGnewsMigrationNeeded() {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/sources`);
+            if (!res.ok) return;
+            const sources = await res.json();
+            const gnewsCount = sources.filter(s => s.rss_feed_url && s.rss_feed_url.includes('news.google.com/rss/search')).length;
+            const banner = document.getElementById('gnews-migrate-banner');
+            if (banner && gnewsCount < 5) banner.classList.remove('hidden');
+        } catch (e) { /* silently fail */ }
+    }
+
+    async function handleManualGnewsPreview() {
+        const query = document.getElementById('gnews-manual-query')?.value?.trim();
+        if (!query) return alert('Enter a search query.');
+        const freshness = document.getElementById('gnews-manual-freshness')?.value || '1d';
+        const encoded = encodeURIComponent(`${query} when:${freshness}`);
+        const rssUrl = `https://news.google.com/rss/search?q=${encoded}&hl=en-US&gl=US&ceid=US:en`;
+        currentPreviewFeedData = { label: query.substring(0, 40), rss_url: rssUrl };
+        showGnewsPreview(rssUrl, 'Manual Query');
+    }
+
+    async function handleManualGnewsAdd() {
+        const query = document.getElementById('gnews-manual-query')?.value?.trim();
+        if (!query) return alert('Enter a search query first.');
+        const freshness = document.getElementById('gnews-manual-freshness')?.value || '1d';
+        const encoded = encodeURIComponent(`${query} when:${freshness}`);
+        const rssUrl = `https://news.google.com/rss/search?q=${encoded}&hl=en-US&gl=US&ceid=US:en`;
+        const label = prompt('Name for this feed:', query.substring(0, 50));
+        if (!label) return;
+        await addFeedAsSource(label, rssUrl);
+    }
+
+    // =========================================
     // M6: SOCIAL MEDIA FUNCTIONS
     // =========================================
 

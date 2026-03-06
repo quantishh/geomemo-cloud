@@ -244,6 +244,122 @@
 
         <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
             <summary class="p-4 cursor-pointer font-semibold text-lg hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b" style="color: var(--text-primary);">
+                🔍 Google News Intelligence Builder
+            </summary>
+            <div class="p-6">
+                <!-- Migration Banner -->
+                <div id="gnews-migrate-banner" class="hidden mb-4 p-3 rounded border border-amber-300 bg-amber-50 text-sm flex items-center gap-2 flex-wrap">
+                    <strong>⚠️ Hardcoded Google News feeds detected.</strong>
+                    <span style="color: var(--text-muted);">Migrate them to the database for full dashboard control.</span>
+                    <button id="migrate-gnews-btn" class="bg-amber-600 text-white px-3 py-1 rounded text-xs hover:bg-amber-700 font-semibold">Migrate to Database</button>
+                    <span id="migrate-gnews-status" class="text-xs" style="color: var(--text-muted);"></span>
+                </div>
+
+                <!-- AI Feed Generator -->
+                <div class="mb-6 p-4 rounded border" style="background-color: var(--bg-section); border-color: var(--border-default);">
+                    <h3 class="font-bold mb-1" style="color: var(--text-primary);">✨ AI Feed Generator</h3>
+                    <p class="text-sm mb-3" style="color: var(--text-muted);">Describe the intelligence you want to track. AI generates optimized Google News search feeds.</p>
+                    <textarea id="gnews-description" class="w-full p-3 border rounded text-sm h-20 resize-none" style="background: var(--bg-input); color: var(--text-primary); border-color: var(--border-default);"
+                        placeholder="e.g., Track China-Taiwan military tensions and their impact on semiconductor supply chains and global markets"></textarea>
+                    <div class="flex gap-3 mt-3 items-end flex-wrap">
+                        <div class="w-40">
+                            <label class="block text-xs mb-1" style="color: var(--text-muted);">Region (optional)</label>
+                            <select id="gnews-region" class="p-2 border rounded w-full text-sm" style="background: var(--bg-input); color: var(--text-primary); border-color: var(--border-default);">
+                                <option value="">Global</option>
+                                <option value="Asia">Asia</option>
+                                <option value="Middle East">Middle East</option>
+                                <option value="Europe">Europe</option>
+                                <option value="Africa">Africa</option>
+                                <option value="Americas">Americas</option>
+                                <option value="South Asia">South Asia</option>
+                                <option value="Southeast Asia">Southeast Asia</option>
+                            </select>
+                        </div>
+                        <div class="w-40">
+                            <label class="block text-xs mb-1" style="color: var(--text-muted);">Focus (optional)</label>
+                            <select id="gnews-focus" class="p-2 border rounded w-full text-sm" style="background: var(--bg-input); color: var(--text-primary); border-color: var(--border-default);">
+                                <option value="">All Angles</option>
+                                <option value="Economic Impact">Economic Impact</option>
+                                <option value="Military & Security">Military & Security</option>
+                                <option value="Diplomacy & Policy">Diplomacy & Policy</option>
+                                <option value="Markets & Trade">Markets & Trade</option>
+                                <option value="Energy & Resources">Energy & Resources</option>
+                                <option value="Technology & Cyber">Technology & Cyber</option>
+                            </select>
+                        </div>
+                        <div class="w-28">
+                            <label class="block text-xs mb-1" style="color: var(--text-muted);">Freshness</label>
+                            <select id="gnews-freshness" class="p-2 border rounded w-full text-sm" style="background: var(--bg-input); color: var(--text-primary); border-color: var(--border-default);">
+                                <option value="1d" selected>Last 24h</option>
+                                <option value="7d">Last 7 days</option>
+                                <option value="1h">Last hour</option>
+                            </select>
+                        </div>
+                        <button id="generate-gnews-btn" class="bg-indigo-600 text-white px-5 py-2 rounded text-sm hover:bg-indigo-700 font-semibold">✨ Generate Feeds</button>
+                    </div>
+                    <span id="gnews-generate-status" class="text-xs mt-2 block" style="color: var(--text-muted);"></span>
+                </div>
+
+                <!-- Generated Results -->
+                <div id="gnews-results" class="space-y-3 mb-6"></div>
+
+                <!-- Quick Builder (Manual) -->
+                <details class="border rounded mb-6" style="border-color: var(--border-default);">
+                    <summary class="p-3 cursor-pointer text-sm font-semibold hover:bg-gray-50" style="color: var(--text-secondary);">
+                        🔧 Quick Builder (Manual)
+                    </summary>
+                    <div class="p-4 space-y-3">
+                        <p class="text-xs" style="color: var(--text-muted);">Build a Google News search URL manually. Use AND, OR, quotes for exact phrases, parentheses for grouping.</p>
+                        <div class="flex gap-2 items-end flex-wrap">
+                            <div class="flex-1 min-w-[300px]">
+                                <label class="block text-xs mb-1" style="color: var(--text-muted);">Search Query</label>
+                                <input type="text" id="gnews-manual-query" class="p-2 border rounded w-full text-sm" style="background: var(--bg-input); color: var(--text-primary); border-color: var(--border-default);"
+                                    placeholder='e.g., ("oil prices" OR "crude oil") AND (OPEC OR sanctions)'>
+                            </div>
+                            <div class="w-28">
+                                <label class="block text-xs mb-1" style="color: var(--text-muted);">Freshness</label>
+                                <select id="gnews-manual-freshness" class="p-2 border rounded w-full text-sm" style="background: var(--bg-input); color: var(--text-primary); border-color: var(--border-default);">
+                                    <option value="1d" selected>Last 24h</option>
+                                    <option value="7d">Last 7 days</option>
+                                </select>
+                            </div>
+                            <button id="gnews-manual-preview-btn" class="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700 font-semibold">Preview</button>
+                            <button id="gnews-manual-add-btn" class="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 font-semibold">Add to Sources</button>
+                        </div>
+                        <div class="text-xs font-mono p-2 rounded break-all" style="background: var(--bg-section); color: var(--text-muted);" id="gnews-manual-url-preview">URL will appear here...</div>
+                        <div id="gnews-manual-results" class="mt-2"></div>
+                    </div>
+                </details>
+
+                <!-- Active Google News Feeds -->
+                <div>
+                    <h3 class="font-bold mb-2 text-sm" style="color: var(--text-primary);">📡 Active Google News Feeds</h3>
+                    <div id="gnews-active-feeds" class="space-y-1 text-sm" style="color: var(--text-secondary);">
+                        <p style="color: var(--text-muted);">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <!-- Google News Preview Modal -->
+        <div id="gnews-preview-modal" class="hidden fixed inset-0 flex items-center justify-center z-50" style="background-color: var(--modal-overlay);">
+            <div class="rounded-lg w-full max-w-lg" style="max-height:70vh; display:flex; flex-direction:column; background-color: var(--modal-bg);">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border-default); flex-shrink:0;">
+                    <h2 id="gnews-preview-title" style="font-size:1rem; font-weight:700; color:var(--text-primary); margin:0;">Feed Preview</h2>
+                    <button id="close-gnews-preview-btn" style="color:var(--text-muted); font-size:1.5rem; cursor:pointer; background:none; border:none;">&times;</button>
+                </div>
+                <div id="gnews-preview-content" style="padding:16px 20px; overflow-y:auto; flex:1;">
+                    <p style="color: var(--text-muted); font-size: 0.85rem;">Loading preview...</p>
+                </div>
+                <div style="padding:12px 20px; border-top:1px solid var(--border-default); flex-shrink:0; display:flex; gap:8px; align-items:center;">
+                    <span id="gnews-preview-count" class="text-xs" style="color: var(--text-muted);"></span>
+                    <button id="gnews-preview-add-btn" class="ml-auto bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 font-semibold">Add to Sources</button>
+                </div>
+            </div>
+        </div>
+
+        <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
+            <summary class="p-4 cursor-pointer font-semibold text-lg hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b" style="color: var(--text-primary);">
                 🏢 Source Management
             </summary>
             <div class="p-6">

@@ -201,6 +201,43 @@ class SourceCreate(BaseModel):
     twitter_handle: Optional[str] = None
 
 
+# --- Google News Feed Builder Models ---
+class GoogleFeedGenerateRequest(BaseModel):
+    """Natural language description of intelligence to track."""
+    description: str
+    region: Optional[str] = None
+    focus: Optional[str] = None
+    freshness: str = "1d"
+
+class GeneratedFeed(BaseModel):
+    """A single AI-generated Google News feed suggestion."""
+    label: str
+    query: str
+    rss_url: str
+    rationale: str
+
+class GoogleFeedGenerateResponse(BaseModel):
+    """Response containing AI-generated feed suggestions."""
+    feeds: List[GeneratedFeed]
+
+class FeedPreviewRequest(BaseModel):
+    """Request to preview an RSS feed URL."""
+    rss_url: str
+
+class FeedPreviewHeadline(BaseModel):
+    """A single headline from a feed preview."""
+    title: str
+    source: Optional[str] = None
+    url: Optional[str] = None
+    published: Optional[str] = None
+
+class FeedPreviewResponse(BaseModel):
+    """Response containing sample headlines from a feed."""
+    headlines: List[FeedPreviewHeadline]
+    total_items: int
+    feed_title: Optional[str] = None
+
+
 # --- M6: Social Media Models ---
 class SocialPost(BaseModel):
     id: int

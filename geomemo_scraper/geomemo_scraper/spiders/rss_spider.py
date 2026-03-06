@@ -230,13 +230,16 @@ class RssSpider(scrapy.Spider):
         'https://www.tasnimnews.com/en/rss/feed/0/7/0/all-stories',
         'https://iranonline.blog/feed/',
 
-        # --- NEW: Google News RSS Feeds for Keywords ---
-        # (Replace/add keywords as needed)
-        'https://news.google.com/rss/search?q=geopolitics&hl=en-US&gl=US&ceid=US:en',
-        'https://news.google.com/rss/search?q=international+relations&hl=en-US&gl=US&ceid=US:en',
-        'https://news.google.com/rss/search?q=global+economy&hl=en-US&gl=US&ceid=US:en',
-        'https://news.google.com/rss/search?q=world+conflict&hl=en-US&gl=US&ceid=US:en',
-        'https://news.google.com/rss/search?q=foreign+policy&hl=en-US&gl=US&ceid=US:en',
+        # --- Google News RSS Feeds (TRANSITIONAL) ---
+        # These are being migrated to the sources database via the admin dashboard.
+        # Once migrated, the scraper picks them up from DB in start_requests().
+        # Use POST /api/sources/migrate-google-feeds to perform the migration.
+        # After migration is confirmed, these hardcoded entries can be removed.
+        'https://news.google.com/rss/search?q=geopolitics+when:1d&hl=en-US&gl=US&ceid=US:en',
+        'https://news.google.com/rss/search?q=international+relations+when:1d&hl=en-US&gl=US&ceid=US:en',
+        'https://news.google.com/rss/search?q=global+economy+when:1d&hl=en-US&gl=US&ceid=US:en',
+        'https://news.google.com/rss/search?q=world+conflict+when:1d&hl=en-US&gl=US&ceid=US:en',
+        'https://news.google.com/rss/search?q=foreign+policy+when:1d&hl=en-US&gl=US&ceid=US:en',
         'https://news.google.com/rss/search?q=(geopolitical+conflict+OR+war+OR+sanctions+OR+embargo)+AND+(trade+OR+"market+impact"+OR+"supply+chain"+OR+financial+impact)+when:1d&hl=en-US&gl=US&ceid=US:en',
         'https://news.google.com/rss/search?q=("climate+change"+OR+"natural+disaster"+OR+drought+OR+flood)+AND+(geopolitics+OR+"economic+impact"+OR+"resource+scarcity"+OR+migration)+when:1d&hl=en-US&gl=US&ceid=US:en',
         'https://news.google.com/rss/search?q=("stock+market"+OR+"major+indices"+OR+Sensex+OR+Nifty+OR+Nikkei+OR+Hang+Seng+OR+FTSE+OR+DAX+OR+"ASX+200"+OR+Bovespa+OR+"JSE")+AND+(forecast+OR+performance+OR+outlook)+when:1d&hl=en-US&gl=US&ceid=US:en',
