@@ -2,6 +2,7 @@
 Social media automation endpoints.
 Handles posting to Telegram (Phase 1) and Twitter/X (Phase 2).
 """
+import json
 import logging
 from typing import Optional
 
@@ -469,31 +470,54 @@ def search_tweets(request: TweetSearchRequest):
 # ============================================================
 
 @router.post("/twitter/embed/{article_id}")
-def save_tweet_embeds(article_id: int, tweet_ids: list[str]):
+def save_tweet_embeds(article_id: int, tweets: list[dict]):
     """
-    Save selected tweet IDs to an article for newsletter embedding.
-    Stores in articles.embedded_tweets JSON column.
+    Save selected tweets to an article for newsletter embedding.
+    Accepts full tweet objects [{username, text, url}] so the newsletter
+    can render them without re-fetching from X API.
+    Stores in articles.embedded_tweets JSONB column.
     """
-    from services.social import twitter
-
-    if not twitter.is_configured():
-        raise HTTPException(status_code=400, detail="X/Twitter not configured")
-
-    # Fetch full tweet data for the selected IDs
     try:
-        # We already have the tweet data from search, just store the IDs
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Store tweet IDs as JSON array in a new column (or use existing structure)
+        # Validate and normalize tweet objects
+        clean_tweets = []
+        for t in tweets:
+            if isinstance(t, dict):
+                clean_tweets.append({
+                    "username": t.get("username", ""),
+                    "text": t.get("text", ""),
+                    "url": t.get("url", ""),
+                })
+            elif isinstance(t, str):
+                # Backwards compatibility: if just a string ID is passed
+                clean_tweets.append({"username": "", "text": "", "url": t})
+
+        # Append to existing embedded tweets (don't overwrite)
+        cursor.execute(
+            "SELECT embedded_tweets FROM articles WHERE id = %s", (article_id,)
+        )
+        row = cursor.fetchone()
+        existing = []
+        if row and row[0]:
+            existing = row[0] if isinstance(row[0], list) else []
+
+        # Deduplicate by URL
+        existing_urls = {t.get('url', '') for t in existing if isinstance(t, dict)}
+        for t in clean_tweets:
+            if t['url'] not in existing_urls:
+                existing.append(t)
+                existing_urls.add(t['url'])
+
         cursor.execute("""
             UPDATE articles
             SET embedded_tweets = %s::jsonb
             WHERE id = %s
-        """, (str(tweet_ids).replace("'", '"'), article_id))
+        """, (json.dumps(existing), article_id))
         conn.commit()
 
-        return {"saved": True, "article_id": article_id, "tweet_count": len(tweet_ids)}
+        return {"saved": True, "article_id": article_id, "tweet_count": len(existing)}
     except Exception as e:
         logger.error(f"Save tweet embeds failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

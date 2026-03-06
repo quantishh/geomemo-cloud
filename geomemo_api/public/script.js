@@ -1379,12 +1379,23 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchSponsorsList(); 
     }
 
-    async function fetchSponsorsList() { 
-        const tb=document.getElementById('sponsors-tbody'); 
-        if(!tb)return; 
-        const res=await fetch(`${API_BASE_URL}/sponsors`); 
-        const items=await res.json(); 
-        tb.innerHTML=items.map(s=>`<tr><td>${s.company_name}</td><td><button onclick="deleteItem('sponsors', ${s.id})">🗑️</button></td></tr>`).join(''); 
+    async function fetchSponsorsList() {
+        const tb=document.getElementById('sponsors-tbody');
+        if(!tb)return;
+        const res=await fetch(`${API_BASE_URL}/sponsors`);
+        const items=await res.json();
+        tb.innerHTML=items.map(s=>{
+            const logoThumb = s.logo_url ? `<img src="${s.logo_url}" alt="${s.company_name}" style="max-height:30px;max-width:50px;vertical-align:middle;border-radius:2px;">` : '<span style="color:#999;font-size:0.75rem;">No logo</span>';
+            const headlineText = (s.headline || '').length > 40 ? s.headline.slice(0, 40) + '...' : (s.headline || '');
+            const linkShort = s.link_url ? `<a href="${s.link_url}" target="_blank" style="font-size:0.75rem;color:#1d4ed8;">Link</a>` : '';
+            return `<tr>
+                <td>${logoThumb}</td>
+                <td style="font-weight:600;">${s.company_name}</td>
+                <td style="font-size:0.85rem;color:#555;">${headlineText}</td>
+                <td>${linkShort}</td>
+                <td><button onclick="deleteItem('sponsors', ${s.id})">🗑️</button></td>
+            </tr>`;
+        }).join('');
     }
 
     async function handlePodcastSubmit(e) { 
@@ -1983,28 +1994,50 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    window.includeXPostInNewsletter = (url, username, text) => {
-        // For now, copy the embed format to clipboard.
-        // When the embedded_tweets column is ready, this will save to DB instead.
-        const embedHtml = `<div style="border-left:3px solid #1d9bf0;padding:8px 12px;margin:8px 0;background:#f8fafc;border-radius:0 6px 6px 0;">` +
-            `<div style="font-size:12px;color:#536471;">@${username} on 𝕏</div>` +
-            `<div style="font-size:13px;margin:4px 0;">${text}</div>` +
-            `<a href="${url}" style="font-size:11px;color:#1d9bf0;">View post</a></div>`;
-
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(embedHtml).then(() => {
-                alert('Tweet embed HTML copied to clipboard! Paste into the newsletter where needed.');
+    window.includeXPostInNewsletter = async (url, username, text) => {
+        if (!currentXPostsArticleId) {
+            alert('No article selected. Open "Find X Posts" from an article first.');
+            return;
+        }
+        try {
+            const res = await fetch(`${API_BASE_URL}/social/twitter/embed/${currentXPostsArticleId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify([{ username, text, url }])
             });
-        } else {
-            const tmp = document.createElement('textarea');
-            tmp.value = embedHtml;
-            tmp.style.position = 'fixed';
-            tmp.style.opacity = '0';
-            document.body.appendChild(tmp);
-            tmp.select();
-            document.execCommand('copy');
-            document.body.removeChild(tmp);
-            alert('Tweet embed HTML copied to clipboard! Paste into the newsletter where needed.');
+            if (!res.ok) {
+                const err = await res.json();
+                alert('Failed to save tweet: ' + (err.detail || 'Unknown error'));
+                return;
+            }
+            const data = await res.json();
+            // Find the button that triggered this and show success
+            const buttons = document.querySelectorAll('#xposts-results button');
+            buttons.forEach(btn => {
+                if (btn.onclick && btn.textContent === 'Include in Newsletter' &&
+                    btn.getAttribute('data-url') === url) {
+                    btn.textContent = '✓ Added';
+                    btn.style.background = '#dcfce7';
+                    btn.style.color = '#16a34a';
+                    btn.style.borderColor = '#86efac';
+                    btn.disabled = true;
+                }
+            });
+            // Also try to mark by finding matching URL in the button's onclick
+            document.querySelectorAll('#xposts-results button').forEach(btn => {
+                if (btn.textContent === 'Include in Newsletter') {
+                    const onclickStr = btn.getAttribute('onclick') || '';
+                    if (onclickStr.includes(url.replace(/'/g, "\\'"))) {
+                        btn.textContent = '✓ Added';
+                        btn.style.background = '#dcfce7';
+                        btn.style.color = '#16a34a';
+                        btn.style.borderColor = '#86efac';
+                        btn.disabled = true;
+                    }
+                }
+            });
+        } catch (e) {
+            alert('Error saving tweet: ' + e.message);
         }
     };
 

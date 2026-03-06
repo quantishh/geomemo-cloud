@@ -23,7 +23,8 @@ router = APIRouter(prefix="/newsletter", tags=["newsletter"])
 # Groq client injected from main.py (same pattern as articles.py)
 groq_client: Groq = None
 
-FONT_STACK = "'Calibri', 'Segoe UI', Helvetica, Arial, sans-serif"
+HEADLINE_FONT = "Optima, 'Century Gothic', 'Trebuchet MS', Helvetica, Arial, sans-serif"
+BODY_FONT = "Optima, 'Trebuchet MS', 'Microsoft Sans Serif', Helvetica, Arial, sans-serif"
 
 
 def init_models(groq: Groq):
@@ -51,7 +52,8 @@ def generate_newsletter(request: NewsletterGenerateRequest = NewsletterGenerateR
             target = request.target_date
             cursor.execute("""
                 SELECT id, url, headline, headline_en, summary, category,
-                       publication_name, author, scraped_at, is_top_story, parent_id
+                       publication_name, author, scraped_at, is_top_story, parent_id,
+                       embedded_tweets
                 FROM articles
                 WHERE status = 'approved'
                   AND scraped_at::date = %s::date
@@ -64,7 +66,8 @@ def generate_newsletter(request: NewsletterGenerateRequest = NewsletterGenerateR
                     FROM articles WHERE status = 'approved'
                 )
                 SELECT id, url, headline, headline_en, summary, category,
-                       publication_name, author, scraped_at, is_top_story, parent_id
+                       publication_name, author, scraped_at, is_top_story, parent_id,
+                       embedded_tweets
                 FROM articles
                 WHERE status = 'approved'
                   AND scraped_at::date = (SELECT max_date FROM LatestBatch)
@@ -100,13 +103,20 @@ def generate_newsletter(request: NewsletterGenerateRequest = NewsletterGenerateR
         brief_text, brief_html = _generate_ai_brief(parents, top_stories)
         word_count = len(brief_text.split()) if brief_text else 0
 
-        # 4. Build full newsletter HTML
+        # 4. Fetch sponsors for newsletter insertion
+        cursor.execute("""
+            SELECT id, company_name, headline, summary, link_url, logo_url
+            FROM sponsors ORDER BY created_at DESC
+        """)
+        sponsors = [dict(row) for row in cursor.fetchall()]
+
+        # 5. Build full newsletter HTML
         subject_line = _build_subject_line(top_stories, parents)
         newsletter_html = _build_newsletter_html(
-            brief_html, top_stories, other_parents, child_map, target
+            brief_html, top_stories, other_parents, child_map, target, sponsors=sponsors
         )
 
-        # 5. Upsert into daily_briefs
+        # 6. Upsert into daily_briefs
         cursor.execute("""
             INSERT INTO daily_briefs (date, summary_text, summary_html, newsletter_html,
                                       subject_line, word_count, generated_at, published)
@@ -378,8 +388,11 @@ def _build_newsletter_html(
     other_parents: list,
     child_map: dict,
     target_date: str,
+    sponsors: list = None,
 ) -> str:
     """Build the complete newsletter HTML with AI brief and all article sections.
+    Techmeme-style layout: charcoal headlines, (Author / Source) attribution,
+    embedded X posts, sponsor blocks between sections.
     Output is minified for Beehiiv compatibility (shortest possible HTML)."""
     try:
         date_formatted = datetime.strptime(target_date, "%Y-%m-%d").strftime("%B %d, %Y")
@@ -391,55 +404,113 @@ def _build_newsletter_html(
     # --- Envelope ---
     parts.append(
         f'<html><head><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>'
-        f'<body style="font-family:{FONT_STACK};color:#111;margin:0;padding:0;background:#fff">'
+        f'<body style="font-family:{BODY_FONT};color:#333;margin:0;padding:0;background:#fff">'
         f'<div style="max-width:600px;margin:0 auto;padding:20px">'
     )
 
-    # --- Header ---
+    # --- Header (clean Techmeme-style: brand left, date right) ---
     parts.append(
-        f'<div style="border-bottom:2px solid #eee;padding-bottom:15px;margin-bottom:20px">'
-        f'<span style="font-size:24px;font-weight:800;color:#430297;letter-spacing:-0.5px;text-transform:uppercase">GeoMemo</span><br>'
-        f'<span style="color:#666;font-size:13px">Daily Intelligence &bull; {date_formatted}</span>'
-        f'</div>'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-bottom:2px solid #e8e8e8;padding-bottom:12px;margin-bottom:24px">'
+        f'<tr><td style="vertical-align:bottom">'
+        f'<span style="font-family:{HEADLINE_FONT};font-size:28px;font-weight:800;color:#333;letter-spacing:-0.5px">GeoMemo</span>'
+        f'</td><td style="text-align:right;vertical-align:bottom">'
+        f'<span style="color:#1a5276;font-size:13px;font-weight:600">{date_formatted}</span>'
+        f'</td></tr></table>'
     )
 
-    # --- AI Daily Brief ---
+    # --- AI Daily Brief (keep purple accent — GeoMemo identity) ---
     if brief_html and brief_html.strip():
         parts.append(
-            f'<div style="background:#f8f6ff;border-left:4px solid #430297;padding:16px 20px;margin-bottom:25px;border-radius:0 6px 6px 0">'
-            f'<div style="font-size:14px;font-weight:700;color:#430297;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Daily Brief</div>'
-            f'<div style="font-size:14px;line-height:1.6">{brief_html}</div>'
+            f'<div style="background:#f8f6ff;border-left:4px solid #430297;padding:16px 20px;margin-bottom:28px;border-radius:0 6px 6px 0">'
+            f'<div style="font-family:{HEADLINE_FONT};font-size:14px;font-weight:700;color:#430297;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Daily Brief</div>'
+            f'<div style="font-size:15px;line-height:1.7;color:#333">{brief_html}</div>'
             f'</div>'
         )
 
     # --- Top News ---
     if top_stories:
         parts.append(
-            '<div style="color:#b00;font-weight:700;font-size:14px;border-bottom:2px solid #b00;margin-bottom:15px;text-transform:uppercase;letter-spacing:0.5px">Top News</div>'
+            f'<div style="font-family:{HEADLINE_FONT};color:#1a5276;font-weight:700;font-size:14px;'
+            f'border-bottom:3px solid #1a5276;padding-bottom:4px;margin-bottom:18px;'
+            f'text-transform:uppercase;letter-spacing:1.5px">Top News</div>'
         )
         for a in top_stories:
-            parts.append(_format_article_item(a, child_map.get(a['id'], [])))
+            parts.append(_format_article_item(a, child_map.get(a['id'], []), is_top=True))
 
-    # --- Category Sections ---
-    categories = {}
-    for a in other_parents:
-        cat = a.get('category', 'Other')
-        if cat not in VALID_CATEGORIES:
-            cat = 'Other'
-        categories.setdefault(cat, []).append(a)
+    # --- Sponsor block insertion logic ---
+    # Distribute sponsors evenly among category sections
+    sponsor_list = sponsors or []
+    sponsor_slots = []
+    if sponsor_list:
+        # Build ordered category list first to know how many sections
+        ordered_cats = []
+        categories = {}
+        for a in other_parents:
+            cat = a.get('category', 'Other')
+            if cat not in VALID_CATEGORIES:
+                cat = 'Other'
+            categories.setdefault(cat, []).append(a)
+        for cat in VALID_CATEGORIES + ['Other']:
+            if cat in categories and categories[cat]:
+                ordered_cats.append(cat)
 
-    for cat in VALID_CATEGORIES + ['Other']:
-        if cat in categories and categories[cat]:
+        # Place sponsors after every N sections (evenly spaced)
+        if ordered_cats and sponsor_list:
+            n_sponsors = min(len(sponsor_list), 4)  # Max 4 sponsor blocks
+            interval = max(1, len(ordered_cats) // (n_sponsors + 1))
+            slot_indices = set()
+            for i in range(n_sponsors):
+                idx = (i + 1) * interval - 1
+                if idx < len(ordered_cats):
+                    slot_indices.add(idx)
+            sponsor_iter = iter(sponsor_list[:n_sponsors])
+            for i, cat in enumerate(ordered_cats):
+                sponsor_slots.append(('category', cat, categories[cat]))
+                if i in slot_indices:
+                    s = next(sponsor_iter, None)
+                    if s:
+                        sponsor_slots.append(('sponsor', s, None))
+        else:
+            for cat in VALID_CATEGORIES + ['Other']:
+                if cat in categories and categories[cat]:
+                    sponsor_slots.append(('category', cat, categories[cat]))
+    else:
+        # No sponsors — just categories
+        categories = {}
+        for a in other_parents:
+            cat = a.get('category', 'Other')
+            if cat not in VALID_CATEGORIES:
+                cat = 'Other'
+            categories.setdefault(cat, []).append(a)
+        for cat in VALID_CATEGORIES + ['Other']:
+            if cat in categories and categories[cat]:
+                sponsor_slots.append(('category', cat, categories[cat]))
+
+    # Insert first sponsor after Top News section (if available and not already placed)
+    if sponsor_list and top_stories:
+        first_sponsor = sponsor_list[0] if len(sponsor_list) > len([s for s in sponsor_slots if s[0] == 'sponsor']) else None
+        if first_sponsor and not any(s[0] == 'sponsor' for s in sponsor_slots):
+            parts.append(_format_sponsor_block(first_sponsor))
+
+    # --- Category Sections + Sponsor Blocks ---
+    for slot_type, slot_data, slot_articles in sponsor_slots:
+        if slot_type == 'category':
+            cat = slot_data
+            cat_articles = slot_articles
             parts.append(
-                f'<div style="color:#b00;font-weight:700;font-size:14px;border-bottom:1px solid #ddd;margin-top:30px;margin-bottom:15px;text-transform:uppercase;letter-spacing:0.5px">{cat}</div>'
+                f'<div style="font-family:{HEADLINE_FONT};color:#1a5276;font-weight:700;font-size:14px;'
+                f'border-bottom:2px solid #1a5276;padding-bottom:4px;margin-top:32px;margin-bottom:18px;'
+                f'text-transform:uppercase;letter-spacing:1.5px">{cat}</div>'
             )
-            for a in categories[cat]:
+            for a in cat_articles:
                 parts.append(_format_article_item(a, child_map.get(a['id'], [])))
+        elif slot_type == 'sponsor':
+            parts.append(_format_sponsor_block(slot_data))
 
     # --- Footer ---
     parts.append(
-        '<div style="margin-top:50px;padding-top:20px;border-top:1px solid #eee;color:#999;font-size:11px;text-align:center;line-height:1.6">'
-        '&copy; 2026 GeoMemo.<br>Briefing the world\'s decision makers.<br>'
+        '<div style="margin-top:50px;padding-top:20px;border-top:1px solid #e8e8e8;color:#999;font-size:11px;text-align:center;line-height:1.6">'
+        '&copy; 2026 GeoMemo. Briefing the world\'s decision makers.<br>'
         '<a href="{{unsubscribe_url}}" style="color:#999;text-decoration:underline">Unsubscribe</a>'
         '</div></div></body></html>'
     )
@@ -447,31 +518,110 @@ def _build_newsletter_html(
     return _minify_html(''.join(parts))
 
 
-def _format_article_item(article: dict, children: list) -> str:
-    """Render one article (parent + children) in compact newsletter HTML."""
+def _format_article_item(article: dict, children: list, is_top: bool = False) -> str:
+    """Render one article (parent + children) in Techmeme-style newsletter HTML.
+    Large bold charcoal headline, (Author / Publication) attribution,
+    embedded X posts, child articles as bullet list."""
+    # Headline text — use summary (which is the AI-enhanced summary) as the display text
     text = article.get('summary') or article.get('headline_en') or article.get('headline') or 'No Content'
     text_clean = re.sub(r'<[^>]*>', '', text)
 
+    # Attribution: (Author / Publication) or just (Publication)
+    author = article.get('author') or ''
     pub_name = article.get('publication_name') or ''
-    meta = f' <span style="color:#888;font-size:12px">({pub_name})</span>' if pub_name else ''
+    if author and pub_name:
+        attribution = f' <span style="color:#999;font-size:14px;font-weight:400">({author} / {pub_name})</span>'
+    elif pub_name:
+        attribution = f' <span style="color:#999;font-size:14px;font-weight:400">({pub_name})</span>'
+    else:
+        attribution = ''
+
+    # Headline size: larger for top stories
+    headline_size = '22px' if is_top else '18px'
 
     html = (
-        f'<div style="border-bottom:1px solid #eee;padding:0 0 12px;margin-bottom:12px">'
-        f'<a href="{article["url"]}" style="color:#111;text-decoration:none;font-weight:700;font-size:15px;line-height:1.4">{text_clean}</a>'
-        f'{meta}'
+        f'<div style="border-bottom:1px solid #e8e8e8;padding:0 0 16px;margin-bottom:16px">'
+        f'<a href="{article["url"]}" style="font-family:{HEADLINE_FONT};color:#333;text-decoration:none;'
+        f'font-weight:700;font-size:{headline_size};line-height:1.35">{text_clean}</a>'
+        f'{attribution}'
     )
 
-    # Render children (cluster items) — compact
+    # Embedded X posts (if any)
+    embedded_tweets = article.get('embedded_tweets')
+    if embedded_tweets:
+        tweets_data = embedded_tweets if isinstance(embedded_tweets, list) else []
+        for tweet in tweets_data:
+            if isinstance(tweet, dict):
+                html += _format_embedded_tweet(
+                    tweet.get('username', ''),
+                    tweet.get('text', '')
+                )
+
+    # Render children (cluster items) — Techmeme bullet style
     if children:
+        html += '<div style="margin-top:10px;padding-left:4px">'
         for child in children:
-            child_pub = child.get('publication_name') or 'Source'
             child_text = child.get('summary') or child.get('headline_en') or child.get('headline') or ''
             child_text = re.sub(r'<[^>]*>', '', child_text)
+            child_author = child.get('author') or ''
+            child_pub = child.get('publication_name') or ''
+            if child_author and child_pub:
+                child_attr = f' <span style="color:#999;font-size:13px;font-weight:400">({child_author} / {child_pub})</span>'
+            elif child_pub:
+                child_attr = f' <span style="color:#999;font-size:13px;font-weight:400">({child_pub})</span>'
+            else:
+                child_attr = ''
             html += (
-                f'<div style="margin-top:6px;font-size:13px;color:#666;line-height:1.4">'
-                f'<a href="{child["url"]}" style="color:#008000;font-weight:bold;text-decoration:none">{child_pub}</a>: {child_text}'
+                f'<div style="margin-top:8px;font-size:16px;line-height:1.4">'
+                f'&bull; <a href="{child["url"]}" style="font-family:{HEADLINE_FONT};color:#333;'
+                f'text-decoration:none;font-weight:700">{child_text}</a>'
+                f'{child_attr}'
                 f'</div>'
             )
+        html += '</div>'
 
     html += '</div>'
     return html
+
+
+def _format_embedded_tweet(username: str, text: str) -> str:
+    """Render a single embedded X post in Techmeme style — clean inline text."""
+    if not username and not text:
+        return ''
+    handle = f'@{username}' if username else ''
+    return (
+        f'<div style="margin-top:8px;padding-left:4px">'
+        f'<span style="font-size:13px;font-weight:700;color:#333">&#120143; {handle}:</span> '
+        f'<span style="font-size:13px;color:#555;font-weight:400;line-height:1.5">{text}</span>'
+        f'</div>'
+    )
+
+
+def _format_sponsor_block(sponsor: dict) -> str:
+    """Render a sponsor block in Techmeme newsletter style."""
+    company = sponsor.get('company_name', '')
+    headline = sponsor.get('headline', '')
+    summary = sponsor.get('summary', '')
+    link_url = sponsor.get('link_url', '#')
+    logo_url = sponsor.get('logo_url', '')
+
+    logo_html = ''
+    if logo_url:
+        logo_html = (
+            f'<td style="width:80px;vertical-align:top;padding-left:12px">'
+            f'<img src="{logo_url}" alt="{company}" style="max-width:80px;max-height:60px;display:block" />'
+            f'</td>'
+        )
+
+    return (
+        f'<div style="background:#f5f5f5;border:1px solid #e0e0e0;padding:16px 20px;margin:28px 0;border-radius:4px">'
+        f'<div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;font-weight:600">Sponsor</div>'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+        f'<td style="vertical-align:top">'
+        f'<a href="{link_url}" style="font-family:{HEADLINE_FONT};font-size:16px;font-weight:700;color:#333;text-decoration:none;line-height:1.3">{headline}</a>'
+        f'<div style="font-size:14px;color:#555;margin-top:6px;line-height:1.5">{summary}</div>'
+        f'</td>'
+        f'{logo_html}'
+        f'</tr></table>'
+        f'</div>'
+    )
