@@ -274,9 +274,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Group by Date
         const grouped = filtered.reduce((groups, article) => {
-            let date = (article.scraped_at && typeof article.scraped_at === 'string') 
-                ? article.scraped_at.split('T')[0] 
-                : 'Unsorted';
+            let date = 'Unsorted';
+            if (article.scraped_at) {
+                // Convert UTC timestamp to user's local date (YYYY-MM-DD)
+                const d = new Date(article.scraped_at);
+                date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            }
             if (!groups[date]) groups[date] = [];
             groups[date].push(article);
             return groups;
@@ -315,8 +318,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Safe Date Formatting
             let prettyDate = date;
             if (date !== 'Unsorted') {
-                try { 
-                    prettyDate = new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); 
+                try {
+                    prettyDate = new Date(date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
                 } catch(e) { console.warn("Date parse error", e); }
             }
 
