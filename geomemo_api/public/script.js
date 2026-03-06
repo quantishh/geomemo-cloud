@@ -1952,7 +1952,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                results.innerHTML = data.tweets.map(t => {
+                // Store full tweet data so includeXPostInNewsletter can access it by index (no truncation)
+                window._xpostsTweets = data.tweets;
+                results.innerHTML = data.tweets.map((t, idx) => {
                     const followerLabel = t.followers_count >= 1000000 ? (t.followers_count / 1000000).toFixed(1) + 'M'
                         : t.followers_count >= 1000 ? (t.followers_count / 1000).toFixed(1) + 'K'
                         : t.followers_count;
@@ -1983,7 +1985,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p style="margin:8px 0; font-size:0.85rem; line-height:1.4; color:var(--text-primary);">${t.text}</p>
                         <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
                             <a href="${t.url}" target="_blank" style="font-size:0.75rem; color:#1d4ed8;">View on 𝕏</a>
-                            <button onclick="includeXPostInNewsletter('${t.url}', '${t.author_username}', \`${t.text.replace(/\x60/g, '').replace(/\\/g, '\\\\').slice(0, 200)}\`)" style="font-size:0.75rem; padding:2px 8px; background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe; border-radius:4px; cursor:pointer;">Include in Newsletter</button>
+                            <button onclick="includeXPostInNewsletter(${idx})" style="font-size:0.75rem; padding:2px 8px; background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe; border-radius:4px; cursor:pointer;">Include in Newsletter</button>
                             <button onclick="repostOnX('${t.id}', '${t.author_username}', '${t.url}')" style="font-size:0.75rem; padding:2px 8px; background:#000; color:#fff; border:none; border-radius:4px; cursor:pointer;">Quote on 𝕏</button>
                         </div>
                     </div>`;
@@ -1994,11 +1996,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    window.includeXPostInNewsletter = async (url, username, text) => {
+    window.includeXPostInNewsletter = async (tweetIndex) => {
         if (!currentXPostsArticleId) {
             alert('No article selected. Open "Find X Posts" from an article first.');
             return;
         }
+        const tweets = window._xpostsTweets || [];
+        const t = tweets[tweetIndex];
+        if (!t) {
+            alert('Tweet data not found. Try searching again.');
+            return;
+        }
+        const { url, author_username: username, text } = t;
         try {
             const res = await fetch(`${API_BASE_URL}/social/twitter/embed/${currentXPostsArticleId}`, {
                 method: 'POST',
@@ -2010,30 +2019,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Failed to save tweet: ' + (err.detail || 'Unknown error'));
                 return;
             }
-            const data = await res.json();
-            // Find the button that triggered this and show success
-            const buttons = document.querySelectorAll('#xposts-results button');
-            buttons.forEach(btn => {
-                if (btn.onclick && btn.textContent === 'Include in Newsletter' &&
-                    btn.getAttribute('data-url') === url) {
+            // Mark the button as added
+            const btns = document.querySelectorAll('#xposts-results button');
+            btns.forEach(btn => {
+                const onclickStr = btn.getAttribute('onclick') || '';
+                if (onclickStr === `includeXPostInNewsletter(${tweetIndex})`) {
                     btn.textContent = '✓ Added';
                     btn.style.background = '#dcfce7';
                     btn.style.color = '#16a34a';
                     btn.style.borderColor = '#86efac';
                     btn.disabled = true;
-                }
-            });
-            // Also try to mark by finding matching URL in the button's onclick
-            document.querySelectorAll('#xposts-results button').forEach(btn => {
-                if (btn.textContent === 'Include in Newsletter') {
-                    const onclickStr = btn.getAttribute('onclick') || '';
-                    if (onclickStr.includes(url.replace(/'/g, "\\'"))) {
-                        btn.textContent = '✓ Added';
-                        btn.style.background = '#dcfce7';
-                        btn.style.color = '#16a34a';
-                        btn.style.borderColor = '#86efac';
-                        btn.disabled = true;
-                    }
                 }
             });
         } catch (e) {
