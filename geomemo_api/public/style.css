@@ -595,6 +595,17 @@ table.table-fixed {
     border-color: var(--color-gold);
 }
 
+/* ====== INLINE EDITABLE CELLS ====== */
+.editable-cell {
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background-color 0.15s;
+}
+.editable-cell:hover {
+    background-color: var(--bg-section);
+}
+
 /* ====== THEME TOGGLE ====== */
 .theme-toggle-btn {
     padding: 6px 10px;

@@ -1543,14 +1543,18 @@ document.addEventListener('DOMContentLoaded', () => {
             tb.innerHTML = sources.map(s => {
                 const rssDisplay = s.rss_feed_url
                     ? `<a href="${s.rss_feed_url}" target="_blank" class="text-blue-600 hover:underline" title="${s.rss_feed_url}">${s.rss_feed_url.length > 30 ? s.rss_feed_url.substring(0, 30) + '...' : s.rss_feed_url}</a>`
-                    : '—';
-                const handleDisplay = s.twitter_handle || '—';
+                    : '';
+                const handleDisplay = s.twitter_handle || '';
                 return `
                 <tr>
                     <td class="font-medium text-gray-800">${s.name}</td>
                     <td class="text-gray-500">${s.domain || '—'}</td>
-                    <td class="text-xs">${rssDisplay}</td>
-                    <td class="text-blue-700 font-medium">${handleDisplay}</td>
+                    <td class="text-xs">
+                        <span class="editable-cell" onclick="editSourceField(${s.id}, 'rss_feed_url', this)" title="Click to edit">${rssDisplay || '<span class=&quot;text-gray-400 cursor-pointer&quot;>+ add feed</span>'}</span>
+                    </td>
+                    <td>
+                        <span class="editable-cell" onclick="editSourceField(${s.id}, 'twitter_handle', this)" title="Click to edit">${handleDisplay ? `<span class="text-blue-700 font-medium">${handleDisplay}</span>` : '<span class=&quot;text-gray-400 cursor-pointer&quot;>+ add handle</span>'}</span>
+                    </td>
                     <td>
                         <span class="score-indicator ${getScoreClass(s.credibility_score)}">${s.credibility_score}</span>
                     </td>
@@ -1577,6 +1581,53 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             alert("Error: " + e.message);
         }
+    };
+
+    window.editSourceField = (sourceId, field, spanEl) => {
+        // Prevent double-click creating multiple inputs
+        if (spanEl.querySelector('input')) return;
+
+        const currentValue = field === 'twitter_handle'
+            ? (spanEl.querySelector('.text-blue-700')?.textContent || '')
+            : (spanEl.querySelector('a')?.getAttribute('href') || '');
+
+        const placeholder = field === 'twitter_handle' ? '@handle' : 'https://feed-url...';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentValue;
+        input.placeholder = placeholder;
+        input.className = 'p-1 border rounded text-sm w-full';
+        input.style.minWidth = field === 'twitter_handle' ? '100px' : '180px';
+
+        spanEl.innerHTML = '';
+        spanEl.appendChild(input);
+        input.focus();
+
+        const saveValue = async () => {
+            const newValue = input.value.trim();
+            if (newValue === currentValue) {
+                fetchSourcesList(); // Revert to display mode
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/sources/${sourceId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [field]: newValue || null })
+                });
+                if (!res.ok) throw new Error("Update failed");
+                fetchSourcesList();
+            } catch (err) {
+                alert("Error: " + err.message);
+                fetchSourcesList();
+            }
+        };
+
+        input.addEventListener('blur', saveValue);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+            if (e.key === 'Escape') { fetchSourcesList(); }
+        });
     };
 
     async function handleSourceSubmit(e) {
