@@ -1,0 +1,47 @@
+# =============================================================================
+# GeoMemo API — Python Dependencies
+# Used by the FastAPI backend + Scrapy scraper (both run in the web container)
+# =============================================================================
+
+# --- Web Framework ---
+fastapi==0.119.0
+uvicorn[standard]==0.37.0
+python-multipart==0.0.20
+
+# --- Database ---
+psycopg2-binary==2.9.11
+pgvector==0.4.1
+
+# --- AI / ML ---
+groq==0.34.1
+sentence-transformers==5.1.2
+transformers==4.57.1
+huggingface-hub==0.36.0
+safetensors==0.6.2
+tokenizers==0.22.1
+# Note: Torch is installed separately in Dockerfile to force CPU version
+
+# --- Scraper ---
+scrapy
+pycountry
+pyOpenSSL
+itemadapter
+lxml
+numpy
+
+# --- HTTP & Parsing ---
+requests
+beautifulsoup4
+
+# --- Social Media ---
+tweepy>=4.14.0
+
+# --- Newsletter / Templating ---
+jinja2
+boto3
+pandas
+
+# --- Utilities ---
+python-dotenv
+pydantic>=2.5.0
+twisted
