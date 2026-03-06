@@ -2,7 +2,9 @@
 Content management endpoints: tweets, sponsors, podcasts.
 Also includes URL metadata scraping helpers.
 """
+import os
 import re
+import uuid
 import logging
 import shutil
 from typing import List, Optional
@@ -15,7 +17,7 @@ from fastapi import APIRouter, HTTPException, File, UploadFile, Form
 from bs4 import BeautifulSoup
 
 from database import get_db_connection
-from config import UPLOAD_DIR
+from config import UPLOAD_DIR, MAX_UPLOAD_SIZE, ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS
 from models import (
     Tweet, TweetSubmission, Sponsor, Podcast, ScrapeRequest,
 )
@@ -132,12 +134,43 @@ def scrape_tweet_meta(url: str):
 
 
 def save_upload_file(upload_file: UploadFile) -> str:
-    """Save an uploaded file and return its URL path."""
+    """
+    Save an uploaded file with security checks. Returns URL path or None.
+
+    Security measures:
+      - MIME type validation (images only)
+      - File extension validation
+      - 5 MB size limit
+      - UUID-based filenames (prevents path traversal)
+    """
     try:
-        file_path = UPLOAD_DIR / f"{int(datetime.now().timestamp())}_{upload_file.filename}"
+        # 1. Validate MIME type
+        content_type = (upload_file.content_type or "").lower()
+        if content_type not in ALLOWED_MIME_TYPES:
+            logger.warning(f"Upload rejected: invalid MIME type '{content_type}'")
+            return None
+
+        # 2. Validate file extension
+        original_name = upload_file.filename or "file"
+        ext = os.path.splitext(original_name)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            logger.warning(f"Upload rejected: invalid extension '{ext}'")
+            return None
+
+        # 3. Read file with size limit
+        contents = upload_file.file.read()
+        if len(contents) > MAX_UPLOAD_SIZE:
+            logger.warning(f"Upload rejected: file too large ({len(contents)} bytes, limit {MAX_UPLOAD_SIZE})")
+            return None
+
+        # 4. Safe filename — UUID + original extension (no user path components)
+        safe_name = f"{uuid.uuid4().hex}{ext}"
+        file_path = UPLOAD_DIR / safe_name
+
         with file_path.open("wb") as buffer:
-            shutil.copyfileobj(upload_file.file, buffer)
-        return f"/uploads/{file_path.name}"
+            buffer.write(contents)
+
+        return f"/uploads/{safe_name}"
     except Exception as e:
         logger.error(f"File save error: {e}")
         return None

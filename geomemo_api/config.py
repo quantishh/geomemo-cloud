@@ -20,10 +20,24 @@ BEEHIIV_PUB_ID = os.getenv("BEEHIIV_PUBLICATION_ID", "")
 # --- Groq LLM ---
 # Groq client reads GROQ_API_KEY from env automatically
 
+# --- Admin Authentication (HTTP Basic Auth) ---
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+
+# --- CORS Allowed Origins ---
+# Comma-separated list of allowed origins. If empty, defaults to same-origin only.
+_cors_raw = os.getenv("CORS_ORIGINS", "https://geomemo.news,http://localhost:3000,http://localhost:8000")
+CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()] if _cors_raw.strip() else []
+
 # --- Directories ---
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploaded_images"
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+# --- File Upload Limits ---
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
 
 # --- Article Categories ---
 VALID_CATEGORIES = [

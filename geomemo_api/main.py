@@ -14,7 +14,8 @@ from fastapi.responses import JSONResponse
 from groq import Groq
 from sentence_transformers import SentenceTransformer
 
-from config import UPLOAD_DIR, BEEHIIV_API_KEY, BEEHIIV_PUB_ID, DRIP_INTERVAL_MINUTES
+from config import UPLOAD_DIR, BEEHIIV_API_KEY, BEEHIIV_PUB_ID, DRIP_INTERVAL_MINUTES, CORS_ORIGINS
+from auth import BasicAuthMiddleware, SecurityHeadersMiddleware
 from database import init_db
 from models import NewsletterSignup
 from routers import articles, content, sources, newsletter, social
@@ -43,12 +44,19 @@ newsletter.init_models(groq_client)
 # --- FastAPI App ---
 app = FastAPI(title="GeoMemo API", version="2.0.0")
 
-app.add_middleware(
+# --- Middleware Stack (order matters: last added = outermost = runs first) ---
+# 1. CORS — must be outermost to handle OPTIONS preflight before auth
+# 2. Auth — checks credentials for admin/write endpoints
+# 3. Security Headers — injects protective headers into every response
+
+app.add_middleware(SecurityHeadersMiddleware)               # innermost
+app.add_middleware(BasicAuthMiddleware)                      # middle
+app.add_middleware(                                          # outermost
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS if CORS_ORIGINS else ["*"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 # --- Initialize Database ---
