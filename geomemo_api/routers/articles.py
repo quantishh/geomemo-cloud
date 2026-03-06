@@ -78,7 +78,7 @@ ARTICLE_COLUMNS = """
 
 # --- Article Listing (M2: with filtering/sorting) ---
 
-@router.get("/articles", response_model=List[Article])
+@router.get("/articles")
 def get_articles(
     sort_by: str = "scraped_at",
     order: str = "desc",
@@ -87,10 +87,15 @@ def get_articles(
     category: Optional[str] = None,
     status: Optional[str] = None,
     days: int = 7,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    target_date: Optional[str] = None,
 ):
     """
-    List articles with optional filtering and sorting.
-    Backwards compatible: no params = original behavior (last 7 days, sorted by scraped_at DESC).
+    List articles with optional filtering, sorting, and pagination.
+    Backwards compatible: no limit param = returns flat list (web version).
+    With limit param = returns {articles, total, limit, offset} (mobile version).
+    With target_date = filters to specific date (YYYY-MM-DD format).
     """
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -105,8 +110,14 @@ def get_articles(
         if order.lower() not in ("asc", "desc"):
             order = "desc"
 
-        where_clauses = [f"scraped_at >= NOW() - INTERVAL '{int(days)} days'"]
         params = []
+
+        # Date filtering: specific date OR rolling window
+        if target_date:
+            where_clauses = ["scraped_at::date = %s"]
+            params.append(target_date)
+        else:
+            where_clauses = [f"scraped_at >= NOW() - INTERVAL '{int(days)} days'"]
 
         if min_score is not None:
             where_clauses.append("auto_approval_score >= %s")
@@ -123,15 +134,42 @@ def get_articles(
 
         where_sql = " AND ".join(where_clauses)
 
-        query = f"""
-            SELECT {ARTICLE_COLUMNS}
-            FROM articles
-            WHERE {where_sql}
-            ORDER BY {sort_by} {order}
-        """
+        # Pagination support
+        if limit is not None:
+            safe_limit = max(1, min(int(limit), 500))
+            safe_offset = max(0, int(offset))
 
-        cursor.execute(query, tuple(params))
-        return [dict(row) for row in cursor.fetchall()]
+            # Get total count for pagination metadata
+            count_query = f"SELECT COUNT(*) FROM articles WHERE {where_sql}"
+            cursor.execute(count_query, tuple(params))
+            total_count = cursor.fetchone()[0]
+
+            query = f"""
+                SELECT {ARTICLE_COLUMNS}
+                FROM articles
+                WHERE {where_sql}
+                ORDER BY {sort_by} {order}
+                LIMIT {safe_limit} OFFSET {safe_offset}
+            """
+            cursor.execute(query, tuple(params))
+            articles = [dict(row) for row in cursor.fetchall()]
+
+            return {
+                "articles": articles,
+                "total": total_count,
+                "limit": safe_limit,
+                "offset": safe_offset,
+            }
+        else:
+            # Original behavior: return flat list (backward compatible)
+            query = f"""
+                SELECT {ARTICLE_COLUMNS}
+                FROM articles
+                WHERE {where_sql}
+                ORDER BY {sort_by} {order}
+            """
+            cursor.execute(query, tuple(params))
+            return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Fetch error: {e}")
         raise HTTPException(500, "DB Error")

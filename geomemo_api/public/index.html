@@ -4,41 +4,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GeoMemo Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Arsenal:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
-    <style>
-        /* Custom tweak to make the header dropdown look seamless */
-        #category-filter {
-            background-color: transparent;
-            font-weight: 700;
-            text-transform: uppercase;
-            font-size: 0.75rem; /* Matches text-xs */
-            color: #374151; /* Matches text-gray-700 */
-            cursor: pointer;
-            width: 100%;
-            outline: none;
-        }
-        #category-filter:hover {
-            color: #000;
-        }
-    </style>
 </head>
-<body class="bg-gray-100 font-sans">
+<body class="theme-light font-sans">
 
     <div class="container mx-auto p-4 md:p-8">
-        <header class="mb-6 flex justify-between items-center">
+        <header class="mb-6 flex justify-between items-center flex-wrap gap-4">
             <div>
-                <h1 class="text-4xl font-bold text-gray-800">GeoMemo Dashboard</h1>
-                <p class="text-lg text-gray-600">Curation & Management</p>
+                <h1 class="text-4xl font-bold">GeoMemo Dashboard</h1>
+                <p class="text-lg" style="color: var(--text-muted);">Curation & Management</p>
             </div>
-            <button id="generate-newsletter-btn" class="bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow hover:bg-purple-800 flex items-center gap-2">
-                <span>📧</span> Generate Newsletter
-            </button>
+            <div class="header-controls flex items-center gap-3">
+                <!-- View Mode Toggle -->
+                <div class="view-toggle">
+                    <a href="#" id="web-view-link" class="active">Web</a>
+                    <a href="#" id="mobile-view-link">Mobile</a>
+                </div>
+                <!-- Theme Toggle -->
+                <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle dark/light theme">
+                    <span id="theme-icon">🌙</span>
+                </button>
+                <!-- Newsletter Button -->
+                <button id="generate-newsletter-btn" class="bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow hover:bg-purple-800 flex items-center gap-2">
+                    <span>📧</span> Generate Newsletter
+                </button>
+            </div>
         </header>
 
         <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
-            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+            <summary class="p-4 cursor-pointer font-semibold text-lg hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b" style="color: var(--text-primary);">
                 💰 Manage Sponsors
             </summary>
             <div class="p-6">
@@ -46,7 +42,7 @@
                     <div class="grid grid-cols-2 gap-4">
                         <input type="text" id="sponsor-company" name="company_name" placeholder="Company Name" class="p-2 border rounded w-full" required>
                         <div>
-                            <label class="block text-xs text-gray-500 mb-1">Logo URL OR Upload File</label>
+                            <label class="block text-xs mb-1" style="color: var(--text-muted);">Logo URL OR Upload File</label>
                             <div class="flex gap-2">
                                 <input type="url" id="sponsor-logo-url" name="logo_url" placeholder="https://..." class="p-2 border rounded w-1/2">
                                 <input type="file" id="sponsor-logo-file" name="logo_file" class="p-1 border rounded w-1/2 text-sm">
@@ -58,20 +54,20 @@
                     <input type="url" id="sponsor-link" name="link_url" placeholder="Click-through URL" class="p-2 border rounded w-full" required>
                     <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Add Sponsor</button>
                 </form>
-                <h3 class="font-bold text-gray-700 mb-2">Active Sponsors</h3>
-                <table class="w-full text-sm text-left text-gray-500"><tbody id="sponsors-tbody"></tbody></table>
+                <h3 class="font-bold mb-2" style="color: var(--text-primary);">Active Sponsors</h3>
+                <table class="w-full text-sm text-left" style="color: var(--text-secondary);"><tbody id="sponsors-tbody"></tbody></table>
             </div>
         </details>
 
         <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
-            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+            <summary class="p-4 cursor-pointer font-semibold text-lg hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b" style="color: var(--text-primary);">
                 🎙️ Manage Featured Content (Auto-Fetch)
             </summary>
             <div class="p-6">
                 <form id="podcast-form" class="space-y-3 mb-6 border-b pb-6">
                     <div class="flex gap-2 items-end">
                         <div class="flex-grow">
-                            <label class="block text-xs font-bold text-gray-600 mb-1">1. Paste Link & Fetch</label>
+                            <label class="block text-xs font-bold mb-1" style="color: var(--text-secondary);">1. Paste Link & Fetch</label>
                             <input type="url" id="podcast-link" name="link_url" placeholder="YouTube/Spotify Link..." class="p-2 border rounded w-full" required>
                         </div>
                         <button type="button" id="fetch-podcast-meta-btn" class="bg-indigo-100 text-indigo-700 px-4 py-2 rounded font-bold hover:bg-indigo-200 mb-0.5">Fetch Metadata</button>
@@ -79,7 +75,7 @@
                     <div class="grid grid-cols-2 gap-4 mt-4">
                         <input type="text" id="podcast-show" name="show_name" placeholder="Show Name / Site Name" class="p-2 border rounded w-full" required>
                         <div>
-                            <label class="block text-xs text-gray-500 mb-1">Cover Image (URL or Upload)</label>
+                            <label class="block text-xs mb-1" style="color: var(--text-muted);">Cover Image (URL or Upload)</label>
                             <div class="flex gap-2">
                                 <input type="url" id="podcast-image-url" name="image_url" placeholder="Image URL" class="p-2 border rounded w-1/2">
                                 <input type="file" id="podcast-image-file" name="image_file" class="p-1 border rounded w-1/2 text-sm">
@@ -90,13 +86,13 @@
                     <textarea id="podcast-desc" name="description" placeholder="Description" class="p-2 border rounded w-full h-20" required></textarea>
                     <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full">Add Content</button>
                 </form>
-                <h3 class="font-bold text-gray-700 mb-2">Active Content</h3>
-                <table class="w-full text-sm text-left text-gray-500"><tbody id="podcasts-tbody"></tbody></table>
+                <h3 class="font-bold mb-2" style="color: var(--text-primary);">Active Content</h3>
+                <table class="w-full text-sm text-left" style="color: var(--text-secondary);"><tbody id="podcasts-tbody"></tbody></table>
             </div>
         </details>
 
         <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
-            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+            <summary class="p-4 cursor-pointer font-semibold text-lg hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b" style="color: var(--text-primary);">
                 🐦 Post Tweets
             </summary>
             <div class="p-6">
@@ -104,12 +100,12 @@
                     <input type="url" id="tweet-url" placeholder="https://x.com/..." class="flex-grow p-2 border rounded" required>
                     <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Fetch & Post</button>
                 </form>
-                <table class="w-full text-sm text-left text-gray-500"><tbody id="tweets-manager-tbody"></tbody></table>
+                <table class="w-full text-sm text-left" style="color: var(--text-secondary);"><tbody id="tweets-manager-tbody"></tbody></table>
             </div>
         </details>
 
         <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
-            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+            <summary class="p-4 cursor-pointer font-semibold text-lg hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b" style="color: var(--text-primary);">
                 📢 Social Media
             </summary>
             <div class="p-6">
@@ -119,23 +115,23 @@
                     <button id="check-breaking-btn" class="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 font-semibold">
                         🔴 Check Breaking News Now
                     </button>
-                    <span id="breaking-result" class="text-sm text-gray-600 self-center"></span>
+                    <span id="breaking-result" class="text-sm self-center" style="color: var(--text-muted);"></span>
                 </div>
 
                 <!-- Manual Tweet Composer -->
-                <div class="mb-4 p-4 bg-gray-50 rounded border border-gray-200">
-                    <h3 class="font-bold text-gray-700 mb-2">✍️ Compose Tweet</h3>
+                <div class="mb-4 p-4 rounded border" style="background-color: var(--bg-section); border-color: var(--border-default);">
+                    <h3 class="font-bold mb-2" style="color: var(--text-primary);">✍️ Compose Tweet</h3>
                     <textarea id="tweet-compose-text" placeholder="Write your tweet here... (280 chars max)" maxlength="280" class="w-full p-2 border rounded text-sm h-20 resize-none"></textarea>
                     <div class="flex justify-between items-center mt-2">
-                        <span id="tweet-char-count" class="text-xs text-gray-400">0/280</span>
-                        <button id="post-tweet-btn" class="bg-black text-white px-4 py-1.5 rounded text-sm font-semibold hover:bg-gray-800">𝕏 Post Tweet</button>
+                        <span id="tweet-char-count" class="text-xs" style="color: var(--text-faint);">0/280</span>
+                        <button id="post-tweet-btn" class="text-white px-4 py-1.5 rounded text-sm font-semibold" style="background-color: var(--color-bunker);">𝕏 Post Tweet</button>
                     </div>
                     <div id="tweet-compose-result" class="text-xs mt-1"></div>
                 </div>
 
-                <h3 class="font-bold text-gray-700 mb-2">Recent Posts</h3>
-                <table class="w-full text-sm text-left text-gray-500">
-                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                <h3 class="font-bold mb-2" style="color: var(--text-primary);">Recent Posts</h3>
+                <table class="w-full text-sm text-left" style="color: var(--text-secondary);">
+                    <thead class="text-xs uppercase" style="background-color: var(--bg-section); color: var(--text-muted);">
                         <tr>
                             <th class="p-2">Platform</th>
                             <th class="p-2">Type</th>
@@ -146,22 +142,22 @@
                     </thead>
                     <tbody id="social-posts-tbody"></tbody>
                 </table>
-                <div id="social-pagination" class="flex items-center justify-between mt-3 text-sm text-gray-500">
-                    <button id="social-prev-btn" class="px-3 py-1 bg-gray-200 rounded text-gray-700 hover:bg-gray-300 disabled:opacity-40 disabled:cursor-not-allowed" disabled>← Prev</button>
+                <div id="social-pagination" class="flex items-center justify-between mt-3 text-sm" style="color: var(--text-muted);">
+                    <button id="social-prev-btn" class="pagination-btn" disabled>← Prev</button>
                     <span id="social-page-info">Page 1</span>
-                    <button id="social-next-btn" class="px-3 py-1 bg-gray-200 rounded text-gray-700 hover:bg-gray-300 disabled:opacity-40 disabled:cursor-not-allowed" disabled>Next →</button>
+                    <button id="social-next-btn" class="pagination-btn" disabled>Next →</button>
                 </div>
             </div>
         </details>
 
         <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200" open>
-            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+            <summary class="p-4 cursor-pointer font-semibold text-lg hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b" style="color: var(--text-primary);">
                 📰 Article Curation
             </summary>
             <div class="p-6">
-                
-                <form id="manual-entry-form" class="mb-6 p-4 bg-gray-50 rounded border border-gray-200 space-y-3">
-                    <h3 class="font-bold text-gray-700">Manual Entry</h3>
+
+                <form id="manual-entry-form" class="mb-6 p-4 rounded border space-y-3" style="background-color: var(--bg-section); border-color: var(--border-default);">
+                    <h3 class="font-bold" style="color: var(--text-primary);">Manual Entry</h3>
                     <div class="grid grid-cols-2 gap-4">
                         <input type="text" id="manual-headline" name="headline" placeholder="Headline" class="p-2 border rounded w-full" required>
                         <input type="url" id="manual-url" name="url" placeholder="URL" class="p-2 border rounded w-full" required>
@@ -179,7 +175,7 @@
 
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold">Queue</h2>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 flex-wrap">
                         <button id="batch-approve" class="bg-green-600 text-white px-3 py-1 rounded text-sm">Approve</button>
                         <button id="batch-reject" class="bg-red-600 text-white px-3 py-1 rounded text-sm">Reject</button>
                         <button id="auto-approve-btn" class="bg-emerald-700 text-white px-3 py-1 rounded text-sm font-semibold">Auto-Approve (80+)</button>
@@ -187,9 +183,27 @@
                     </div>
                 </div>
 
-                <div class="overflow-x-auto border rounded-lg shadow-sm" style="-webkit-overflow-scrolling: touch;">
-                    <table class="w-full text-sm text-left text-gray-500 min-w-[1000px]">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                <!-- Advanced Filter Bar (Phase 3) -->
+                <div id="filter-bar" class="filter-bar">
+                    <div class="filter-group">
+                        <button class="filter-pill active" data-filter-type="status" data-value="All">All</button>
+                        <button class="filter-pill" data-filter-type="status" data-value="pending">Pending</button>
+                        <button class="filter-pill" data-filter-type="status" data-value="approved">Approved</button>
+                        <button class="filter-pill" data-filter-type="status" data-value="rejected">Rejected</button>
+                    </div>
+                    <div class="filter-divider"></div>
+                    <div class="filter-group">
+                        <button class="filter-pill active" data-filter-type="score" data-value="All">All Scores</button>
+                        <button class="filter-pill" data-filter-type="score" data-value="auto-approve">Auto-Approve (<span class="approve-threshold-label">80</span>+)</button>
+                        <button class="filter-pill" data-filter-type="score" data-value="auto-reject">Auto-Reject (<span class="reject-threshold-label">30</span>-)</button>
+                        <button class="filter-pill" data-filter-type="score" data-value="in-between">In Between</button>
+                    </div>
+                    <span class="filter-count" id="filter-count-label"></span>
+                </div>
+
+                <div class="overflow-x-auto border rounded-lg shadow-sm" style="-webkit-overflow-scrolling: touch; border-color: var(--border-default);">
+                    <table class="w-full text-sm text-left min-w-[1000px]" style="color: var(--text-secondary);">
+                        <thead class="text-xs uppercase" style="background-color: var(--bg-section); color: var(--text-muted);">
                             <tr>
                                 <th class="p-3 w-10"><input type="checkbox" id="select-all-checkbox"></th>
                                 <th class="p-3 w-3/12">Headline</th>
@@ -199,7 +213,7 @@
                                     </select>
                                 </th>
                                 <th class="p-3 w-3/12">Summary</th>
-                                <th class="p-3 w-1/12 cursor-pointer select-none hover:text-blue-600" id="score-sort-header">
+                                <th class="p-3 w-1/12 cursor-pointer select-none" id="score-sort-header" style="color: var(--accent-blue);">
                                     Score <span id="score-sort-arrow" class="sort-arrow">▼</span>
                                 </th>
                                 <th class="p-3 w-1/12">Status</th>
@@ -209,11 +223,24 @@
                         <tbody id="articles-tbody"></tbody>
                     </table>
                 </div>
+
+                <!-- Pagination Controls (for mobile view) -->
+                <div id="articles-pagination" class="pagination-bar hidden">
+                    <button id="articles-prev-btn" class="pagination-btn" disabled>← Previous</button>
+                    <span id="articles-page-info" class="pagination-info">Page 1</span>
+                    <button id="articles-next-btn" class="pagination-btn" disabled>Next →</button>
+                </div>
+
+                <!-- Mobile Archive Links -->
+                <div id="mobile-archive" class="archive-bar hidden">
+                    <span class="text-xs font-bold uppercase" style="color: var(--text-muted); margin-right: 8px; align-self: center;">Archive:</span>
+                    <div id="archive-links" class="flex flex-wrap gap-2"></div>
+                </div>
             </div>
         </details>
 
         <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
-            <summary class="p-4 cursor-pointer font-semibold text-lg text-gray-700 hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b">
+            <summary class="p-4 cursor-pointer font-semibold text-lg hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b" style="color: var(--text-primary);">
                 🏢 Source Management
             </summary>
             <div class="p-6">
@@ -222,21 +249,21 @@
                     <button id="recalc-sources-btn" class="bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 font-semibold">Recalculate Scores</button>
                 </div>
 
-                <form id="source-form" class="flex gap-2 mb-4 p-3 bg-gray-50 rounded border border-gray-200 items-end flex-wrap">
+                <form id="source-form" class="flex gap-2 mb-4 p-3 rounded border items-end flex-wrap" style="background-color: var(--bg-section); border-color: var(--border-default);">
                     <div class="flex-1 min-w-[150px]">
-                        <label class="block text-xs text-gray-500 mb-1">Name *</label>
+                        <label class="block text-xs mb-1" style="color: var(--text-muted);">Name *</label>
                         <input type="text" id="source-name" placeholder="e.g. Reuters" class="p-2 border rounded w-full text-sm" required>
                     </div>
                     <div class="flex-1 min-w-[150px]">
-                        <label class="block text-xs text-gray-500 mb-1">Domain</label>
+                        <label class="block text-xs mb-1" style="color: var(--text-muted);">Domain</label>
                         <input type="text" id="source-domain" placeholder="reuters.com" class="p-2 border rounded w-full text-sm">
                     </div>
                     <div class="w-24">
-                        <label class="block text-xs text-gray-500 mb-1">Score</label>
+                        <label class="block text-xs mb-1" style="color: var(--text-muted);">Score</label>
                         <input type="number" id="source-credibility" value="50" min="0" max="100" class="p-2 border rounded w-full text-sm">
                     </div>
                     <div class="w-20">
-                        <label class="block text-xs text-gray-500 mb-1">Tier</label>
+                        <label class="block text-xs mb-1" style="color: var(--text-muted);">Tier</label>
                         <select id="source-tier" class="p-2 border rounded w-full text-sm">
                             <option value="1">1</option>
                             <option value="2">2</option>
@@ -244,15 +271,15 @@
                         </select>
                     </div>
                     <div class="w-24">
-                        <label class="block text-xs text-gray-500 mb-1">Country</label>
+                        <label class="block text-xs mb-1" style="color: var(--text-muted);">Country</label>
                         <input type="text" id="source-country" placeholder="US" class="p-2 border rounded w-full text-sm">
                     </div>
                     <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700">Add Source</button>
                 </form>
 
-                <div class="overflow-x-auto border rounded-lg">
-                    <table class="w-full text-sm text-left text-gray-500">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                <div class="overflow-x-auto border rounded-lg" style="border-color: var(--border-default);">
+                    <table class="w-full text-sm text-left" style="color: var(--text-secondary);">
+                        <thead class="text-xs uppercase" style="background-color: var(--bg-section); color: var(--text-muted);">
                             <tr>
                                 <th class="p-2">Name</th>
                                 <th class="p-2">Domain</th>
@@ -272,16 +299,16 @@
     </div>
 
     <div id="enhance-modal" class="modal-overlay hidden"><div class="modal-container max-w-2xl"><div class="modal-header"><h2>Enhance</h2><button class="modal-close-btn">&times;</button></div><div class="modal-body space-y-3"><div class="grid grid-cols-2 gap-4"><input type="text" id="enhance-publication" placeholder="Publication" class="p-2 border rounded w-full"><input type="text" id="enhance-author" placeholder="Author" class="p-2 border rounded w-full"></div><textarea id="enhance-text-input" class="p-2 border rounded w-full h-40" placeholder="Content..."></textarea><button id="confirm-enhance-btn" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Enhance & Approve</button></div></div></div>
-    
+
     <!-- NEWSLETTER MODAL (M3 Upgrade: AI Brief + Preview + Beehiiv) -->
-    <div id="newsletter-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg w-full max-w-5xl" style="height:95vh; display:flex; flex-direction:column;">
+    <div id="newsletter-modal" class="hidden fixed inset-0 flex items-center justify-center z-50" style="background-color: var(--modal-overlay);">
+        <div class="rounded-lg w-full max-w-5xl" style="height:95vh; display:flex; flex-direction:column; background-color: var(--modal-bg);">
             <!-- Header -->
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #e5e7eb; flex-shrink:0;">
-                <h2 style="font-size:1.25rem; font-weight:700; color:#1f2937; margin:0;">Newsletter Generator</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border-default); flex-shrink:0;">
+                <h2 style="font-size:1.25rem; font-weight:700; color:var(--text-primary); margin:0;">Newsletter Generator</h2>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <button id="regenerate-btn" style="padding:6px 12px; font-size:0.75rem; font-weight:600; color:#7c3aed; background:#f3e8ff; border:1px solid #ddd6fe; border-radius:4px; cursor:pointer;" title="Re-generate with fresh AI brief">Regenerate</button>
-                    <button id="close-newsletter-btn" style="color:#9ca3af; font-size:1.5rem; cursor:pointer; background:none; border:none; line-height:1;">&times;</button>
+                    <button id="regenerate-btn" style="padding:6px 12px; font-size:0.75rem; font-weight:600; color:var(--accent-purple); background:var(--btn-enhance-bg); border:1px solid var(--border-default); border-radius:4px; cursor:pointer;" title="Re-generate with fresh AI brief">Regenerate</button>
+                    <button id="close-newsletter-btn" style="color:var(--text-muted); font-size:1.5rem; cursor:pointer; background:none; border:none; line-height:1;">&times;</button>
                 </div>
             </div>
 
@@ -290,34 +317,34 @@
                 <div style="flex:1; display:flex; flex-direction:column; padding:16px; overflow:hidden;">
                     <!-- Subject line -->
                     <div style="margin-bottom:10px;">
-                        <label style="display:block; font-size:0.7rem; font-weight:700; color:#6b7280; text-transform:uppercase; margin-bottom:4px;">Subject Line</label>
-                        <input type="text" id="newsletter-subject" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:4px; background:#f9fafb; font-size:0.85rem; box-sizing:border-box;" readonly>
+                        <label style="display:block; font-size:0.7rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Subject Line</label>
+                        <input type="text" id="newsletter-subject" style="width:100%; padding:8px 10px; border:1px solid var(--border-default); border-radius:4px; background:var(--bg-section); color:var(--text-primary); font-size:0.85rem; box-sizing:border-box;" readonly>
                     </div>
 
                     <!-- View toggle + word count -->
                     <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
-                        <button id="toggle-preview-btn" style="padding:4px 12px; font-size:0.75rem; font-weight:600; border-radius:4px; cursor:pointer; background:#f3e8ff; color:#7c3aed; border:none;">Preview</button>
-                        <button id="toggle-html-btn" style="padding:4px 12px; font-size:0.75rem; font-weight:600; border-radius:4px; cursor:pointer; background:#f3f4f6; color:#6b7280; border:none;">HTML</button>
-                        <span id="newsletter-word-count" style="margin-left:auto; font-size:0.7rem; color:#9ca3af;"></span>
+                        <button id="toggle-preview-btn" style="padding:4px 12px; font-size:0.75rem; font-weight:600; border-radius:4px; cursor:pointer; background:var(--btn-enhance-bg); color:var(--accent-purple); border:none;">Preview</button>
+                        <button id="toggle-html-btn" style="padding:4px 12px; font-size:0.75rem; font-weight:600; border-radius:4px; cursor:pointer; background:var(--bg-section); color:var(--text-muted); border:none;">HTML</button>
+                        <span id="newsletter-word-count" style="margin-left:auto; font-size:0.7rem; color:var(--text-faint);"></span>
                     </div>
 
                     <!-- Rendered preview (iframe) -->
-                    <iframe id="newsletter-preview" style="flex:1; width:100%; border:1px solid #e5e7eb; border-radius:6px; background:#fff; min-height:200px;"></iframe>
+                    <iframe id="newsletter-preview" style="flex:1; width:100%; border:1px solid var(--border-default); border-radius:6px; background:var(--bg-card); min-height:200px;"></iframe>
                     <!-- Raw HTML (hidden by default) -->
-                    <textarea id="newsletter-output" style="flex:1; width:100%; padding:12px; border:1px solid #e5e7eb; border-radius:6px; font-family:monospace; font-size:0.7rem; display:none; resize:none; box-sizing:border-box;" readonly></textarea>
+                    <textarea id="newsletter-output" style="flex:1; width:100%; padding:12px; border:1px solid var(--border-default); border-radius:6px; font-family:monospace; font-size:0.7rem; display:none; resize:none; box-sizing:border-box; background:var(--bg-input); color:var(--text-primary);" readonly></textarea>
 
                     <!-- Action buttons -->
                     <div style="display:flex; gap:8px; margin-top:12px; flex-shrink:0;">
                         <button id="copy-html-btn" style="flex:1; padding:10px; font-size:0.85rem; font-weight:700; color:#fff; background:#4b5563; border:none; border-radius:6px; cursor:pointer;">Copy HTML</button>
-                        <button id="push-beehiiv-btn" style="flex:1; padding:10px; font-size:0.85rem; font-weight:700; color:#fff; background:#7c3aed; border:none; border-radius:6px; cursor:pointer;">Push to Beehiiv (Draft)</button>
+                        <button id="push-beehiiv-btn" style="flex:1; padding:10px; font-size:0.85rem; font-weight:700; color:#fff; background:var(--accent-purple); border:none; border-radius:6px; cursor:pointer;">Push to Beehiiv (Draft)</button>
                         <button id="post-newsletter-telegram-btn" style="flex:1; padding:10px; font-size:0.85rem; font-weight:700; color:#fff; background:#0088cc; border:none; border-radius:6px; cursor:pointer;">📢 Post to Telegram</button>
                     </div>
                     <div id="newsletter-status" style="margin-top:8px; font-size:0.8rem; text-align:center; display:none;"></div>
                 </div>
 
                 <!-- Right: History sidebar -->
-                <div style="width:220px; border-left:1px solid #e5e7eb; background:#f9fafb; padding:16px; overflow-y:auto; flex-shrink:0;">
-                    <h3 style="font-size:0.7rem; font-weight:700; color:#6b7280; text-transform:uppercase; margin:0 0 12px 0;">History</h3>
+                <div style="width:220px; border-left:1px solid var(--border-default); background:var(--bg-section); padding:16px; overflow-y:auto; flex-shrink:0;">
+                    <h3 style="font-size:0.7rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin:0 0 12px 0;">History</h3>
                     <div id="newsletter-history-list" style="display:flex; flex-direction:column; gap:6px; font-size:0.8rem;"></div>
                 </div>
             </div>
@@ -325,17 +352,17 @@
     </div>
 
     <!-- FIND X POSTS MODAL -->
-    <div id="xposts-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg w-full max-w-2xl" style="max-height:80vh; display:flex; flex-direction:column;">
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #e5e7eb; flex-shrink:0;">
-                <h2 style="font-size:1.1rem; font-weight:700; color:#1f2937; margin:0;">🔍 Find X Posts</h2>
-                <button id="close-xposts-btn" style="color:#9ca3af; font-size:1.5rem; cursor:pointer; background:none; border:none;">&times;</button>
+    <div id="xposts-modal" class="hidden fixed inset-0 flex items-center justify-center z-50" style="background-color: var(--modal-overlay);">
+        <div class="rounded-lg w-full max-w-2xl" style="max-height:80vh; display:flex; flex-direction:column; background-color: var(--modal-bg);">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border-default); flex-shrink:0;">
+                <h2 style="font-size:1.1rem; font-weight:700; color:var(--text-primary); margin:0;">🔍 Find X Posts</h2>
+                <button id="close-xposts-btn" style="color:var(--text-muted); font-size:1.5rem; cursor:pointer; background:none; border:none;">&times;</button>
             </div>
             <div style="padding:16px 20px; overflow-y:auto; flex:1;">
                 <div style="margin-bottom:12px;">
-                    <input type="text" id="xposts-search-query" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:4px; font-size:0.85rem; box-sizing:border-box;" placeholder="Search query (auto-filled from headline)...">
-                    <button id="xposts-search-btn" style="margin-top:6px; padding:6px 16px; font-size:0.8rem; font-weight:600; background:#000; color:#fff; border:none; border-radius:4px; cursor:pointer;">Search 𝕏</button>
-                    <span id="xposts-search-status" style="font-size:0.75rem; color:#6b7280; margin-left:8px;"></span>
+                    <input type="text" id="xposts-search-query" style="width:100%; padding:8px 10px; border:1px solid var(--border-default); border-radius:4px; font-size:0.85rem; box-sizing:border-box; background:var(--bg-input); color:var(--text-primary);" placeholder="Search query (auto-filled from headline)...">
+                    <button id="xposts-search-btn" style="margin-top:6px; padding:6px 16px; font-size:0.8rem; font-weight:600; background:var(--color-bunker); color:var(--color-white); border:none; border-radius:4px; cursor:pointer;">Search 𝕏</button>
+                    <span id="xposts-search-status" style="font-size:0.75rem; color:var(--text-muted); margin-left:8px;"></span>
                 </div>
                 <div id="xposts-results" style="display:flex; flex-direction:column; gap:10px;"></div>
             </div>

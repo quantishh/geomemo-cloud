@@ -43,10 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const podcastForm = document.getElementById('podcast-form');
     const fetchMetaBtn = document.getElementById('fetch-podcast-meta-btn');
 
-    // --- STYLE CONSTANTS (MODERN PREMIUM) ---
-    // Using System Fonts for a clean, app-like feel
-    const FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-
     // --- STATE ---
     let allArticlesCache = [];
     let currentEnhanceId = null;
@@ -55,6 +51,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSortOrder = 'desc';
     let socialHistoryOffset = 0;
     const SOCIAL_PAGE_SIZE = 10;
+
+    // --- FILTER STATE (Phase 3) ---
+    let currentStatusFilter = 'All';
+    let currentScoreFilter = 'All';
+    let currentAutoApproveThreshold = 80;
+    let currentAutoRejectThreshold = 30;
+
+    // --- VIEW MODE STATE (Phase 4) ---
+    let currentViewMode = localStorage.getItem('geomemo-view') || 'web';
+    const ARTICLES_PER_PAGE = 50;
+    let mobileCurrentPage = 0;
+    let mobileTotalArticles = 0;
+    let mobileSelectedDate = null;
     
     // ** UPDATED CATEGORY ORDER **
     const VALID_CATEGORIES = [
@@ -166,6 +175,178 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchSocialHistory();
     });
 
+    // --- THEME TOGGLE (Phase 2) ---
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    const themeIcon = document.getElementById('theme-icon');
+    const savedTheme = localStorage.getItem('geomemo-theme') || 'light';
+    document.body.className = document.body.className.replace(/theme-\w+/, `theme-${savedTheme}`);
+    if (themeIcon) themeIcon.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            const isDark = document.body.classList.contains('theme-dark');
+            document.body.classList.remove(isDark ? 'theme-dark' : 'theme-light');
+            document.body.classList.add(isDark ? 'theme-light' : 'theme-dark');
+            const newTheme = isDark ? 'light' : 'dark';
+            localStorage.setItem('geomemo-theme', newTheme);
+            if (themeIcon) themeIcon.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+        });
+    }
+
+    // --- FILTER BAR (Phase 3) ---
+    document.querySelectorAll('.filter-pill').forEach(pill => {
+        pill.addEventListener('click', (e) => {
+            const btn = e.target.closest('.filter-pill');
+            if (!btn) return;
+            const type = btn.dataset.filterType;
+            const value = btn.dataset.value;
+
+            // Deactivate siblings of same type
+            document.querySelectorAll(`.filter-pill[data-filter-type="${type}"]`)
+                .forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+
+            if (type === 'status') currentStatusFilter = value;
+            if (type === 'score') currentScoreFilter = value;
+
+            renderArticles();
+        });
+    });
+
+    function updateAutoButtonLabels() {
+        document.querySelectorAll('.approve-threshold-label')
+            .forEach(el => el.textContent = currentAutoApproveThreshold);
+        document.querySelectorAll('.reject-threshold-label')
+            .forEach(el => el.textContent = currentAutoRejectThreshold);
+        if (autoApproveBtn) autoApproveBtn.textContent = `Auto-Approve (${currentAutoApproveThreshold}+)`;
+        if (autoRejectBtn) autoRejectBtn.textContent = `Auto-Reject (${currentAutoRejectThreshold}-)`;
+    }
+
+    // --- VIEW MODE TOGGLE (Phase 4) ---
+    const webViewLink = document.getElementById('web-view-link');
+    const mobileViewLink = document.getElementById('mobile-view-link');
+
+    function setViewMode(mode) {
+        currentViewMode = mode;
+        localStorage.setItem('geomemo-view', mode);
+
+        if (mode === 'web') {
+            if (webViewLink) webViewLink.classList.add('active');
+            if (mobileViewLink) mobileViewLink.classList.remove('active');
+
+            const paginationEl = document.getElementById('articles-pagination');
+            const archiveEl = document.getElementById('mobile-archive');
+            const filterBarEl = document.getElementById('filter-bar');
+            if (paginationEl) paginationEl.classList.add('hidden');
+            if (archiveEl) archiveEl.classList.add('hidden');
+            if (filterBarEl) filterBarEl.classList.remove('hidden');
+
+            fetchArticles(false);
+        } else {
+            if (mobileViewLink) mobileViewLink.classList.add('active');
+            if (webViewLink) webViewLink.classList.remove('active');
+
+            const paginationEl = document.getElementById('articles-pagination');
+            const archiveEl = document.getElementById('mobile-archive');
+            const filterBarEl = document.getElementById('filter-bar');
+            if (paginationEl) paginationEl.classList.remove('hidden');
+            if (archiveEl) archiveEl.classList.remove('hidden');
+            if (filterBarEl) filterBarEl.classList.add('hidden');
+
+            mobileCurrentPage = 0;
+            mobileSelectedDate = null;
+            fetchMobileArticles();
+            buildArchiveLinks();
+        }
+    }
+
+    if (webViewLink) webViewLink.addEventListener('click', (e) => { e.preventDefault(); setViewMode('web'); });
+    if (mobileViewLink) mobileViewLink.addEventListener('click', (e) => { e.preventDefault(); setViewMode('mobile'); });
+
+    // Mobile pagination button listeners
+    const articlesPrevBtn = document.getElementById('articles-prev-btn');
+    const articlesNextBtn = document.getElementById('articles-next-btn');
+    if (articlesPrevBtn) articlesPrevBtn.addEventListener('click', () => {
+        mobileCurrentPage = Math.max(0, mobileCurrentPage - 1);
+        fetchMobileArticles();
+    });
+    if (articlesNextBtn) articlesNextBtn.addEventListener('click', () => {
+        mobileCurrentPage++;
+        fetchMobileArticles();
+    });
+
+    async function fetchMobileArticles() {
+        const offset = mobileCurrentPage * ARTICLES_PER_PAGE;
+        let url = `${API_BASE_URL}/articles?days=1&limit=${ARTICLES_PER_PAGE}&offset=${offset}`;
+        if (mobileSelectedDate) {
+            url = `${API_BASE_URL}/articles?target_date=${mobileSelectedDate}&limit=${ARTICLES_PER_PAGE}&offset=${offset}`;
+        }
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            const articles = data.articles || data;
+            mobileTotalArticles = data.total || articles.length;
+
+            if (!articlesTbody) return;
+            articlesTbody.innerHTML = '';
+            if (articles.length === 0) {
+                articlesTbody.innerHTML = `<tr><td colspan="7" style="padding:24px; text-align:center; color:var(--text-muted);">No articles for this date.</td></tr>`;
+                return;
+            }
+            articles.forEach(article => {
+                const row = createArticleRow(article, false);
+                articlesTbody.appendChild(row);
+            });
+            updateMobilePagination();
+        } catch (e) {
+            console.error('Mobile fetch error:', e);
+        }
+    }
+
+    function updateMobilePagination() {
+        const totalPages = Math.max(1, Math.ceil(mobileTotalArticles / ARTICLES_PER_PAGE));
+        const prevBtn = document.getElementById('articles-prev-btn');
+        const nextBtn = document.getElementById('articles-next-btn');
+        const pageInfo = document.getElementById('articles-page-info');
+
+        if (prevBtn) prevBtn.disabled = mobileCurrentPage === 0;
+        if (nextBtn) nextBtn.disabled = (mobileCurrentPage + 1) >= totalPages;
+        if (pageInfo) pageInfo.textContent = `Page ${mobileCurrentPage + 1} of ${totalPages} (${mobileTotalArticles} articles)`;
+    }
+
+    function buildArchiveLinks() {
+        const container = document.getElementById('archive-links');
+        if (!container) return;
+
+        const links = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const label = i === 0 ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+            const isActive = (mobileSelectedDate === dateStr) || (i === 0 && !mobileSelectedDate);
+            links.push(`<a href="#" class="archive-link${isActive ? ' active' : ''}" data-date="${dateStr}">${label}</a>`);
+        }
+        container.innerHTML = links.join('');
+
+        container.querySelectorAll('.archive-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                mobileSelectedDate = e.target.dataset.date;
+                mobileCurrentPage = 0;
+                container.querySelectorAll('.archive-link').forEach(l => l.classList.remove('active'));
+                e.target.classList.add('active');
+                fetchMobileArticles();
+            });
+        });
+    }
+
+    // Initialize view mode on load
+    if (currentViewMode === 'mobile') {
+        setViewMode('mobile');
+    }
+    // else: web mode is default, fetchArticles already called above
+
     // --- GLOBAL HELPERS ---
     window.deleteItem = async (endpoint, id) => {
         if(!confirm("Delete this item?")) return;
@@ -266,11 +447,34 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderArticles() {
         if(!articlesTbody) return;
         const selectedCategory = categoryFilter ? categoryFilter.value : 'All';
-        
-        // Filter
-        const filtered = (selectedCategory === 'All') 
-            ? allArticlesCache 
+
+        // Category Filter
+        let filtered = (selectedCategory === 'All')
+            ? allArticlesCache
             : allArticlesCache.filter(a => a.category === selectedCategory);
+
+        // Status Filter (Phase 3)
+        if (currentStatusFilter !== 'All') {
+            filtered = filtered.filter(a => a.status === currentStatusFilter);
+        }
+
+        // Score Range Filter (Phase 3)
+        if (currentScoreFilter === 'auto-approve') {
+            filtered = filtered.filter(a => (a.auto_approval_score || 0) >= currentAutoApproveThreshold);
+        } else if (currentScoreFilter === 'auto-reject') {
+            filtered = filtered.filter(a => (a.auto_approval_score || 0) <= currentAutoRejectThreshold);
+        } else if (currentScoreFilter === 'in-between') {
+            filtered = filtered.filter(a => {
+                const score = a.auto_approval_score || 0;
+                return score > currentAutoRejectThreshold && score < currentAutoApproveThreshold;
+            });
+        }
+
+        // Update filter count label
+        const countLabel = document.getElementById('filter-count-label');
+        if (countLabel) {
+            countLabel.textContent = `${filtered.length} of ${allArticlesCache.length} articles`;
+        }
 
         // Group by Date
         const grouped = filtered.reduce((groups, article) => {
@@ -1116,7 +1320,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================
 
     async function handleAutoApprove() {
-        const threshold = prompt("Auto-approve all pending articles with score >= ?", "80");
+        const threshold = prompt("Auto-approve all pending articles with score >= ?", String(currentAutoApproveThreshold));
         if (threshold === null) return;
         const val = parseFloat(threshold);
         if (isNaN(val)) return alert("Invalid number");
@@ -1130,6 +1334,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (!res.ok) throw new Error("Failed");
             const data = await res.json();
+            currentAutoApproveThreshold = val;
+            updateAutoButtonLabels();
             alert(data.message);
             fetchArticles(true);
         } catch (e) {
@@ -1138,7 +1344,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleAutoReject() {
-        const threshold = prompt("Auto-reject all pending articles with score <= ?", "30");
+        const threshold = prompt("Auto-reject all pending articles with score <= ?", String(currentAutoRejectThreshold));
         if (threshold === null) return;
         const val = parseFloat(threshold);
         if (isNaN(val)) return alert("Invalid number");
@@ -1152,6 +1358,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (!res.ok) throw new Error("Failed");
             const data = await res.json();
+            currentAutoRejectThreshold = val;
+            updateAutoButtonLabels();
             alert(data.message);
             fetchArticles(true);
         } catch (e) {
@@ -1506,7 +1714,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch(`${API_BASE_URL}/social/twitter/search`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query, max_results: 10 })
+                    body: JSON.stringify({ query: query, max_results: 25, exclude_publications: true, boost_experts: true })
                 });
                 const data = await res.json();
 
@@ -1523,26 +1731,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                results.innerHTML = data.tweets.map(t => `
-                    <div style="border:1px solid #e5e7eb; border-radius:8px; padding:12px; background:#fff;">
+                results.innerHTML = data.tweets.map(t => {
+                    const followerLabel = t.followers_count >= 1000000 ? (t.followers_count / 1000000).toFixed(1) + 'M'
+                        : t.followers_count >= 1000 ? (t.followers_count / 1000).toFixed(1) + 'K'
+                        : t.followers_count;
+                    const expertTag = t.is_likely_news
+                        ? '<span style="font-size:0.65rem;padding:1px 6px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:9999px;font-weight:600;">NEWS</span>'
+                        : (t.followers_count < 100000
+                            ? '<span style="font-size:0.65rem;padding:1px 6px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:9999px;font-weight:600;">EXPERT</span>'
+                            : '');
+                    const scoreColor = t.relevance_score >= 30 ? '#16a34a' : t.relevance_score >= 15 ? '#ca8a04' : '#6b7280';
+                    return `
+                    <div style="border:1px solid var(--border-default, #e5e7eb); border-radius:8px; padding:12px; background:var(--bg-card, #fff);">
                         <div style="display:flex; justify-content:space-between; align-items:start;">
-                            <div>
-                                <span style="font-weight:600; font-size:0.85rem;">${t.author_name}</span>
-                                <span style="color:#6b7280; font-size:0.8rem;">@${t.author_username}</span>
+                            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                                <span style="font-weight:600; font-size:0.85rem; color:var(--text-primary);">${t.author_name}</span>
+                                <span style="color:var(--text-muted, #6b7280); font-size:0.8rem;">@${t.author_username}</span>
+                                <span style="color:var(--text-muted, #6b7280); font-size:0.7rem;">· ${followerLabel} followers</span>
+                                ${expertTag}
                             </div>
-                            <div style="display:flex; gap:8px; font-size:0.7rem; color:#6b7280;">
+                            <div style="display:flex; gap:8px; font-size:0.7rem; color:var(--text-muted, #6b7280); white-space:nowrap;">
+                                <span title="Relevance Score" style="font-weight:700; color:${scoreColor};">⚡${t.relevance_score}</span>
                                 <span>❤️ ${t.like_count}</span>
                                 <span>🔁 ${t.retweet_count}</span>
                             </div>
                         </div>
-                        <p style="margin:8px 0; font-size:0.85rem; line-height:1.4;">${t.text}</p>
+                        <p style="margin:8px 0; font-size:0.85rem; line-height:1.4; color:var(--text-primary);">${t.text}</p>
                         <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
                             <a href="${t.url}" target="_blank" style="font-size:0.75rem; color:#1d4ed8;">View on 𝕏</a>
-                            <button onclick="includeXPostInNewsletter('${t.url}', '${t.author_username}', \`${t.text.replace(/`/g, '').replace(/\\/g, '\\\\').slice(0, 200)}\`)" style="font-size:0.75rem; padding:2px 8px; background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe; border-radius:4px; cursor:pointer;">Include in Newsletter</button>
+                            <button onclick="includeXPostInNewsletter('${t.url}', '${t.author_username}', \`${t.text.replace(/\x60/g, '').replace(/\\/g, '\\\\').slice(0, 200)}\`)" style="font-size:0.75rem; padding:2px 8px; background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe; border-radius:4px; cursor:pointer;">Include in Newsletter</button>
                             <button onclick="repostOnX('${t.id}', '${t.author_username}', '${t.url}')" style="font-size:0.75rem; padding:2px 8px; background:#000; color:#fff; border:none; border-radius:4px; cursor:pointer;">Quote on 𝕏</button>
                         </div>
-                    </div>
-                `).join('');
+                    </div>`;
+                }).join('');
             } catch (e) {
                 if (status) { status.textContent = 'Error: ' + e.message; status.style.color = '#dc2626'; }
             }

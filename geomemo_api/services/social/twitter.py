@@ -21,6 +21,17 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+# Major news publication accounts to exclude from "Find X Posts" results
+# These are excluded to surface individual experts and citizen journalists
+MAJOR_NEWS_ACCOUNTS = [
+    'CNN', 'BBCWorld', 'BBCBreaking', 'BBCNews', 'nytimes', 'washingtonpost',
+    'Reuters', 'AP', 'AFP', 'AJEnglish', 'guardian', 'FT',
+    'WSJ', 'business', 'CNBC', 'CBSNews', 'ABCNews', 'NBCNews',
+    'FoxNews', 'MSNBC', 'NPR', 'PBS', 'TIME', 'Newsweek',
+    'TheEconomist', 'ReutersWorld', 'SkyNews', 'DWNews',
+    'France24_en', 'i24NEWS_EN', 'XHNews',
+]
+
 
 class QuoteTweetForbiddenError(Exception):
     """Raised when X API returns 403 for a quote tweet due to author conversation restrictions."""
@@ -138,37 +149,51 @@ def post_tweet(text: str, quote_tweet_id: str = None) -> dict:
     return {"tweet_id": tweet_id}
 
 
-def search_recent_tweets(query: str, max_results: int = 10) -> list:
+def search_recent_tweets(
+    query: str,
+    max_results: int = 25,
+    exclude_publications: bool = True,
+    boost_experts: bool = True,
+) -> list:
     """
-    Search recent tweets matching a query.
-    Used for the "Find X Posts" feature (Techmeme-style).
+    Search recent tweets with enhanced filtering for expert voices.
 
-    Returns list of dicts with: id, text, author_username, author_name,
-    like_count, retweet_count, created_at, url.
-
-    The query is auto-filtered to exclude retweets and replies for cleaner results.
+    - Fetches more tweets than requested (3x) to allow post-processing
+    - Excludes major news publication accounts
+    - Boosts individual experts over institutional accounts
+    - Scores by engagement rate (relative to followers) not raw engagement
     """
     if not TWITTER_BEARER_TOKEN:
         raise ValueError("TWITTER_BEARER_TOKEN required for tweet search.")
 
     client = _get_client_v2()
-
-    # Sanitize the query for X API search
     clean_query = _sanitize_x_search_query(query)
 
-    # Filter out retweets and replies, require English
-    search_query = f'({clean_query}) -is:retweet -is:reply lang:en'
+    # Build exclusion operators for major news accounts
+    exclusions = ""
+    if exclude_publications:
+        # Limit exclusions to keep query under 512 chars
+        exclude_accounts = MAJOR_NEWS_ACCOUNTS[:15]
+        exclusions = " ".join(f"-from:{acct}" for acct in exclude_accounts)
 
-    # Truncate query to X API limit (512 chars for recent search)
+    search_query = f'({clean_query}) -is:retweet -is:reply lang:en {exclusions}'.strip()
+
+    # Truncate to X API limit (512 chars)
     if len(search_query) > 512:
-        search_query = search_query[:509] + '...'
+        # Remove exclusions if query is too long, keep core query
+        search_query = f'({clean_query}) -is:retweet -is:reply lang:en'
+        if len(search_query) > 512:
+            search_query = search_query[:509] + '...'
+
+    # Fetch 3x the requested amount for post-processing
+    fetch_count = min(max_results * 3, 100)
 
     try:
         response = client.search_recent_tweets(
             query=search_query,
-            max_results=min(max_results, 100),
+            max_results=fetch_count,
             tweet_fields=['created_at', 'public_metrics', 'author_id'],
-            user_fields=['username', 'name', 'verified'],
+            user_fields=['username', 'name', 'verified', 'public_metrics', 'description'],
             expansions=['author_id'],
             sort_order='relevancy',
         )
@@ -179,39 +204,91 @@ def search_recent_tweets(query: str, max_results: int = 10) -> list:
     if not response.data:
         return []
 
-    # Build author lookup
+    # Build author lookup with follower data
     users = {}
     if response.includes and 'users' in response.includes:
         for user in response.includes['users']:
+            user_metrics = getattr(user, 'public_metrics', None) or {}
             users[user.id] = {
                 'username': user.username,
                 'name': user.name,
+                'followers_count': user_metrics.get('followers_count', 0),
+                'description': getattr(user, 'description', '') or '',
             }
 
-    # Format results, sorted by engagement
+    # Process and score each tweet
     results = []
     for tweet in response.data:
         metrics = tweet.public_metrics or {}
         author = users.get(tweet.author_id, {})
         username = author.get('username', 'unknown')
+        followers = author.get('followers_count', 0)
+        author_desc = author.get('description', '')
+        author_name = author.get('name', username)
+
+        likes = metrics.get('like_count', 0)
+        retweets = metrics.get('retweet_count', 0)
+        replies = metrics.get('reply_count', 0)
+        raw_engagement = likes + retweets * 2 + replies
+
+        # --- RELEVANCE SCORING ALGORITHM ---
+        score = 0.0
+
+        # 1. Engagement rate (engagement relative to followers)
+        if followers > 0:
+            engagement_rate = raw_engagement / followers
+            score += min(engagement_rate * 100, 40)  # Cap at 40 points
+        else:
+            score += min(raw_engagement * 0.5, 20)
+
+        # 2. Expert boost: deprioritize accounts >1M followers (likely media)
+        if boost_experts:
+            if followers < 100_000:
+                score += 15  # Individual expert range
+            elif followers < 500_000:
+                score += 8   # Mid-tier analysts
+            # else: +0 for large institutional accounts
+
+        # 3. Content depth: boost longer tweets (analysis, not headlines)
+        tweet_length = len(tweet.text)
+        if tweet_length > 200:
+            score += 10  # Long analysis
+        elif tweet_length > 100:
+            score += 5   # Medium analysis
+
+        # 4. Penalize accounts with "News" indicators
+        news_indicators = ['news', 'media', 'press', 'daily', 'breaking', 'official']
+        name_lower = author_name.lower()
+        desc_lower = author_desc.lower()
+        is_likely_news = any(ind in name_lower or ind in desc_lower for ind in news_indicators)
+        if is_likely_news and followers > 500_000:
+            score -= 20  # Strong penalty for large news accounts
+
+        # 5. Minimum engagement floor
+        if raw_engagement < 2:
+            score -= 10
 
         results.append({
             'id': str(tweet.id),
             'text': tweet.text,
             'author_username': username,
-            'author_name': author.get('name', username),
-            'like_count': metrics.get('like_count', 0),
-            'retweet_count': metrics.get('retweet_count', 0),
-            'reply_count': metrics.get('reply_count', 0),
+            'author_name': author_name,
+            'followers_count': followers,
+            'like_count': likes,
+            'retweet_count': retweets,
+            'reply_count': replies,
             'created_at': tweet.created_at.isoformat() if tweet.created_at else None,
             'url': f'https://x.com/{username}/status/{tweet.id}',
-            'engagement': metrics.get('like_count', 0) + metrics.get('retweet_count', 0) * 2,
+            'engagement': raw_engagement,
+            'relevance_score': round(score, 1),
+            'is_likely_news': is_likely_news,
         })
 
-    # Sort by engagement (likes + 2*retweets) descending
-    results.sort(key=lambda t: t['engagement'], reverse=True)
+    # Sort by relevance score descending
+    results.sort(key=lambda t: t['relevance_score'], reverse=True)
 
-    return results
+    # Return top N results
+    return results[:max_results]
 
 
 def get_monthly_post_count() -> int:
