@@ -1431,10 +1431,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('tweet-compose-text').value = '';
                     document.getElementById('tweet-compose-text').dataset.articleId = '';
                     delete document.getElementById('tweet-compose-text').dataset.quoteTweetId;
+                    delete document.getElementById('tweet-compose-text').dataset.quoteTweetUrl;
                     const quoteIndicator = document.getElementById('quote-tweet-indicator');
                     if (quoteIndicator) quoteIndicator.innerHTML = '';
                     if (tweetCharCount) tweetCharCount.textContent = '0/280';
                     fetchSocialHistory();
+                } else if (data.quote_restricted) {
+                    // Author restricts quote tweets via API — fall back to X.com web intent
+                    const quoteTweetUrl = composerEl?.dataset.quoteTweetUrl || `https://x.com/i/status/${quoteTweetId}`;
+                    const intentUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(text + '\n\n' + quoteTweetUrl)}`;
+                    window.open(intentUrl, '_blank');
+
+                    const result = document.getElementById('tweet-compose-result');
+                    if (result) {
+                        result.textContent = '⚠️ Author restricts API quotes. Opened X.com for manual posting.';
+                        result.style.color = '#d97706';
+                    }
+                    // Clear composer
+                    document.getElementById('tweet-compose-text').value = '';
+                    document.getElementById('tweet-compose-text').dataset.articleId = '';
+                    delete document.getElementById('tweet-compose-text').dataset.quoteTweetId;
+                    delete document.getElementById('tweet-compose-text').dataset.quoteTweetUrl;
+                    const quoteIndicator = document.getElementById('quote-tweet-indicator');
+                    if (quoteIndicator) quoteIndicator.innerHTML = '';
+                    if (tweetCharCount) tweetCharCount.textContent = '0/280';
                 } else {
                     alert('Error: ' + (data.detail || JSON.stringify(data)));
                 }
@@ -1516,7 +1536,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
                             <a href="${t.url}" target="_blank" style="font-size:0.75rem; color:#1d4ed8;">View on 𝕏</a>
                             <button onclick="includeXPostInNewsletter('${t.url}', '${t.author_username}', \`${t.text.replace(/`/g, '').replace(/\\/g, '\\\\').slice(0, 200)}\`)" style="font-size:0.75rem; padding:2px 8px; background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe; border-radius:4px; cursor:pointer;">Include in Newsletter</button>
-                            <button onclick="repostOnX('${t.id}', '${t.author_username}')" style="font-size:0.75rem; padding:2px 8px; background:#000; color:#fff; border:none; border-radius:4px; cursor:pointer;">Quote on 𝕏</button>
+                            <button onclick="repostOnX('${t.id}', '${t.author_username}', '${t.url}')" style="font-size:0.75rem; padding:2px 8px; background:#000; color:#fff; border:none; border-radius:4px; cursor:pointer;">Quote on 𝕏</button>
                         </div>
                     </div>
                 `).join('');
@@ -1552,7 +1572,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Quote on X: posts as a real Quote Tweet (repost with comment) using tweet ID
-    window.repostOnX = (tweetId, authorUsername) => {
+    window.repostOnX = (tweetId, authorUsername, tweetUrl) => {
         const summary = currentXPostsArticleSummary || '';
         if (!summary) return alert('No article summary available.');
 
@@ -1577,6 +1597,7 @@ document.addEventListener('DOMContentLoaded', () => {
             composer.value = tweetText;
             composer.dataset.articleId = currentXPostsArticleId || '';
             composer.dataset.quoteTweetId = tweetId;  // Store tweet ID for quote tweet
+            composer.dataset.quoteTweetUrl = tweetUrl || '';  // Store URL for web intent fallback
             if (charCount) {
                 charCount.textContent = `${tweetText.length}/280`;
                 charCount.style.color = tweetText.length > 260 ? (tweetText.length > 280 ? '#dc2626' : '#f59e0b') : '#9ca3af';
@@ -1605,7 +1626,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Clear quote tweet mode (switch back to regular tweet)
     window.clearQuoteTweet = () => {
         const composer = document.getElementById('tweet-compose-text');
-        if (composer) delete composer.dataset.quoteTweetId;
+        if (composer) {
+            delete composer.dataset.quoteTweetId;
+            delete composer.dataset.quoteTweetUrl;
+        }
         const indicator = document.getElementById('quote-tweet-indicator');
         if (indicator) indicator.innerHTML = '';
     };

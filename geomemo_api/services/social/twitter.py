@@ -21,6 +21,12 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+
+class QuoteTweetForbiddenError(Exception):
+    """Raised when X API returns 403 for a quote tweet due to author conversation restrictions."""
+    pass
+
+
 # Lazy-initialized clients (only created when first needed)
 _client_v2 = None
 
@@ -108,13 +114,25 @@ def post_tweet(text: str, quote_tweet_id: str = None) -> dict:
 
     If quote_tweet_id is provided, the tweet becomes a "Quote Tweet"
     (repost with comment) — the original tweet is embedded below the text.
+
+    Raises QuoteTweetForbiddenError if the original tweet's author restricts
+    who can quote their posts (403 from X API).
     """
     client = _get_client_v2()
     kwargs = {"text": text}
     if quote_tweet_id:
         kwargs["quote_tweet_id"] = quote_tweet_id
         logger.info(f"Posting quote tweet of {quote_tweet_id}")
-    response = client.create_tweet(**kwargs)
+    try:
+        response = client.create_tweet(**kwargs)
+    except tweepy.errors.Forbidden as e:
+        error_msg = str(e).lower()
+        if quote_tweet_id and ("not allowed" in error_msg or "not permitted" in error_msg):
+            logger.warning(f"Quote tweet blocked by author restrictions: {quote_tweet_id}")
+            raise QuoteTweetForbiddenError(
+                "Author restricts quote tweets via API. Use X.com to quote manually."
+            )
+        raise  # Re-raise other 403 errors as-is
     tweet_id = response.data['id']
     logger.info(f"Tweet posted: {tweet_id}" + (f" (quote of {quote_tweet_id})" if quote_tweet_id else ""))
     return {"tweet_id": tweet_id}

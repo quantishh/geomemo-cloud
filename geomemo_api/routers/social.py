@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from database import get_db_connection
 from models import SocialPostArticleRequest, SocialPostNewsletterRequest, BreakingNewsCheckResponse
 from services.social import telegram
+from services.social.twitter import QuoteTweetForbiddenError
 from services.social.content_generator import (
     generate_breaking_telegram,
     generate_newsletter_telegram,
@@ -303,6 +304,15 @@ def post_custom_tweet(request: TweetPostRequest):
             "tweet_id": tw_result['tweet_id'],
             "is_quote_tweet": bool(request.quote_tweet_id),
             "monthly_count": monthly + 1,
+        }
+    except QuoteTweetForbiddenError:
+        # Author restricts quote tweets — return structured response for frontend fallback
+        conn.rollback()
+        logger.warning(f"Quote tweet blocked by author restrictions (quote_tweet_id={request.quote_tweet_id})")
+        return {
+            "posted": False,
+            "quote_restricted": True,
+            "message": "Author restricts quote tweets via API. Opening X.com for manual posting.",
         }
     except Exception as e:
         conn.rollback()
