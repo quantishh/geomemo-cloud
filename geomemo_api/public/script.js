@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentScoreFilter = 'All';
     let currentAutoApproveThreshold = 80;
     let currentAutoRejectThreshold = 30;
+    let currentDateFilter = 'All'; // 'All' or 'YYYY-MM-DD'
 
     // --- VIEW MODE STATE (Phase 4) ---
     let currentViewMode = localStorage.getItem('geomemo-view') || 'web';
@@ -223,23 +224,80 @@ document.addEventListener('DOMContentLoaded', () => {
         updateScoreDistribution();
     }
 
+    function getArticleLocalDate(article) {
+        if (!article.scraped_at) return 'Unsorted';
+        const d = new Date(article.scraped_at);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
     function updateScoreDistribution() {
         const distEl = document.getElementById('score-distribution');
         if (!distEl || !allArticlesCache.length) return;
 
-        const pending = allArticlesCache.filter(a => a.status === 'pending');
+        // Build the date picker options from available dates
+        const dateCounts = {};
+        allArticlesCache.forEach(a => {
+            const d = getArticleLocalDate(a);
+            dateCounts[d] = (dateCounts[d] || 0) + 1;
+        });
+        const sortedDates = Object.keys(dateCounts).filter(d => d !== 'Unsorted').sort().reverse();
+
+        // Apply date filter to get scoped articles
+        let scoped = allArticlesCache;
+        if (currentDateFilter !== 'All') {
+            scoped = scoped.filter(a => getArticleLocalDate(a) === currentDateFilter);
+        }
+
+        // Apply category filter too (so distribution matches what user sees)
+        const selectedCategory = categoryFilter ? categoryFilter.value : 'All';
+        if (selectedCategory !== 'All') {
+            scoped = scoped.filter(a => a.category === selectedCategory);
+        }
+
+        const pending = scoped.filter(a => a.status === 'pending');
         const below30 = pending.filter(a => (a.auto_approval_score || 0) < 30).length;
         const range30to50 = pending.filter(a => { const s = a.auto_approval_score || 0; return s >= 30 && s < 50; }).length;
         const range50to70 = pending.filter(a => { const s = a.auto_approval_score || 0; return s >= 50 && s < 70; }).length;
         const above70 = pending.filter(a => (a.auto_approval_score || 0) >= 70).length;
 
+        // Pretty label for the selected date
+        let dateLabel = 'All Days';
+        if (currentDateFilter !== 'All') {
+            try {
+                dateLabel = new Date(currentDateFilter + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+            } catch(e) { dateLabel = currentDateFilter; }
+        }
+
+        // Date picker options
+        const dateOptions = sortedDates.map(d => {
+            let label = d;
+            try {
+                label = new Date(d + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+            } catch(e) {}
+            const selected = d === currentDateFilter ? 'selected' : '';
+            return `<option value="${d}" ${selected}>${label} (${dateCounts[d]})</option>`;
+        }).join('');
+
         distEl.innerHTML = `
-            <span class="dist-chip dist-low" title="Score below 30">🔴 &lt;30: <strong>${below30}</strong></span>
-            <span class="dist-chip dist-medium-low" title="Score 30-50">🟠 30–50: <strong>${range30to50}</strong></span>
-            <span class="dist-chip dist-medium-high" title="Score 50-70">🟡 50–70: <strong>${range50to70}</strong></span>
-            <span class="dist-chip dist-high" title="Score 70-100">🟢 70+: <strong>${above70}</strong></span>
-            <span class="dist-chip dist-total" title="Total pending">📊 Pending: <strong>${pending.length}</strong></span>
+            <select id="dist-date-picker" class="dist-date-picker" title="Scope score counts to a specific day">
+                <option value="All" ${currentDateFilter === 'All' ? 'selected' : ''}>All Days</option>
+                ${dateOptions}
+            </select>
+            <span class="dist-chip dist-low" title="Pending with score below 30">🔴 &lt;30: <strong>${below30}</strong></span>
+            <span class="dist-chip dist-medium-low" title="Pending with score 30-50">🟠 30–50: <strong>${range30to50}</strong></span>
+            <span class="dist-chip dist-medium-high" title="Pending with score 50-70">🟡 50–70: <strong>${range50to70}</strong></span>
+            <span class="dist-chip dist-high" title="Pending with score 70-100">🟢 70+: <strong>${above70}</strong></span>
+            <span class="dist-chip dist-total" title="Total pending for ${dateLabel}">📊 Pending: <strong>${pending.length}</strong></span>
         `;
+
+        // Date picker change handler
+        const picker = document.getElementById('dist-date-picker');
+        if (picker) {
+            picker.addEventListener('change', (e) => {
+                currentDateFilter = e.target.value;
+                updateScoreDistribution();
+            });
+        }
     }
 
     // --- VIEW MODE TOGGLE (Phase 4) ---
