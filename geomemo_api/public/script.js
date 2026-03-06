@@ -437,15 +437,44 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch(e) { alert(e.message); }
     };
 
-    window.updateStatus = async (id, status) => { 
-        try { 
-            await fetch(`${API_BASE_URL}/articles/${id}/status`, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ status: status }) 
-            }); 
-            fetchArticles(true); 
-        } catch (e) { alert("Failed to update status"); } 
+    window.updateStatus = async (id, status) => {
+        // Optimistic UI: instantly update the row before API responds
+        const row = document.querySelector(`tr[data-article-id="${id}"]`);
+        let prevBadgeHtml = '';
+        let prevRowClass = '';
+        if (row) {
+            prevRowClass = row.className;
+            const badge = row.querySelector('.status-badge');
+            if (badge) {
+                prevBadgeHtml = badge.outerHTML;
+                const icon = status === 'approved' ? '✓' : status === 'rejected' ? '✗' : '?';
+                badge.textContent = `${icon} ${status}`;
+                badge.className = `status-badge status-${status} text-xs block mb-1`;
+            }
+            row.className = `article-row ${status}`;
+            row.style.opacity = '0.7';
+            row.style.transition = 'opacity 0.2s';
+            setTimeout(() => { if (row) row.style.opacity = '1'; }, 200);
+        }
+        try {
+            const res = await fetch(`${API_BASE_URL}/articles/${id}/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: status })
+            });
+            if (!res.ok) throw new Error('API error');
+            // Update cache in-place
+            const cached = allArticlesCache.find(a => a.id === id);
+            if (cached) cached.status = status;
+        } catch (e) {
+            // Revert on failure
+            if (row) {
+                row.className = prevRowClass;
+                const badge = row.querySelector('.status-badge');
+                if (badge && prevBadgeHtml) badge.outerHTML = prevBadgeHtml;
+            }
+            alert("Failed to update status");
+        }
     };
 
     window.handleFindSimilarClick = (id, headline) => {
@@ -675,6 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function createArticleRow(article, isChild = false) {
         const tr = document.createElement('tr');
         tr.className = `article-row ${article.status}`;
+        tr.dataset.articleId = article.id;
         
         const statusClass = (article.status === 'approved') ? 'status-approved' : (article.status === 'rejected' ? 'status-rejected' : 'status-pending');
         const statusIcon = article.status === 'approved' ? '✓' : (article.status === 'rejected' ? '✗' : '?');
