@@ -744,7 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     data-auth="${article.author || ''}">✨ Enhance</button>
                 <button class="telegram-btn w-full text-xs" style="background:#0088cc;color:#fff;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;margin-top:4px;" onclick="postArticleToTelegram(${article.id})">📢 Telegram</button>
                 <button class="twitter-btn w-full text-xs" style="background:#000;color:#fff;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;margin-top:2px;" onclick="postArticleToTwitter(${article.id})">𝕏 Post</button>
-                <button class="xposts-btn w-full text-xs" style="background:#f3f4f6;color:#374151;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;margin-top:2px;" onclick="openFindXPosts(${article.id}, \`${dashboardHeadline.replace(/`/g, '')}\`, \`${(displaySummary || '').replace(/`/g, '').replace(/\\/g, '').slice(0, 300)}\`)">🔍 Find X Posts</button>
+                <button class="xposts-btn w-full text-xs" style="background:#f3f4f6;color:#374151;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;margin-top:2px;" onclick="openFindXPosts(${article.id})">🔍 Find X Posts</button>
             </td>
         `;
         
@@ -1902,9 +1902,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Find X Posts modal
     let currentXPostsArticleId = null;
     let currentXPostsArticleSummary = '';
-    window.openFindXPosts = (articleId, headline, summary) => {
+    window.openFindXPosts = (articleId) => {
         currentXPostsArticleId = articleId;
-        currentXPostsArticleSummary = summary || headline || '';
+        // Look up article data from cache — avoids inline escaping issues with quotes in summaries
+        const article = allArticlesCache.find(a => a.id === articleId) || {};
+        const headline = article.headline || article.headline_original || 'No Headline';
+        const summary = article.summary || '';
+        currentXPostsArticleSummary = summary || headline;
         const modal = document.getElementById('xposts-modal');
         const queryInput = document.getElementById('xposts-search-query');
         const results = document.getElementById('xposts-results');
