@@ -277,6 +277,14 @@
                         <label class="block text-xs mb-1" style="color: var(--text-muted);">Country</label>
                         <input type="text" id="source-country" placeholder="US" class="p-2 border rounded w-full text-sm">
                     </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-xs mb-1" style="color: var(--text-muted);">RSS Feed URL</label>
+                        <input type="url" id="source-rss-url" placeholder="https://feeds.reuters.com/..." class="p-2 border rounded w-full text-sm">
+                    </div>
+                    <div class="w-32">
+                        <label class="block text-xs mb-1" style="color: var(--text-muted);">X Handle</label>
+                        <input type="text" id="source-twitter-handle" placeholder="@Reuters" class="p-2 border rounded w-full text-sm">
+                    </div>
                     <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700">Add Source</button>
                 </form>
 
@@ -286,6 +294,8 @@
                             <tr>
                                 <th class="p-2">Name</th>
                                 <th class="p-2">Domain</th>
+                                <th class="p-2">RSS Feed</th>
+                                <th class="p-2">X Handle</th>
                                 <th class="p-2">Credibility</th>
                                 <th class="p-2">Tier</th>
                                 <th class="p-2">Articles</th>

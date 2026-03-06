@@ -404,7 +404,8 @@ Content: "{content_snippet}"
             )
 
             # 10. M2: Look up or auto-create source_id
-            source_id = self._lookup_or_create_source(publication_name)
+            # Use pre-resolved source_id from DB-loaded feeds if available
+            source_id = adapter.get('source_id') or self._lookup_or_create_source(publication_name)
 
             self.logger.info(
                 f"Scored: '{headline}' | Confidence: {adapter['confidence_score']} | "

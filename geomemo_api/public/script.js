@@ -1540,10 +1540,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_BASE_URL}/api/sources`);
             if (!res.ok) return;
             const sources = await res.json();
-            tb.innerHTML = sources.map(s => `
+            tb.innerHTML = sources.map(s => {
+                const rssDisplay = s.rss_feed_url
+                    ? `<a href="${s.rss_feed_url}" target="_blank" class="text-blue-600 hover:underline" title="${s.rss_feed_url}">${s.rss_feed_url.length > 30 ? s.rss_feed_url.substring(0, 30) + '...' : s.rss_feed_url}</a>`
+                    : '—';
+                const handleDisplay = s.twitter_handle || '—';
+                return `
                 <tr>
                     <td class="font-medium text-gray-800">${s.name}</td>
                     <td class="text-gray-500">${s.domain || '—'}</td>
+                    <td class="text-xs">${rssDisplay}</td>
+                    <td class="text-blue-700 font-medium">${handleDisplay}</td>
                     <td>
                         <span class="score-indicator ${getScoreClass(s.credibility_score)}">${s.credibility_score}</span>
                     </td>
@@ -1555,7 +1562,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button onclick="deleteSource(${s.id})" class="text-red-500 hover:text-red-700 text-xs font-semibold">Delete</button>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
         } catch (e) {
             console.error('Error fetching sources:', e);
         }
@@ -1580,7 +1587,9 @@ document.addEventListener('DOMContentLoaded', () => {
             credibility_score: parseInt(document.getElementById('source-credibility').value) || 50,
             tier: parseInt(document.getElementById('source-tier').value) || 3,
             country: document.getElementById('source-country').value || null,
-            language: 'en'
+            language: 'en',
+            rss_feed_url: document.getElementById('source-rss-url').value || null,
+            twitter_handle: document.getElementById('source-twitter-handle').value || null,
         };
         try {
             const res = await fetch(`${API_BASE_URL}/api/sources`, {

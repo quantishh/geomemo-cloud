@@ -6,6 +6,8 @@ Uses existing article data (headline_en, summary, category, etc.).
 import re
 import logging
 
+from database import get_db_connection
+
 logger = logging.getLogger(__name__)
 
 # Category → emoji mapping (shared across platforms)
@@ -173,9 +175,27 @@ TWEET_CTA = '🌐 Follow @GeoMemoNews for daily geopolitical intel'
 
 
 def _get_source_attribution(publication_name: str) -> str:
-    """Get source attribution with X handle if known, otherwise plain name."""
+    """Get source attribution with X handle if known, otherwise plain name.
+    Checks database first for twitter_handle, falls back to hardcoded dict.
+    """
     if not publication_name:
         return ''
+    # Try database lookup first
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT twitter_handle FROM sources WHERE name = %s AND twitter_handle IS NOT NULL",
+            (publication_name,)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if row and row[0]:
+            return f'— via {row[0]}'
+    except Exception as e:
+        logger.debug(f"DB twitter_handle lookup failed for {publication_name}: {e}")
+    # Fall back to hardcoded dict
     handle = SOURCE_X_HANDLES.get(publication_name)
     if handle:
         return f'— via {handle}'

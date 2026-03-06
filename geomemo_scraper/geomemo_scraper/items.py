@@ -18,3 +18,4 @@ class ArticleItem(scrapy.Item):
     category = scrapy.Field()
     embedding = scrapy.Field()
     confidence_score = scrapy.Field()
+    source_id = scrapy.Field()  # Pre-resolved source ID from DB-loaded feeds

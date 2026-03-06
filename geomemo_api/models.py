@@ -177,6 +177,8 @@ class Source(BaseModel):
     total_articles: int = 0
     approved_count: int = 0
     rejected_count: int = 0
+    rss_feed_url: Optional[str] = None
+    twitter_handle: Optional[str] = None
 
 
 class SourceUpdate(BaseModel):
@@ -184,6 +186,8 @@ class SourceUpdate(BaseModel):
     tier: Optional[int] = None
     country: Optional[str] = None
     language: Optional[str] = None
+    rss_feed_url: Optional[str] = None
+    twitter_handle: Optional[str] = None
 
 
 class SourceCreate(BaseModel):
@@ -193,6 +197,8 @@ class SourceCreate(BaseModel):
     tier: int = 3
     country: Optional[str] = None
     language: str = 'en'
+    rss_feed_url: Optional[str] = None
+    twitter_handle: Optional[str] = None
 
 
 # --- M6: Social Media Models ---

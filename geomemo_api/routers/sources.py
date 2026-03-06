@@ -22,7 +22,8 @@ def list_sources():
     try:
         cursor.execute("""
             SELECT id, name, domain, credibility_score, tier, country, language,
-                   total_articles, approved_count, rejected_count
+                   total_articles, approved_count, rejected_count,
+                   rss_feed_url, twitter_handle
             FROM sources
             ORDER BY total_articles DESC
         """)
@@ -52,6 +53,12 @@ def update_source(source_id: int, update: SourceUpdate):
         if update.language is not None:
             sets.append("language = %s")
             params.append(update.language)
+        if update.rss_feed_url is not None:
+            sets.append("rss_feed_url = %s")
+            params.append(update.rss_feed_url)
+        if update.twitter_handle is not None:
+            sets.append("twitter_handle = %s")
+            params.append(update.twitter_handle)
         if not sets:
             raise HTTPException(400, "No fields to update")
         params.append(source_id)
@@ -186,10 +193,12 @@ def create_source(source: SourceCreate):
     cursor = conn.cursor()
     try:
         cursor.execute(
-            """INSERT INTO sources (name, domain, credibility_score, tier, country, language)
-               VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+            """INSERT INTO sources (name, domain, credibility_score, tier, country, language,
+                                    rss_feed_url, twitter_handle)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             (source.name, source.domain, source.credibility_score,
-             source.tier, source.country, source.language)
+             source.tier, source.country, source.language,
+             source.rss_feed_url, source.twitter_handle)
         )
         new_id = cursor.fetchone()[0]
         conn.commit()

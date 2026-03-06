@@ -1,4 +1,6 @@
+import os
 import scrapy
+import psycopg2
 from geomemo_scraper.items import ArticleItem
 import re
 from parsel import Selector
@@ -246,6 +248,53 @@ class RssSpider(scrapy.Spider):
         # Add more keyword searches as desired
     ]
 
+    def start_requests(self):
+        """Load RSS feeds from database (additive), then yield hardcoded feeds as fallback."""
+        db_feed_count = 0
+        try:
+            conn = psycopg2.connect(
+                host=os.getenv("POSTGRES_HOST", "db"),
+                database=os.getenv("POSTGRES_DB", "postgres"),
+                user=os.getenv("POSTGRES_USER", "postgres"),
+                password=os.getenv("POSTGRES_PASSWORD", ""),
+            )
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, name, rss_feed_url FROM sources "
+                "WHERE rss_feed_url IS NOT NULL AND rss_feed_url != ''"
+            )
+            db_feeds = cursor.fetchall()
+            cursor.close()
+            conn.close()
+
+            # Track DB feed URLs to avoid duplicates with hardcoded list
+            db_urls = set()
+            for source_id, source_name, rss_url in db_feeds:
+                db_urls.add(rss_url)
+                db_feed_count += 1
+                yield scrapy.Request(
+                    url=rss_url,
+                    callback=self.parse,
+                    meta={'source_id': source_id, 'source_name': source_name},
+                    dont_filter=True,
+                )
+            self.logger.info(f"Loaded {db_feed_count} RSS feeds from database")
+
+            # Yield hardcoded feeds, skipping any already in DB
+            hardcoded_count = 0
+            for url in self.start_urls:
+                if url not in db_urls:
+                    hardcoded_count += 1
+                    yield scrapy.Request(url=url, callback=self.parse, dont_filter=True)
+            self.logger.info(f"Loaded {hardcoded_count} hardcoded RSS feeds (skipped {len(self.start_urls) - hardcoded_count} duplicates)")
+
+        except Exception as e:
+            self.logger.warning(f"DB feed loading failed, falling back to hardcoded feeds only: {e}")
+            # Fallback: yield all hardcoded feeds
+            for url in self.start_urls:
+                yield scrapy.Request(url=url, callback=self.parse, dont_filter=True)
+            self.logger.info(f"Loaded {len(self.start_urls)} hardcoded RSS feeds (fallback mode)")
+
     # The parse method is called for every downloaded response
     def parse(self, response):
         try:
@@ -334,5 +383,9 @@ class RssSpider(scrapy.Spider):
             item['publication_name'] = publication_name or (feed_title.strip() if feed_title else response.url)
             item['author'] = author
             item['description'] = description # Pass description to pipeline
+
+            # Pass source_id from DB-loaded feeds (avoids re-lookup in pipeline)
+            if response.meta.get('source_id'):
+                item['source_id'] = response.meta['source_id']
 
             yield item
