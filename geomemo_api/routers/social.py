@@ -39,9 +39,10 @@ class TweetPostRequest(BaseModel):
 class TweetSearchRequest(BaseModel):
     """Search X for tweets related to a headline."""
     query: str
-    max_results: int = 25
+    max_results: int = 50
     exclude_publications: bool = True
     boost_experts: bool = True
+    include_replies: bool = True
 
 
 # ============================================================
@@ -451,6 +452,7 @@ def search_tweets(request: TweetSearchRequest):
             max_results=request.max_results,
             exclude_publications=request.exclude_publications,
             boost_experts=request.boost_experts,
+            include_replies=request.include_replies,
         )
         return {
             "query": request.query,

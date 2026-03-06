@@ -154,6 +154,7 @@ def search_recent_tweets(
     max_results: int = 25,
     exclude_publications: bool = True,
     boost_experts: bool = True,
+    include_replies: bool = True,
 ) -> list:
     """
     Search recent tweets with enhanced filtering for expert voices.
@@ -162,6 +163,7 @@ def search_recent_tweets(
     - Excludes major news publication accounts
     - Boosts individual experts over institutional accounts
     - Scores by engagement rate (relative to followers) not raw engagement
+    - include_replies=True: includes replies where expert commentary lives
     """
     if not TWITTER_BEARER_TOKEN:
         raise ValueError("TWITTER_BEARER_TOKEN required for tweet search.")
@@ -176,12 +178,15 @@ def search_recent_tweets(
         exclude_accounts = MAJOR_NEWS_ACCOUNTS[:15]
         exclusions = " ".join(f"-from:{acct}" for acct in exclude_accounts)
 
-    search_query = f'({clean_query}) -is:retweet -is:reply lang:en {exclusions}'.strip()
+    # Build query: always exclude retweets (no original content),
+    # but INCLUDE replies (expert commentary and opinions live in replies)
+    reply_filter = "" if include_replies else " -is:reply"
+    search_query = f'({clean_query}) -is:retweet{reply_filter} lang:en {exclusions}'.strip()
 
     # Truncate to X API limit (512 chars)
     if len(search_query) > 512:
         # Remove exclusions if query is too long, keep core query
-        search_query = f'({clean_query}) -is:retweet -is:reply lang:en'
+        search_query = f'({clean_query}) -is:retweet{reply_filter} lang:en'
         if len(search_query) > 512:
             search_query = search_query[:509] + '...'
 
@@ -192,7 +197,7 @@ def search_recent_tweets(
         response = client.search_recent_tweets(
             query=search_query,
             max_results=fetch_count,
-            tweet_fields=['created_at', 'public_metrics', 'author_id'],
+            tweet_fields=['created_at', 'public_metrics', 'author_id', 'in_reply_to_user_id', 'conversation_id'],
             user_fields=['username', 'name', 'verified', 'public_metrics', 'description'],
             expansions=['author_id'],
             sort_order='relevancy',
@@ -228,8 +233,11 @@ def search_recent_tweets(
 
         likes = metrics.get('like_count', 0)
         retweets = metrics.get('retweet_count', 0)
-        replies = metrics.get('reply_count', 0)
-        raw_engagement = likes + retweets * 2 + replies
+        reply_count = metrics.get('reply_count', 0)
+        raw_engagement = likes + retweets * 2 + reply_count
+
+        # Detect if this tweet is a reply
+        is_reply = getattr(tweet, 'in_reply_to_user_id', None) is not None
 
         # --- RELEVANCE SCORING ALGORITHM ---
         score = 0.0
@@ -268,6 +276,15 @@ def search_recent_tweets(
         if raw_engagement < 2:
             score -= 10
 
+        # 6. Opinion/commentary boost: replies with high engagement are valuable discourse
+        #    A reply that gets 5+ likes usually means the person said something insightful
+        if is_reply and likes >= 5:
+            score += 8  # High-engagement reply = quality commentary
+        elif is_reply and likes >= 2:
+            score += 4  # Moderate-engagement reply
+        elif is_reply and raw_engagement < 2:
+            score -= 5  # Low-engagement reply = noise ("lol", "so true")
+
         results.append({
             'id': str(tweet.id),
             'text': tweet.text,
@@ -276,12 +293,13 @@ def search_recent_tweets(
             'followers_count': followers,
             'like_count': likes,
             'retweet_count': retweets,
-            'reply_count': replies,
+            'reply_count': reply_count,
             'created_at': tweet.created_at.isoformat() if tweet.created_at else None,
             'url': f'https://x.com/{username}/status/{tweet.id}',
             'engagement': raw_engagement,
             'relevance_score': round(score, 1),
             'is_likely_news': is_likely_news,
+            'is_reply': is_reply,
         })
 
     # Sort by relevance score descending

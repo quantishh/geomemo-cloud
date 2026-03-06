@@ -1864,7 +1864,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch(`${API_BASE_URL}/social/twitter/search`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query, max_results: 25, exclude_publications: true, boost_experts: true })
+                    body: JSON.stringify({ query: query, max_results: 50, exclude_publications: true, boost_experts: true, include_replies: true })
                 });
                 const data = await res.json();
 
@@ -1885,6 +1885,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const followerLabel = t.followers_count >= 1000000 ? (t.followers_count / 1000000).toFixed(1) + 'M'
                         : t.followers_count >= 1000 ? (t.followers_count / 1000).toFixed(1) + 'K'
                         : t.followers_count;
+                    const replyTag = t.is_reply
+                        ? '<span style="font-size:0.65rem;padding:1px 6px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:9999px;font-weight:600;">REPLY</span>'
+                        : '';
                     const expertTag = t.is_likely_news
                         ? '<span style="font-size:0.65rem;padding:1px 6px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:9999px;font-weight:600;">NEWS</span>'
                         : (t.followers_count < 100000
@@ -1898,7 +1901,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <span style="font-weight:600; font-size:0.85rem; color:var(--text-primary);">${t.author_name}</span>
                                 <span style="color:var(--text-muted, #6b7280); font-size:0.8rem;">@${t.author_username}</span>
                                 <span style="color:var(--text-muted, #6b7280); font-size:0.7rem;">· ${followerLabel} followers</span>
-                                ${expertTag}
+                                ${expertTag}${replyTag}
                             </div>
                             <div style="display:flex; gap:8px; font-size:0.7rem; color:var(--text-muted, #6b7280); white-space:nowrap;">
                                 <span title="Relevance Score" style="font-weight:700; color:${scoreColor};">⚡${t.relevance_score}</span>
@@ -1945,14 +1948,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Quote on X: posts as a real Quote Tweet (repost with comment) using tweet ID
+    // Quote on X: two options — compose in dashboard OR open X.com directly
     window.repostOnX = (tweetId, authorUsername, tweetUrl) => {
         const summary = currentXPostsArticleSummary || '';
         if (!summary) return alert('No article summary available.');
 
-        // Build quote tweet text: emoji + summary + CTA (no h/t needed — X embeds the original)
+        // Build quote tweet text: emoji + summary + CTA
         const cta = '\u{1F310} Follow @GeoMemoNews for daily geopolitical intel';
-        // Calculate max summary length to fit in 280 chars
         const fixedParts = `\u{1F4CA} \n\n${cta}`;
         const maxSummary = 280 - fixedParts.length - 2;
         let trimmedSummary = summary;
@@ -1961,17 +1963,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const tweetText = `\u{1F4CA} ${trimmedSummary}\n\n${cta}`;
 
-        // Expand Social Media section and load into composer
-        const socialDetails = document.querySelector('details:has(#tweet-compose-text)');
-        if (socialDetails && !socialDetails.open) socialDetails.open = true;
+        // Open X.com with quote tweet intent — most reliable method
+        const quoteTweetUrl = tweetUrl || `https://x.com/i/status/${tweetId}`;
+        const intentUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(quoteTweetUrl)}`;
+        window.open(intentUrl, '_blank');
 
+        // Also load into dashboard composer as backup
         const composer = document.getElementById('tweet-compose-text');
-        const charCount = document.getElementById('tweet-char-count');
         if (composer) {
+            // Find and expand the Social Media details section
+            let el = composer;
+            while (el && el.tagName !== 'DETAILS') el = el.parentElement;
+            if (el && !el.open) el.open = true;
+
             composer.value = tweetText;
             composer.dataset.articleId = currentXPostsArticleId || '';
-            composer.dataset.quoteTweetId = tweetId;  // Store tweet ID for quote tweet
-            composer.dataset.quoteTweetUrl = tweetUrl || '';  // Store URL for web intent fallback
+            composer.dataset.quoteTweetId = tweetId;
+            composer.dataset.quoteTweetUrl = quoteTweetUrl;
+            const charCount = document.getElementById('tweet-char-count');
             if (charCount) {
                 charCount.textContent = `${tweetText.length}/280`;
                 charCount.style.color = tweetText.length > 260 ? (tweetText.length > 280 ? '#dc2626' : '#f59e0b') : '#9ca3af';
@@ -1984,17 +1993,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 composer.parentElement.insertBefore(quoteIndicator, composer);
             }
             quoteIndicator.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;font-size:0.8rem;color:#0369a1;margin-bottom:6px;">
-                <span>🔁 Quote tweet of @${authorUsername}</span>
+                <span>🔁 Quote tweet of @${authorUsername} (X.com opened in new tab)</span>
                 <button onclick="clearQuoteTweet()" style="margin-left:auto;font-size:0.7rem;color:#dc2626;background:none;border:none;cursor:pointer;">✕ Cancel quote</button>
             </div>`;
-
-            // Close modal and scroll to composer
-            document.getElementById('xposts-modal')?.classList.add('hidden');
-            setTimeout(() => {
-                composer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                composer.focus();
-            }, 100);
         }
+
+        // Close the X Posts modal
+        document.getElementById('xposts-modal')?.classList.add('hidden');
     };
 
     // Clear quote tweet mode (switch back to regular tweet)
