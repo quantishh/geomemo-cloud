@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchSourcesList();
 
     // --- EVENT LISTENERS ---
-    if (categoryFilter) categoryFilter.addEventListener('change', () => renderArticles());
+    if (categoryFilter) categoryFilter.addEventListener('change', () => { renderArticles(); updateScoreDistribution(); });
     if (selectAllCheckbox) selectAllCheckbox.addEventListener('change', handleSelectAll);
     if (batchApproveBtn) batchApproveBtn.addEventListener('click', () => handleBatch('approved'));
     if (batchRejectBtn) batchRejectBtn.addEventListener('click', () => handleBatch('rejected'));
@@ -290,11 +290,12 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="dist-chip dist-total" title="Total pending for ${dateLabel}">📊 Pending: <strong>${pending.length}</strong></span>
         `;
 
-        // Date picker change handler
+        // Date picker change handler — updates BOTH distribution AND article table
         const picker = document.getElementById('dist-date-picker');
         if (picker) {
             picker.addEventListener('change', (e) => {
                 currentDateFilter = e.target.value;
+                renderArticles();
                 updateScoreDistribution();
             });
         }
@@ -527,10 +528,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!articlesTbody) return;
         const selectedCategory = categoryFilter ? categoryFilter.value : 'All';
 
+        // Date Filter — must come first so all counts are scoped to selected day
+        let filtered = allArticlesCache;
+        let baseTotal = allArticlesCache.length;
+        if (currentDateFilter !== 'All') {
+            filtered = filtered.filter(a => getArticleLocalDate(a) === currentDateFilter);
+            baseTotal = filtered.length;
+        }
+
         // Category Filter
-        let filtered = (selectedCategory === 'All')
-            ? allArticlesCache
-            : allArticlesCache.filter(a => a.category === selectedCategory);
+        if (selectedCategory !== 'All') {
+            filtered = filtered.filter(a => a.category === selectedCategory);
+        }
 
         // Status Filter (Phase 3)
         if (currentStatusFilter !== 'All') {
@@ -549,10 +558,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Update filter count label
+        // Update filter count label (relative to date-scoped total)
         const countLabel = document.getElementById('filter-count-label');
         if (countLabel) {
-            countLabel.textContent = `${filtered.length} of ${allArticlesCache.length} articles`;
+            countLabel.textContent = `${filtered.length} of ${baseTotal} articles`;
         }
 
         // Group by Date
@@ -1418,16 +1427,26 @@ document.addEventListener('DOMContentLoaded', () => {
         renderArticles();
 
         // Step 2: Ask user to commit
-        const pendingAbove = allArticlesCache.filter(
+        // NOTE: auto-approve API operates on ALL pending articles across all dates,
+        // not just the filtered view. Show both scoped and total counts.
+        const allPendingAbove = allArticlesCache.filter(
             a => a.status === 'pending' && (a.auto_approval_score || 0) >= val
         ).length;
 
-        if (pendingAbove === 0) {
+        if (allPendingAbove === 0) {
             alert(`No pending articles with score ≥ ${val}. Adjust threshold or review the filter.`);
             return;
         }
 
-        if (!confirm(`You are viewing ${pendingAbove} pending articles with score ≥ ${val}.\n\nCommit auto-approve now? (Click Cancel to just preview)`)) return;
+        let confirmMsg = `This will approve ${allPendingAbove} pending articles with score ≥ ${val} across ALL dates.`;
+        if (currentDateFilter !== 'All') {
+            const scopedAbove = allArticlesCache.filter(
+                a => a.status === 'pending' && (a.auto_approval_score || 0) >= val && getArticleLocalDate(a) === currentDateFilter
+            ).length;
+            confirmMsg = `Currently viewing ${scopedAbove} for selected date.\nTotal: ${allPendingAbove} pending articles with score ≥ ${val} across ALL dates will be approved.`;
+        }
+        confirmMsg += `\n\nCommit auto-approve now? (Click Cancel to just preview)`;
+        if (!confirm(confirmMsg)) return;
 
         try {
             const res = await fetch(`${API_BASE_URL}/articles/auto-approve`, {
@@ -1464,16 +1483,24 @@ document.addEventListener('DOMContentLoaded', () => {
         renderArticles();
 
         // Step 2: Ask user to commit
-        const pendingBelow = allArticlesCache.filter(
+        const allPendingBelow = allArticlesCache.filter(
             a => a.status === 'pending' && (a.auto_approval_score || 0) <= val
         ).length;
 
-        if (pendingBelow === 0) {
+        if (allPendingBelow === 0) {
             alert(`No pending articles with score ≤ ${val}. Adjust threshold or review the filter.`);
             return;
         }
 
-        if (!confirm(`You are viewing ${pendingBelow} pending articles with score ≤ ${val}.\n\nCommit auto-reject now? (Click Cancel to just preview)`)) return;
+        let confirmMsg = `This will reject ${allPendingBelow} pending articles with score ≤ ${val} across ALL dates.`;
+        if (currentDateFilter !== 'All') {
+            const scopedBelow = allArticlesCache.filter(
+                a => a.status === 'pending' && (a.auto_approval_score || 0) <= val && getArticleLocalDate(a) === currentDateFilter
+            ).length;
+            confirmMsg = `Currently viewing ${scopedBelow} for selected date.\nTotal: ${allPendingBelow} pending articles with score ≤ ${val} across ALL dates will be rejected.`;
+        }
+        confirmMsg += `\n\nCommit auto-reject now? (Click Cancel to just preview)`;
+        if (!confirm(confirmMsg)) return;
 
         try {
             const res = await fetch(`${API_BASE_URL}/articles/auto-reject`, {
