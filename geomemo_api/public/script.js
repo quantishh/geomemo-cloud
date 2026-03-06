@@ -750,12 +750,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="text-xs text-gray-500 mt-1">${article.publication_name || 'N/A'}</div>
                 ${countryHtml}
             </td>
-            <td class="p-3 align-top w-1/12">
+            <td class="p-3 align-top w-2/12">
                 <select class="category-dropdown w-full p-1 border rounded border-gray-300 text-xs bg-white" data-id="${article.id}">
                     ${categoryOptions}
                 </select>
             </td>
-            <td class="p-3 align-top w-3/12 text-sm text-gray-600">
+            <td class="p-3 align-top w-2/12 text-sm text-gray-600">
                 ${displaySummary}
             </td>
             <td class="p-3 align-top w-1/12 text-center">
