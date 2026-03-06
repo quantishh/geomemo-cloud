@@ -220,6 +220,26 @@ document.addEventListener('DOMContentLoaded', () => {
             .forEach(el => el.textContent = currentAutoRejectThreshold);
         if (autoApproveBtn) autoApproveBtn.textContent = `Auto-Approve (${currentAutoApproveThreshold}+)`;
         if (autoRejectBtn) autoRejectBtn.textContent = `Auto-Reject (${currentAutoRejectThreshold}-)`;
+        updateScoreDistribution();
+    }
+
+    function updateScoreDistribution() {
+        const distEl = document.getElementById('score-distribution');
+        if (!distEl || !allArticlesCache.length) return;
+
+        const pending = allArticlesCache.filter(a => a.status === 'pending');
+        const below30 = pending.filter(a => (a.auto_approval_score || 0) < 30).length;
+        const range30to50 = pending.filter(a => { const s = a.auto_approval_score || 0; return s >= 30 && s < 50; }).length;
+        const range50to70 = pending.filter(a => { const s = a.auto_approval_score || 0; return s >= 50 && s < 70; }).length;
+        const above70 = pending.filter(a => (a.auto_approval_score || 0) >= 70).length;
+
+        distEl.innerHTML = `
+            <span class="dist-chip dist-low" title="Score below 30">🔴 &lt;30: <strong>${below30}</strong></span>
+            <span class="dist-chip dist-medium-low" title="Score 30-50">🟠 30–50: <strong>${range30to50}</strong></span>
+            <span class="dist-chip dist-medium-high" title="Score 50-70">🟡 50–70: <strong>${range50to70}</strong></span>
+            <span class="dist-chip dist-high" title="Score 70-100">🟢 70+: <strong>${above70}</strong></span>
+            <span class="dist-chip dist-total" title="Total pending">📊 Pending: <strong>${pending.length}</strong></span>
+        `;
     }
 
     // --- VIEW MODE TOGGLE (Phase 4) ---
@@ -435,7 +455,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${API_BASE_URL}/articles${qs ? '?' + qs : ''}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             allArticlesCache = await response.json();
-            renderArticles(); 
+            renderArticles();
+            updateScoreDistribution();
             if (preserveScroll) window.scrollTo(0, currentScrollY);
         } catch (error) { 
             console.error('Error fetching articles:', error); 
@@ -1320,11 +1341,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================
 
     async function handleAutoApprove() {
-        const threshold = prompt("Auto-approve all pending articles with score >= ?", String(currentAutoApproveThreshold));
+        const threshold = prompt("Set auto-approve threshold (preview first, then commit):", String(currentAutoApproveThreshold));
         if (threshold === null) return;
         const val = parseFloat(threshold);
         if (isNaN(val)) return alert("Invalid number");
-        if (!confirm(`Approve ALL pending articles with auto_approval_score >= ${val}?`)) return;
+
+        // Step 1: Update threshold + filters — PREVIEW only, no commit
+        currentAutoApproveThreshold = val;
+        updateAutoButtonLabels();
+        updateScoreDistribution();
+
+        // Activate the auto-approve filter pill so user sees what will be approved
+        document.querySelectorAll('.filter-pill[data-filter-type="score"]')
+            .forEach(p => p.classList.remove('active'));
+        const approvePill = document.querySelector('.filter-pill[data-value="auto-approve"]');
+        if (approvePill) approvePill.classList.add('active');
+        currentScoreFilter = 'auto-approve';
+        renderArticles();
+
+        // Step 2: Ask user to commit
+        const pendingAbove = allArticlesCache.filter(
+            a => a.status === 'pending' && (a.auto_approval_score || 0) >= val
+        ).length;
+
+        if (pendingAbove === 0) {
+            alert(`No pending articles with score ≥ ${val}. Adjust threshold or review the filter.`);
+            return;
+        }
+
+        if (!confirm(`You are viewing ${pendingAbove} pending articles with score ≥ ${val}.\n\nCommit auto-approve now? (Click Cancel to just preview)`)) return;
 
         try {
             const res = await fetch(`${API_BASE_URL}/articles/auto-approve`, {
@@ -1334,8 +1379,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (!res.ok) throw new Error("Failed");
             const data = await res.json();
-            currentAutoApproveThreshold = val;
-            updateAutoButtonLabels();
             alert(data.message);
             fetchArticles(true);
         } catch (e) {
@@ -1344,11 +1387,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleAutoReject() {
-        const threshold = prompt("Auto-reject all pending articles with score <= ?", String(currentAutoRejectThreshold));
+        const threshold = prompt("Set auto-reject threshold (preview first, then commit):", String(currentAutoRejectThreshold));
         if (threshold === null) return;
         const val = parseFloat(threshold);
         if (isNaN(val)) return alert("Invalid number");
-        if (!confirm(`Reject ALL pending articles with auto_approval_score <= ${val}?`)) return;
+
+        // Step 1: Update threshold + filters — PREVIEW only, no commit
+        currentAutoRejectThreshold = val;
+        updateAutoButtonLabels();
+        updateScoreDistribution();
+
+        // Activate the auto-reject filter pill so user sees what will be rejected
+        document.querySelectorAll('.filter-pill[data-filter-type="score"]')
+            .forEach(p => p.classList.remove('active'));
+        const rejectPill = document.querySelector('.filter-pill[data-value="auto-reject"]');
+        if (rejectPill) rejectPill.classList.add('active');
+        currentScoreFilter = 'auto-reject';
+        renderArticles();
+
+        // Step 2: Ask user to commit
+        const pendingBelow = allArticlesCache.filter(
+            a => a.status === 'pending' && (a.auto_approval_score || 0) <= val
+        ).length;
+
+        if (pendingBelow === 0) {
+            alert(`No pending articles with score ≤ ${val}. Adjust threshold or review the filter.`);
+            return;
+        }
+
+        if (!confirm(`You are viewing ${pendingBelow} pending articles with score ≤ ${val}.\n\nCommit auto-reject now? (Click Cancel to just preview)`)) return;
 
         try {
             const res = await fetch(`${API_BASE_URL}/articles/auto-reject`, {
@@ -1358,8 +1425,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (!res.ok) throw new Error("Failed");
             const data = await res.json();
-            currentAutoRejectThreshold = val;
-            updateAutoButtonLabels();
             alert(data.message);
             fetchArticles(true);
         } catch (e) {
