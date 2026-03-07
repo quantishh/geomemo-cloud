@@ -122,7 +122,9 @@ If no specific country is mentioned, return an empty list.
 
 STEP 4: Write the "summary" field:
 - 30-50 words. Authoritative analytical tone for investment bankers and policymakers.
-- Lead with the key development, then explain implications. Include names, figures, countries. English only.
+- Lead with the key development, then add specific context — who is involved, what figures/data, what changed.
+- Do NOT write generic "this matters because" or "this is significant" filler. Every sentence must contain concrete facts.
+- Include names, figures, countries. English only.
 
 STEP 5: Write the "summary_long" field:
 - 80-100 words. Include key facts, figures, names, implications for markets/policy.
@@ -384,8 +386,8 @@ Content: "{content_snippet}"
                 try:
                     enhance_resp = groq_client.chat.completions.create(
                         messages=[
-                            {"role": "system", "content": "You are a senior geopolitical analyst writing for investment bankers and policymakers. Always write exactly 3 sentences."},
-                            {"role": "user", "content": f"Write a professional 35-to-50 word news summary for this article. You MUST write 3 full sentences. Include key names, figures, and countries. Explain why it matters.\n\nHeadline: {adapter['headline_en']}\nContent: {content_snippet}"}
+                            {"role": "system", "content": "You are a senior geopolitical analyst writing for investment bankers and policymakers. Write in a factual, dense style. Never use phrases like 'this matters because', 'this is significant', or 'this development matters'. Every sentence must contain concrete facts, names, or figures."},
+                            {"role": "user", "content": f"Write a 35-to-50 word news summary in 2-3 sentences. Pack each sentence with specific facts — names, figures, dates, countries. No filler or generic importance statements.\n\nHeadline: {adapter['headline_en']}\nContent: {content_snippet}"}
                         ],
                         model="llama-3.3-70b-versatile",
                         temperature=0.3,
