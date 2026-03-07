@@ -380,20 +380,21 @@ Content: "{content_snippet}"
 
             # 3b. Post-process: if summary is too short, regenerate with dedicated call
             summary_wc = len(adapter['summary'].split())
-            if summary_wc < 25:
+            if summary_wc < 28:
                 try:
                     enhance_resp = groq_client.chat.completions.create(
                         messages=[
-                            {"role": "system", "content": "You are a senior geopolitical analyst writing for investment bankers and policymakers. Write exactly 2-3 sentences."},
-                            {"role": "user", "content": f"Write a professional 35-to-50 word news summary for this article. Include key names, figures, and countries. Explain why it matters.\n\nHeadline: {adapter['headline_en']}\nContent: {content_snippet}"}
+                            {"role": "system", "content": "You are a senior geopolitical analyst writing for investment bankers and policymakers. Always write exactly 3 sentences."},
+                            {"role": "user", "content": f"Write a professional 35-to-50 word news summary for this article. You MUST write 3 full sentences. Include key names, figures, and countries. Explain why it matters.\n\nHeadline: {adapter['headline_en']}\nContent: {content_snippet}"}
                         ],
                         model="llama-3.3-70b-versatile",
                         temperature=0.3,
                     )
                     enhanced = enhance_resp.choices[0].message.content.strip().strip('"')
-                    if len(enhanced.split()) >= 25:
+                    enhanced_wc = len(enhanced.split())
+                    if enhanced_wc > summary_wc:
                         adapter['summary'] = enhanced
-                        self.logger.info(f"Summary enhanced: {summary_wc}→{len(enhanced.split())} words")
+                        self.logger.info(f"Summary enhanced: {summary_wc}→{enhanced_wc} words")
                 except Exception as e:
                     self.logger.warning(f"Summary enhance failed: {e}")
 
