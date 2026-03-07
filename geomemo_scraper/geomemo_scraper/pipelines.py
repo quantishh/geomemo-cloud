@@ -120,16 +120,12 @@ STEP 3: Extract ALL countries mentioned or implied in the headline and content.
 Return their common English names (e.g., "United States", "China", "Russia").
 If no specific country is mentioned, return an empty list.
 
-STEP 4: Write the "summary" field (30-50 words, NEVER shorter):
-- Authoritative analytical tone for investment bankers and policymakers.
-- Lead with the key development, then explain WHY it matters and its implications.
-- Include specific names, figures, and countries. English only.
+STEP 4: Write the "summary" field:
+- 30-50 words. Authoritative analytical tone for investment bankers and policymakers.
+- Lead with the key development, then explain implications. Include names, figures, countries. English only.
 
-EXAMPLE of a good 38-word summary:
-"Germany's Chancellor Scholz announces EUR 200 billion defense spending package, breaking decades of fiscal restraint. The move signals a fundamental shift in European security posture, likely boosting defense stocks while raising concerns about eurozone debt sustainability among bond investors."
-
-STEP 5: Write the "summary_long" field (80-100 words, NEVER shorter):
-- Include key facts, figures, names, implications for markets and policy.
+STEP 5: Write the "summary_long" field:
+- 80-100 words. Include key facts, figures, names, implications for markets/policy.
 - Note which countries are affected and why this matters for global investors. English only.
 
 STEP 6: Output valid JSON:
@@ -137,8 +133,8 @@ STEP 6: Output valid JSON:
     "is_relevant": "yes/no",
     "confidence_score": <integer 0-100>,
     "headline_en": "Formal English Headline",
-    "summary": "<your 30-to-50 word summary — match the length and depth of the example above>",
-    "summary_long": "<your 80-to-100 word analytical summary>",
+    "summary": "<your 30-50 word summary from STEP 4>",
+    "summary_long": "<your 80-100 word analytical summary from STEP 5>",
     "category": "Category Name",
     "countries": ["Country1", "Country2"]
 }}
@@ -381,6 +377,25 @@ Content: "{content_snippet}"
             adapter['headline_en'] = processed_data.get('headline_en', headline)
             adapter['summary'] = processed_data.get('summary', 'No summary.')
             adapter['summary_long'] = processed_data.get('summary_long', adapter['summary'])
+
+            # 3b. Post-process: if summary is too short, regenerate with dedicated call
+            summary_wc = len(adapter['summary'].split())
+            if summary_wc < 25:
+                try:
+                    enhance_resp = groq_client.chat.completions.create(
+                        messages=[
+                            {"role": "system", "content": "You are a senior geopolitical analyst writing for investment bankers and policymakers. Write exactly 2-3 sentences."},
+                            {"role": "user", "content": f"Write a professional 35-to-50 word news summary for this article. Include key names, figures, and countries. Explain why it matters.\n\nHeadline: {adapter['headline_en']}\nContent: {content_snippet}"}
+                        ],
+                        model="llama-3.3-70b-versatile",
+                        temperature=0.3,
+                    )
+                    enhanced = enhance_resp.choices[0].message.content.strip().strip('"')
+                    if len(enhanced.split()) >= 25:
+                        adapter['summary'] = enhanced
+                        self.logger.info(f"Summary enhanced: {summary_wc}→{len(enhanced.split())} words")
+                except Exception as e:
+                    self.logger.warning(f"Summary enhance failed: {e}")
 
             # 4. Generate Embedding AFTER Groq — use English headline + AI summary
             #    for accurate cross-language similarity matching
