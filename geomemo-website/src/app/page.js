@@ -131,7 +131,7 @@ export default async function Home() {
           </div>
         </section>
       ) : (
-        /* Main Content — Techmeme-style 2-column layout */
+        /* Main Content — 3-column Techmeme-style layout */
         <section style={{ padding: 'var(--space-6) 0 var(--space-12)' }}>
           <div className="container">
             <div className="homepage-grid">
@@ -192,8 +192,8 @@ export default async function Home() {
                 ))}
               </div>
 
-              {/* RIGHT COLUMN — Sidebar */}
-              <aside className="sidebar-column">
+              {/* MIDDLE COLUMN — Sponsors + Podcasts */}
+              <div className="middle-column">
 
                 {/* Sponsor Posts */}
                 {sponsors.length > 0 && (
@@ -302,13 +302,15 @@ export default async function Home() {
                     </div>
                   </div>
                 )}
+              </div>
 
-                {/* Latest News — 75+ score from cron */}
+              {/* RIGHT COLUMN — Latest News */}
+              <div className="right-column">
                 {latestNews.length > 0 && (
                   <div className="sidebar-section">
                     <h3 className="sidebar-title">Latest News</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                      {latestNews.slice(0, 15).map((article) => (
+                      {latestNews.slice(0, 20).map((article) => (
                         <div
                           key={article.id}
                           style={{
@@ -353,7 +355,8 @@ export default async function Home() {
                     </div>
                   </div>
                 )}
-              </aside>
+              </div>
+
             </div>
           </div>
         </section>
