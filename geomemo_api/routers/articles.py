@@ -359,7 +359,7 @@ def enhance_article_summary(article_id: int, request: EnhanceRequest):
     try:
         chat = groq_client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "Summarize/Rewrite this headline/content for a professional news feed in 50 words. English only."},
+                {"role": "system", "content": "Rewrite this as a professional 50-word MAX news summary for investment bankers and policymakers. Authoritative analytical tone. Lead with the key development, include specific names/figures/countries. English only. Do NOT exceed 50 words."},
                 {"role": "user", "content": text_input},
             ],
             model="llama-3.3-70b-versatile",
@@ -368,7 +368,13 @@ def enhance_article_summary(article_id: int, request: EnhanceRequest):
         new_summary = chat.choices[0].message.content.strip()
         conn = get_db_connection()
         cursor = conn.cursor()
-        embedding = embedding_model.encode(new_summary).tolist()
+
+        # Fetch headline_en so embedding matches scraper format: "Headline: ... Summary: ..."
+        cursor.execute("SELECT headline_en, headline FROM articles WHERE id = %s", (article_id,))
+        row = cursor.fetchone()
+        headline_en = (row[0] or row[1] or '') if row else ''
+        text_to_embed = f"Headline: {headline_en}\nSummary: {new_summary}"
+        embedding = embedding_model.encode(text_to_embed).tolist()
 
         sql = "UPDATE articles SET summary = %s, embedding = %s, status = 'pending'"
         params = [new_summary, embedding]

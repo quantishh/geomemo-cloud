@@ -125,8 +125,8 @@ STEP 4: Output valid JSON:
     "is_relevant": "yes/no",
     "confidence_score": <integer 0-100>,
     "headline_en": "Formal English Headline",
-    "summary": "Concise 50-word summary of the key facts.",
-    "summary_long": "Detailed 100-word analytical summary. Include key facts, figures, names, country implications, and market/policy impact.",
+    "summary": "Professional 50-word MAX news summary. Write in authoritative analytical tone for investment bankers and policymakers. Lead with the key development, include specific names/figures/countries. English only. Do NOT exceed 50 words.",
+    "summary_long": "100-word analytical summary for social media. Include key facts, figures, names, implications for markets and policy. Note which countries are affected and why this matters for global investors. English only.",
     "category": "Category Name",
     "countries": ["Country1", "Country2"]
 }}
@@ -357,23 +357,24 @@ Content: "{content_snippet}"
         self.logger.info(f"Processing: '{headline}'")
 
         try:
-            # 1. Generate Embedding
-            text_to_embed = f"Headline: {headline}\nSummary: {content_snippet}"
-            embedding = self.embedding_model.encode(text_to_embed).tolist()
-            adapter['embedding'] = embedding
-
-            # 2. Ask Groq (M2: now includes country extraction)
+            # 1. Ask Groq FIRST (M2: includes country extraction)
             processed_data = self._get_groq_completion(headline, content_snippet)
 
-            # 3. Check Relevance
+            # 2. Check Relevance
             if processed_data.get("is_relevant") == "no":
                 self.logger.info(f"DROPPED (Irrelevant): '{headline}' (Score: {processed_data.get('confidence_score', 0)})")
                 raise DropItem(f"Irrelevant: {headline}")
 
-            # 4. Assign Data from Groq
+            # 3. Assign Data from Groq
             adapter['headline_en'] = processed_data.get('headline_en', headline)
             adapter['summary'] = processed_data.get('summary', 'No summary.')
             adapter['summary_long'] = processed_data.get('summary_long', adapter['summary'])
+
+            # 4. Generate Embedding AFTER Groq — use English headline + AI summary
+            #    for accurate cross-language similarity matching
+            text_to_embed = f"Headline: {adapter['headline_en']}\nSummary: {adapter['summary']}"
+            embedding = self.embedding_model.encode(text_to_embed).tolist()
+            adapter['embedding'] = embedding
             adapter['category'] = processed_data.get('category', 'Other')
             adapter['confidence_score'] = processed_data.get('confidence_score', 50)
 
