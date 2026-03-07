@@ -121,15 +121,16 @@ Return their common English names (e.g., "United States", "China", "Russia").
 If no specific country is mentioned, return an empty list.
 
 STEP 4: Write the "summary" field:
-- 20-50 words. Authoritative analytical tone for investment bankers and policymakers.
-- ONLY use names, figures, and facts that appear in the headline and content provided. NEVER add information from your own knowledge.
-- If the source content is brief, write a shorter summary. A short accurate summary is better than a longer hallucinated one.
-- Do NOT include dates. Do NOT use filler phrases like "this matters" or "this is significant".
-- English only.
+- 20-50 words. Write like a Reuters wire brief — punchy, present tense, active voice.
+- ACTIVE VOICE ONLY. Name the specific actor first: "Anthropic vows..." NOT "A court fight is vowed."
+- Preserve specific names and titles from the headline — do NOT generalize ("chief tech officer" stays, not "official").
+- Each sentence must add NEW information. NEVER restate the same fact in different words.
+- ONLY use facts from the headline and content provided. NEVER invent names, figures, or details.
+- No dates. No filler ("point of contention", "remains to be seen", "is a concern"). English only.
 
 STEP 5: Write the "summary_long" field:
-- 50-100 words. ONLY use facts from the source content provided. NEVER invent names, figures, or details.
-- Do NOT include dates. English only.
+- 50-100 words. Same rules: active voice, actor-first, no repetition, no invented facts.
+- No dates. English only.
 
 STEP 6: Output valid JSON:
 {{
@@ -387,8 +388,8 @@ Content: "{content_snippet}"
                 try:
                     enhance_resp = groq_client.chat.completions.create(
                         messages=[
-                            {"role": "system", "content": "You are a senior geopolitical analyst. STRICT RULE: ONLY use facts from the provided headline and content. NEVER add names, figures, dates, or details from your own knowledge. If the source is brief, write a brief summary. Accuracy is more important than length."},
-                            {"role": "user", "content": f"Summarize this article in 2-3 sentences (20-50 words). Use ONLY information from the headline and content below. Do NOT add any facts, names, or figures not explicitly stated below. No dates. No filler.\n\nHeadline: {adapter['headline_en']}\nContent: {content_snippet}"}
+                            {"role": "system", "content": "You are a Reuters wire editor. RULES: Active voice only — name the actor first. Preserve specific names/titles from the headline. Each sentence adds new information — never repeat. ONLY use facts from the source. NEVER invent details. No dates."},
+                            {"role": "user", "content": f"Rewrite as a 20-50 word wire brief. Active voice, actor-first. No dates. No repetition. Only facts from below.\n\nHeadline: {adapter['headline_en']}\nContent: {content_snippet}"}
                         ],
                         model="llama-3.3-70b-versatile",
                         temperature=0.1,
