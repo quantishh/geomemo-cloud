@@ -269,6 +269,28 @@ def get_newsletter_history(limit: int = Query(30, ge=1, le=365)):
         conn.close()
 
 
+@router.get("/archive")
+def get_newsletter_archive(limit: int = Query(90, ge=1, le=365)):
+    """
+    Public archive: list past newsletters with date and HTML content.
+    Returns reverse-chronological list for the public archive page.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("""
+            SELECT date::text, newsletter_html AS html, subject_line, word_count
+            FROM daily_briefs
+            WHERE newsletter_html IS NOT NULL
+            ORDER BY date DESC
+            LIMIT %s
+        """, (limit,))
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.get("/{brief_id}", response_model=DailyBrief)
 def get_newsletter_by_id(brief_id: int):
     """Get a single newsletter brief by ID."""

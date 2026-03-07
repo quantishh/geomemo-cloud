@@ -18,7 +18,7 @@ from config import UPLOAD_DIR, BEEHIIV_API_KEY, BEEHIIV_PUB_ID, DRIP_INTERVAL_MI
 from auth import BasicAuthMiddleware, SecurityHeadersMiddleware
 from database import init_db
 from models import NewsletterSignup
-from routers import articles, content, sources, newsletter, social
+from routers import articles, content, sources, newsletter, social, events
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
@@ -70,6 +70,7 @@ app.include_router(content.router)
 app.include_router(sources.router)
 app.include_router(newsletter.router)
 app.include_router(social.router)
+app.include_router(events.router)
 
 
 # --- Newsletter Signup (Beehiiv) ---

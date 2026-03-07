@@ -28,6 +28,7 @@ class Article(BaseModel):
     auto_approval_score: Optional[float] = 0
     country_codes: Optional[List[str]] = None
     region: Optional[str] = None
+    og_image: Optional[str] = None
 
 
 class StatusUpdate(BaseModel):

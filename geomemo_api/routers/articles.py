@@ -73,7 +73,7 @@ ARTICLE_COLUMNS = """
     summary, category, status, publication_name, author, scraped_at,
     is_top_story, confidence_score, parent_id,
     source_id, relevance_score, repetition_score, auto_approval_score,
-    country_codes, region
+    country_codes, region, og_image
 """
 
 
@@ -302,6 +302,33 @@ def get_approved_articles():
         return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Fetch approved error: {e}")
+        raise HTTPException(500, "DB Error")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/articles/newest-updates", response_model=List[Article])
+def get_newest_updates():
+    """
+    Auto-populated feed of high-scoring articles from the most recent cron run.
+    Returns articles with auto_approval_score >= 75, sorted by score DESC.
+    Limited to 20 items.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute(f"""
+            SELECT {ARTICLE_COLUMNS}
+            FROM articles
+            WHERE auto_approval_score >= 75
+              AND scraped_at >= NOW() - INTERVAL '6 hours'
+            ORDER BY auto_approval_score DESC, scraped_at DESC
+            LIMIT 20
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Fetch newest updates error: {e}")
         raise HTTPException(500, "DB Error")
     finally:
         cursor.close()

@@ -149,6 +149,21 @@ def init_db():
             );
         """)
 
+        # --- Events table ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                url TEXT,
+                location TEXT,
+                start_date DATE NOT NULL,
+                end_date DATE,
+                description TEXT,
+                category TEXT DEFAULT 'Conference',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+
         # --- Migrations (safe ADD COLUMN IF NOT EXISTS) ---
         migrations = [
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS parent_id INTEGER",
@@ -184,6 +199,10 @@ def init_db():
             # Social queue indexes
             "CREATE INDEX IF NOT EXISTS idx_social_queue_status ON social_queue (status)",
             "CREATE INDEX IF NOT EXISTS idx_social_queue_queued_at ON social_queue (queued_at)",
+            # Website: OG image URL for article thumbnails
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS og_image TEXT",
+            # Events index for upcoming events query
+            "CREATE INDEX IF NOT EXISTS idx_events_start_date ON events (start_date)",
         ]
         for sql in migrations:
             try:
