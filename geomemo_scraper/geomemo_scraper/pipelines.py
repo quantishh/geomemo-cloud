@@ -121,17 +121,15 @@ Return their common English names (e.g., "United States", "China", "Russia").
 If no specific country is mentioned, return an empty list.
 
 STEP 4: Write the "summary" field:
-- 30-50 words. Authoritative analytical tone for investment bankers and policymakers.
-- Lead with the key development, then add specific context — who is involved, what figures/data, what changed.
-- Do NOT write generic "this matters because" or "this is significant" filler. Every sentence must contain concrete facts.
-- Do NOT include any dates (no "On March 10", "On February 27", etc.). Just state the facts.
-- Do NOT invent or hallucinate dates, figures, or details not present in the source content.
-- Include names, figures, countries. English only.
+- 20-50 words. Authoritative analytical tone for investment bankers and policymakers.
+- ONLY use names, figures, and facts that appear in the headline and content provided. NEVER add information from your own knowledge.
+- If the source content is brief, write a shorter summary. A short accurate summary is better than a longer hallucinated one.
+- Do NOT include dates. Do NOT use filler phrases like "this matters" or "this is significant".
+- English only.
 
 STEP 5: Write the "summary_long" field:
-- 80-100 words. Include key facts, figures, names, implications for markets/policy.
-- Do NOT include dates. Do NOT invent details not in the source content.
-- Note which countries are affected and why this matters for global investors. English only.
+- 50-100 words. ONLY use facts from the source content provided. NEVER invent names, figures, or details.
+- Do NOT include dates. English only.
 
 STEP 6: Output valid JSON:
 {{
@@ -385,15 +383,15 @@ Content: "{content_snippet}"
 
             # 3b. Post-process: if summary is too short, regenerate with dedicated call
             summary_wc = len(adapter['summary'].split())
-            if summary_wc < 28:
+            if summary_wc < 20:
                 try:
                     enhance_resp = groq_client.chat.completions.create(
                         messages=[
-                            {"role": "system", "content": "You are a senior geopolitical analyst writing for investment bankers and policymakers. Write in a factual, dense style. Never use phrases like 'this matters because', 'this is significant', or 'this development matters'. Never include dates. Never invent or hallucinate facts not in the source. Every sentence must contain concrete facts, names, or figures from the source."},
-                            {"role": "user", "content": f"Write a 35-to-50 word news summary in 2-3 sentences. Pack each sentence with specific facts — names, figures, countries. Do NOT include any dates. Do NOT invent details not present below. No filler.\n\nHeadline: {adapter['headline_en']}\nContent: {content_snippet}"}
+                            {"role": "system", "content": "You are a senior geopolitical analyst. STRICT RULE: ONLY use facts from the provided headline and content. NEVER add names, figures, dates, or details from your own knowledge. If the source is brief, write a brief summary. Accuracy is more important than length."},
+                            {"role": "user", "content": f"Summarize this article in 2-3 sentences (20-50 words). Use ONLY information from the headline and content below. Do NOT add any facts, names, or figures not explicitly stated below. No dates. No filler.\n\nHeadline: {adapter['headline_en']}\nContent: {content_snippet}"}
                         ],
                         model="llama-3.3-70b-versatile",
-                        temperature=0.3,
+                        temperature=0.1,
                     )
                     enhanced = enhance_resp.choices[0].message.content.strip().strip('"')
                     enhanced_wc = len(enhanced.split())
