@@ -511,6 +511,74 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { alert('Failed: ' + e.message); }
     };
 
+    // --- SOCIAL QUEUE ---
+    window.addToQueue = async (articleId, platform) => {
+        // Optional: prompt for content override
+        const doPaste = confirm(`Add to ${platform} queue?\n\nClick OK to add with auto-generated content.\nIf you want to paste article content for a better summary, click Cancel and use the Enhance button first.`);
+        if (!doPaste) return;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/social/queue/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ article_id: articleId, platforms: [platform] })
+            });
+            const data = await res.json();
+            if (data.queued && data.queued.length > 0) {
+                alert(`Added to ${platform} queue! Will auto-post within 30 minutes.`);
+                loadQueueItems();
+            } else {
+                alert('Failed to add to queue');
+            }
+        } catch (e) { alert('Queue error: ' + e.message); }
+    };
+
+    async function loadQueueItems() {
+        const queuePanel = document.getElementById('queue-items-list');
+        if (!queuePanel) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/social/queue?status=queued&limit=20`);
+            const items = await res.json();
+            if (items.length === 0) {
+                queuePanel.innerHTML = '<p class="text-xs text-gray-400 p-2">No items in queue</p>';
+                return;
+            }
+            queuePanel.innerHTML = items.map(item => `
+                <div class="flex items-center justify-between p-2 border-b border-gray-100 text-xs">
+                    <div class="flex-1 truncate mr-2">
+                        <span class="font-semibold ${item.platform === 'telegram' ? 'text-blue-500' : 'text-gray-800'}">${item.platform === 'telegram' ? '📢' : '𝕏'}</span>
+                        ${item.headline || 'Article #' + item.article_id}
+                    </div>
+                    <div class="flex gap-1">
+                        <button class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded" onclick="postQueueNow(${item.id})">Post Now</button>
+                        <button class="text-xs px-2 py-1 bg-red-100 text-red-700 rounded" onclick="cancelQueueItem(${item.id})">Cancel</button>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) { console.error('Queue load error:', e); }
+    }
+
+    window.postQueueNow = async (queueId) => {
+        if (!confirm('Post this item now?')) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/social/queue/${queueId}/post-now`, { method: 'POST' });
+            const data = await res.json();
+            alert(data.message || 'Posted!');
+            loadQueueItems();
+            fetchSocialHistory();
+        } catch (e) { alert('Post failed: ' + e.message); }
+    };
+
+    window.cancelQueueItem = async (queueId) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/social/queue/${queueId}`, { method: 'DELETE' });
+            if (res.ok) loadQueueItems();
+        } catch (e) { console.error('Cancel error:', e); }
+    };
+
+    // Load queue on page load
+    setTimeout(loadQueueItems, 2000);
+
     function isToday(dateString) {
         if (!dateString) return false;
         const d = new Date(dateString);
@@ -866,8 +934,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     data-id="${article.id}"
                     data-pub="${article.publication_name || ''}"
                     data-auth="${article.author || ''}">✨ Enhance</button>
-                <button class="telegram-btn w-full text-xs" style="background:#0088cc;color:#fff;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;margin-top:4px;" onclick="postArticleToTelegram(${article.id})">📢 Telegram</button>
-                <button class="twitter-btn w-full text-xs" style="background:#000;color:#fff;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;margin-top:2px;" onclick="postArticleToTwitter(${article.id})">𝕏 Post</button>
+                <div class="flex gap-1 mt-1">
+                    <button class="telegram-btn text-xs flex-1" style="background:#0088cc;color:#fff;padding:4px 4px;border:none;border-radius:4px;cursor:pointer;" onclick="postArticleToTelegram(${article.id})">📢 TG</button>
+                    <button class="text-xs flex-1" style="background:#e0f2fe;color:#0088cc;padding:4px 4px;border:1px solid #0088cc;border-radius:4px;cursor:pointer;" onclick="addToQueue(${article.id},'telegram')">+ Queue</button>
+                </div>
+                <div class="flex gap-1 mt-1">
+                    <button class="twitter-btn text-xs flex-1" style="background:#000;color:#fff;padding:4px 4px;border:none;border-radius:4px;cursor:pointer;" onclick="postArticleToTwitter(${article.id})">𝕏 Post</button>
+                    <button class="text-xs flex-1" style="background:#f3f4f6;color:#333;padding:4px 4px;border:1px solid #999;border-radius:4px;cursor:pointer;" onclick="addToQueue(${article.id},'twitter')">+ Queue</button>
+                </div>
                 <button class="xposts-btn w-full text-xs" style="background:#f3f4f6;color:#374151;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;margin-top:2px;" onclick="openFindXPosts(${article.id})">🔍 Find X Posts</button>
             </td>
         `;

@@ -41,6 +41,7 @@ except Exception as e:
 articles.init_models(embedding_model, groq_client)
 newsletter.init_models(groq_client)
 sources.init_models(groq_client)
+social.init_queue_groq(groq_client)
 
 # --- FastAPI App ---
 app = FastAPI(title="GeoMemo API", version="2.0.0")
@@ -135,12 +136,57 @@ def _drip_feed_loop():
             logger.error(f"Drip feed background error: {e}")
 
 
+def _queue_processor_loop():
+    """
+    Process the social posting queue every 30 minutes.
+    Posts one queued item per cycle (oldest first).
+    """
+    QUEUE_INTERVAL = 30 * 60  # 30 minutes
+    while True:
+        time.sleep(QUEUE_INTERVAL)
+        try:
+            from database import get_db_connection
+            import psycopg2.extras
+            conn = get_db_connection()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+            cursor.execute("""
+                SELECT * FROM social_queue
+                WHERE status = 'queued'
+                ORDER BY queued_at ASC
+                LIMIT 1
+            """)
+            item = cursor.fetchone()
+            if not item:
+                cursor.close()
+                conn.close()
+                continue
+
+            item = dict(item)
+            try:
+                social._post_queue_item(item, cursor, conn)
+                logger.info(f"Queue worker: posted item {item['id']} to {item['platform']}")
+            except Exception as post_err:
+                logger.error(f"Queue worker: failed to post item {item['id']}: {post_err}")
+
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Queue processor error: {e}")
+
+
 @app.on_event("startup")
-def start_drip_feed():
-    """Start the article drip feed background thread on app startup."""
+def start_background_workers():
+    """Start background threads on app startup."""
+    # Drip feed thread
     thread = threading.Thread(target=_drip_feed_loop, daemon=True)
     thread.start()
     logger.info(f"Article drip feed started ({DRIP_INTERVAL_MINUTES}-minute interval, posts during ET business hours)")
+
+    # Queue processor thread
+    queue_thread = threading.Thread(target=_queue_processor_loop, daemon=True)
+    queue_thread.start()
+    logger.info("Social queue processor started (30-minute interval)")
 
 
 # --- Static File Mounts (must be LAST — catch-all routes) ---

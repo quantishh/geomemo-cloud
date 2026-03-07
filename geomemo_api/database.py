@@ -135,6 +135,20 @@ def init_db():
             );
         """)
 
+        # --- Social queue for scheduled posting ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS social_queue (
+                id SERIAL PRIMARY KEY,
+                article_id INTEGER REFERENCES articles(id),
+                platform TEXT NOT NULL,
+                content_text TEXT NOT NULL,
+                status TEXT DEFAULT 'queued',
+                queued_at TIMESTAMPTZ DEFAULT NOW(),
+                posted_at TIMESTAMPTZ,
+                error_message TEXT
+            );
+        """)
+
         # --- Migrations (safe ADD COLUMN IF NOT EXISTS) ---
         migrations = [
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS parent_id INTEGER",
@@ -167,6 +181,9 @@ def init_db():
             # Source management: RSS feed URL + X/Twitter handle per source
             "ALTER TABLE sources ADD COLUMN IF NOT EXISTS rss_feed_url TEXT",
             "ALTER TABLE sources ADD COLUMN IF NOT EXISTS twitter_handle TEXT",
+            # Social queue indexes
+            "CREATE INDEX IF NOT EXISTS idx_social_queue_status ON social_queue (status)",
+            "CREATE INDEX IF NOT EXISTS idx_social_queue_queued_at ON social_queue (queued_at)",
         ]
         for sql in migrations:
             try:
