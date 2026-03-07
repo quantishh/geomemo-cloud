@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentBriefId = null;
     let currentSortBy = 'scraped_at';
     let currentSortOrder = 'desc';
+    let isTopicGrouped = false;
     let socialHistoryOffset = 0;
     const SOCIAL_PAGE_SIZE = 10;
 
@@ -213,6 +214,17 @@ document.addEventListener('DOMContentLoaded', () => {
             renderArticles();
         });
     });
+
+    // --- TOPIC GROUP TOGGLE ---
+    const topicGroupBtn = document.getElementById('topic-group-toggle');
+    if (topicGroupBtn) {
+        topicGroupBtn.addEventListener('click', () => {
+            isTopicGrouped = !isTopicGrouped;
+            topicGroupBtn.classList.toggle('active', isTopicGrouped);
+            topicGroupBtn.textContent = isTopicGrouped ? '🔗 Grouped by Topic' : '🔗 Group by Topic';
+            fetchArticles();
+        });
+    }
 
     function updateAutoButtonLabels() {
         document.querySelectorAll('.approve-threshold-label')
@@ -537,7 +549,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (articlesTbody && articlesTbody.children.length === 0) showLoading(true);
         try {
             const params = new URLSearchParams();
-            if (currentSortBy !== 'scraped_at') params.set('sort_by', currentSortBy);
+            if (isTopicGrouped) {
+                params.set('sort_by', 'topic_group');
+            } else if (currentSortBy !== 'scraped_at') {
+                params.set('sort_by', currentSortBy);
+            }
             if (currentSortOrder !== 'desc') params.set('order', currentSortOrder);
             const qs = params.toString();
             const response = await fetch(`${API_BASE_URL}/articles${qs ? '?' + qs : ''}`);
@@ -593,20 +609,25 @@ document.addEventListener('DOMContentLoaded', () => {
             countLabel.textContent = `${filtered.length} of ${baseTotal} articles`;
         }
 
-        // Group by Date
-        const grouped = filtered.reduce((groups, article) => {
-            let date = 'Unsorted';
-            if (article.scraped_at) {
-                // Convert UTC timestamp to user's local date (YYYY-MM-DD)
-                const d = new Date(article.scraped_at);
-                date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            }
-            if (!groups[date]) groups[date] = [];
-            groups[date].push(article);
-            return groups;
-        }, {});
+        if (isTopicGrouped) {
+            // Topic-grouped view: articles come with topic_group field from server
+            renderTopicGroupedArticles(filtered);
+        } else {
+            // Group by Date (default)
+            const grouped = filtered.reduce((groups, article) => {
+                let date = 'Unsorted';
+                if (article.scraped_at) {
+                    // Convert UTC timestamp to user's local date (YYYY-MM-DD)
+                    const d = new Date(article.scraped_at);
+                    date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                }
+                if (!groups[date]) groups[date] = [];
+                groups[date].push(article);
+                return groups;
+            }, {});
 
-        renderGroupedArticles(grouped);
+            renderGroupedArticles(grouped);
+        }
     }
 
     function renderGroupedArticles(groupedArticles) {
@@ -698,6 +719,79 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
         
+        updateCheckboxStates();
+    }
+
+    function renderTopicGroupedArticles(articles) {
+        articlesTbody.innerHTML = '';
+
+        if (!articles || articles.length === 0) {
+            articlesTbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">No articles found.</td></tr>';
+            return;
+        }
+
+        // Group articles by topic_group
+        const topicGroups = {};
+        articles.forEach(a => {
+            const gid = (a.topic_group != null) ? a.topic_group : 'ungrouped';
+            if (!topicGroups[gid]) topicGroups[gid] = [];
+            topicGroups[gid].push(a);
+        });
+
+        const groupKeys = Object.keys(topicGroups);
+
+        groupKeys.forEach((gid, idx) => {
+            const group = topicGroups[gid];
+            const groupSize = group.length;
+
+            // Topic Group Header (only for groups with 2+ articles)
+            if (groupSize >= 2) {
+                const headerRow = document.createElement('tr');
+                headerRow.className = 'topic-group-header';
+                const leadHeadline = group[0].headline || group[0].headline_original || 'Topic Group';
+                // Truncate to 80 chars for display
+                const headerText = leadHeadline.length > 80 ? leadHeadline.substring(0, 77) + '...' : leadHeadline;
+                headerRow.innerHTML = `
+                    <td colspan="7" class="p-2 border-b-2" style="background:linear-gradient(90deg,#eef2ff,#fff);border-color:#6366f1;">
+                        <div class="flex items-center">
+                            <span class="inline-block w-4 mr-2 cursor-pointer text-gray-500 toggle-icon">▼</span>
+                            <span class="font-semibold text-indigo-700 text-sm">🔗 ${groupSize} similar articles</span>
+                            <span class="text-xs text-gray-500 ml-3 truncate">${headerText}</span>
+                        </div>
+                    </td>
+                `;
+                headerRow.addEventListener('click', () => {
+                    const rows = document.querySelectorAll(`.article-row[data-topic-group="${gid}"]`);
+                    const icon = headerRow.querySelector('.toggle-icon');
+                    let isHidden = false;
+                    rows.forEach((row, i) => {
+                        if (i === 0) return; // Always show first article
+                        row.classList.toggle('hidden');
+                        if (row.classList.contains('hidden')) isHidden = true;
+                    });
+                    icon.textContent = isHidden ? '▶' : '▼';
+                });
+                articlesTbody.appendChild(headerRow);
+            }
+
+            group.forEach((article, artIdx) => {
+                const isSubItem = (groupSize >= 2 && artIdx > 0);
+                const row = createArticleRow(article, isSubItem);
+                row.setAttribute('data-topic-group', gid);
+                if (groupSize >= 2) {
+                    row.setAttribute('data-date', ''); // Clear date grouping interference
+                }
+                articlesTbody.appendChild(row);
+            });
+
+            // Add spacing between topic groups
+            if (idx < groupKeys.length - 1 && groupSize >= 2) {
+                const spacer = document.createElement('tr');
+                spacer.innerHTML = '<td colspan="7" style="height:8px;background:transparent;border:none;"></td>';
+                articlesTbody.appendChild(spacer);
+            }
+        });
+
         updateCheckboxStates();
     }
 

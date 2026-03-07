@@ -4,6 +4,7 @@ M2: Added filtering/sorting, auto-approve/reject, duplicate detection.
 """
 import json
 import logging
+import numpy as np
 from typing import List, Optional
 
 import psycopg2.extras
@@ -76,6 +77,79 @@ ARTICLE_COLUMNS = """
 """
 
 
+def _group_by_topic(articles: list, threshold: float = 0.70) -> list:
+    """
+    Greedy topic grouping: assign each article to an existing group if cosine
+    similarity >= threshold, otherwise create a new group.  Returns a flat list
+    with `topic_group` (int) and `topic_group_size` (int) fields added.
+    Groups are sorted by the highest score in each group (DESC).
+    Within a group, articles are sorted by auto_approval_score DESC.
+    """
+    if not articles:
+        return []
+
+    # Build embedding matrix (skip articles without embeddings)
+    groups = []          # list of lists of article indices
+    group_centroids = [] # representative embedding for each group
+
+    for art in articles:
+        emb = art.get('embedding')
+        if emb is None:
+            # No embedding — put in its own singleton group
+            groups.append([art])
+            group_centroids.append(None)
+            continue
+
+        emb_arr = np.array(emb, dtype=np.float32)
+        norm = np.linalg.norm(emb_arr)
+        if norm > 0:
+            emb_arr = emb_arr / norm
+
+        best_group = -1
+        best_sim = threshold
+
+        for gi, centroid in enumerate(group_centroids):
+            if centroid is None:
+                continue
+            sim = float(np.dot(emb_arr, centroid))
+            if sim >= best_sim:
+                best_sim = sim
+                best_group = gi
+
+        if best_group >= 0:
+            groups[best_group].append(art)
+            # Update centroid as running average
+            n = len(groups[best_group])
+            group_centroids[best_group] = (
+                group_centroids[best_group] * (n - 1) + emb_arr
+            ) / n
+            c_norm = np.linalg.norm(group_centroids[best_group])
+            if c_norm > 0:
+                group_centroids[best_group] = group_centroids[best_group] / c_norm
+        else:
+            groups.append([art])
+            group_centroids.append(emb_arr)
+
+    # Sort groups by highest auto_approval_score in each group
+    def group_max_score(group):
+        return max((a.get('auto_approval_score') or 0) for a in group)
+
+    groups.sort(key=group_max_score, reverse=True)
+
+    # Flatten with topic_group and topic_group_size fields
+    result = []
+    for gi, group in enumerate(groups):
+        # Sort within group by score descending
+        group.sort(key=lambda a: (a.get('auto_approval_score') or 0), reverse=True)
+        for art in group:
+            art.pop('embedding', None)  # Don't send embeddings to frontend
+            art['topic_group'] = gi
+            art['topic_group_size'] = len(group)
+            result.append(art)
+
+    return result
+
+
 # --- Article Listing (M2: with filtering/sorting) ---
 
 @router.get("/articles")
@@ -103,8 +177,9 @@ def get_articles(
         # Whitelist allowed sort columns to prevent SQL injection
         ALLOWED_SORT_COLS = {
             "scraped_at", "auto_approval_score", "confidence_score",
-            "repetition_score", "publication_name",
+            "repetition_score", "publication_name", "topic_group",
         }
+        is_topic_grouped = (sort_by == "topic_group")
         if sort_by not in ALLOWED_SORT_COLS:
             sort_by = "scraped_at"
         if order.lower() not in ("asc", "desc"):
@@ -161,15 +236,27 @@ def get_articles(
                 "offset": safe_offset,
             }
         else:
-            # Original behavior: return flat list (backward compatible)
-            query = f"""
-                SELECT {ARTICLE_COLUMNS}
-                FROM articles
-                WHERE {where_sql}
-                ORDER BY {sort_by} {order}
-            """
-            cursor.execute(query, tuple(params))
-            return [dict(row) for row in cursor.fetchall()]
+            if is_topic_grouped:
+                # Topic-grouped view: fetch articles with embeddings, cluster by similarity
+                query = f"""
+                    SELECT {ARTICLE_COLUMNS}, embedding
+                    FROM articles
+                    WHERE {where_sql}
+                    ORDER BY auto_approval_score DESC NULLS LAST, scraped_at DESC
+                """
+                cursor.execute(query, tuple(params))
+                articles = [dict(row) for row in cursor.fetchall()]
+                return _group_by_topic(articles)
+            else:
+                # Original behavior: return flat list (backward compatible)
+                query = f"""
+                    SELECT {ARTICLE_COLUMNS}
+                    FROM articles
+                    WHERE {where_sql}
+                    ORDER BY {sort_by} {order}
+                """
+                cursor.execute(query, tuple(params))
+                return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Fetch error: {e}")
         raise HTTPException(500, "DB Error")
@@ -402,6 +489,33 @@ def update_article_status(article_id: int, status_update: StatusUpdate):
     cursor = conn.cursor()
     try:
         cursor.execute("UPDATE articles SET status = %s WHERE id = %s", (status_update.status, article_id))
+
+        # Milestone E: Update source credibility on approve/reject
+        if status_update.status in ('approved', 'rejected'):
+            try:
+                cursor.execute("SELECT source_id FROM articles WHERE id = %s", (article_id,))
+                row = cursor.fetchone()
+                if row and row[0]:
+                    source_id = row[0]
+                    cursor.execute("""
+                        UPDATE sources SET credibility_score = (
+                            SELECT CASE
+                                WHEN (approved + rejected) > 0
+                                THEN ROUND((approved::numeric / (approved + rejected)) * 100, 1)
+                                ELSE 50
+                            END
+                            FROM (
+                                SELECT
+                                    COUNT(*) FILTER (WHERE status = 'approved') AS approved,
+                                    COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
+                                FROM articles WHERE source_id = %s
+                            ) counts
+                        )
+                        WHERE id = %s
+                    """, (source_id, source_id))
+            except Exception as cred_err:
+                logger.warning(f"Credibility update failed for source: {cred_err}")
+
         conn.commit()
         return {"message": "Updated"}
     except Exception as e:
@@ -456,6 +570,28 @@ def batch_update_article_status(update_data: BatchStatusUpdate):
             "UPDATE articles SET status = data.status FROM (VALUES %s) AS data(status, id) WHERE articles.id = data.id",
             [(update_data.status, aid) for aid in update_data.ids],
         )
+
+        # Milestone E: Batch credibility update for affected sources
+        if update_data.status in ('approved', 'rejected'):
+            try:
+                placeholders = ','.join(['%s'] * len(update_data.ids))
+                cursor.execute(f"""
+                    UPDATE sources SET credibility_score = sub.new_score
+                    FROM (
+                        SELECT s.id, ROUND(
+                            COUNT(*) FILTER (WHERE a.status = 'approved')::numeric /
+                            NULLIF(COUNT(*) FILTER (WHERE a.status IN ('approved', 'rejected')), 0) * 100, 1
+                        ) AS new_score
+                        FROM sources s
+                        JOIN articles a ON a.source_id = s.id
+                        WHERE s.id IN (SELECT DISTINCT source_id FROM articles WHERE id IN ({placeholders}) AND source_id IS NOT NULL)
+                        GROUP BY s.id
+                    ) sub
+                    WHERE sources.id = sub.id AND sub.new_score IS NOT NULL
+                """, tuple(update_data.ids))
+            except Exception as cred_err:
+                logger.warning(f"Batch credibility update failed: {cred_err}")
+
         conn.commit()
         return {"message": "Batch updated"}
     except Exception as e:
@@ -810,11 +946,40 @@ Synthesize these articles into a single comprehensive briefing. Requirements:
             (new_sum, request.make_top_story, original_id),
         )
         if cluster_ids:
-            child_ph = ','.join(['%s'] * len(cluster_ids))
-            cursor.execute(
-                f"UPDATE articles SET status = 'approved', parent_id = %s WHERE id IN ({child_ph})",
-                (original_id, *cluster_ids),
-            )
+            # Milestone D: Generate differentiated summaries for each child
+            # highlighting what's UNIQUE about each source
+            for aid in cluster_ids:
+                child_art = articles.get(aid, {})
+                try:
+                    diff_chat = groq_client.chat.completions.create(
+                        messages=[
+                            {"role": "system", "content": (
+                                "You are a news editor. Given a MAIN cluster summary and a CHILD article, "
+                                "rewrite the child's summary to highlight ONLY what it adds beyond the main summary. "
+                                "Focus on: additional facts, different perspective, unique data, or contrarian views. "
+                                "50 words max. English only. If purely duplicate, write: 'Corroborates [topic] via [source name].'"
+                            )},
+                            {"role": "user", "content": (
+                                f"MAIN SUMMARY:\n{new_sum}\n\n"
+                                f"CHILD ARTICLE:\nHeadline: {child_art.get('headline_en', 'N/A')}\n"
+                                f"Original summary: {child_art.get('summary', 'N/A')}\n"
+                                f"Source: {child_art.get('publication_name', 'Unknown')}"
+                            )},
+                        ],
+                        model="llama-3.3-70b-versatile",
+                        temperature=0.1,
+                    )
+                    child_summary = diff_chat.choices[0].message.content.strip()
+                    cursor.execute(
+                        "UPDATE articles SET status = 'approved', parent_id = %s, summary = %s WHERE id = %s",
+                        (original_id, child_summary, aid),
+                    )
+                except Exception as child_err:
+                    logger.warning(f"Child summary differentiation failed for {aid}: {child_err}")
+                    cursor.execute(
+                        "UPDATE articles SET status = 'approved', parent_id = %s WHERE id = %s",
+                        (original_id, aid),
+                    )
         conn.commit()
         return ClusterAnalysisResponse(
             new_summary=new_sum,
