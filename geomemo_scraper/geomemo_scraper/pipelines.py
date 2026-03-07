@@ -125,8 +125,8 @@ STEP 4: Output valid JSON:
     "is_relevant": "yes/no",
     "confidence_score": <integer 0-100>,
     "headline_en": "Formal English Headline",
-    "summary": "Professional 50-word MAX news summary. Write in authoritative analytical tone for investment bankers and policymakers. Lead with the key development, include specific names/figures/countries. English only. Do NOT exceed 50 words.",
-    "summary_long": "100-word analytical summary for social media. Include key facts, figures, names, implications for markets and policy. Note which countries are affected and why this matters for global investors. English only.",
+    "summary": "Write a 30-to-50 word professional news summary (MUST be at least 30 words). Authoritative analytical tone for investment bankers and policymakers. Lead with the key development, then explain implications. Include specific names, figures, countries. English only.",
+    "summary_long": "Write a 80-to-100 word analytical summary (MUST be at least 80 words). Include key facts, figures, names, implications for markets and policy. Note which countries are affected and why this matters for global investors. English only.",
     "category": "Category Name",
     "countries": ["Country1", "Country2"]
 }}
