@@ -121,7 +121,7 @@ export default async function Home() {
             gap: 'var(--space-3)',
             marginBottom: 'var(--space-8)',
           }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Today&apos;s Intelligence</h2>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Latest Intelligence</h2>
             <div className="accent-bar" />
           </div>
 

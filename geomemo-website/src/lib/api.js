@@ -2,11 +2,23 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export async function fetchApprovedArticles() {
   try {
+    // Try today's approved articles first
     const res = await fetch(`${API_URL}/articles/approved`, {
       cache: 'no-store',
     });
     if (!res.ok) return [];
-    return res.json();
+    const articles = await res.json();
+
+    // If today has articles, use them
+    if (articles.length > 0) return articles;
+
+    // Fallback: fetch recent approved articles (for testing when today is empty)
+    const fallback = await fetch(
+      `${API_URL}/articles?status=approved&days=2&sort_by=scraped_at&order=desc`,
+      { cache: 'no-store' }
+    );
+    if (!fallback.ok) return [];
+    return fallback.json();
   } catch (error) {
     console.error('Failed to fetch approved articles:', error);
     return [];
