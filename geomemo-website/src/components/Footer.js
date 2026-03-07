@@ -61,27 +61,7 @@ export default function Footer() {
                   href={social.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                    color: 'rgba(255,255,255,0.6)',
-                    transition: 'border-color 0.15s, color 0.15s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.borderColor = 'var(--color-accent)';
-                    e.target.style.color = 'var(--color-accent)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.borderColor = 'rgba(255,255,255,0.2)';
-                    e.target.style.color = 'rgba(255,255,255,0.6)';
-                  }}
+                  className="footer-social"
                 >
                   {social.label}
                 </a>
@@ -117,13 +97,8 @@ export default function Footer() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  style={{
-                    fontSize: '0.875rem',
-                    color: 'rgba(255,255,255,0.6)',
-                    transition: 'color 0.15s',
-                  }}
-                  onMouseEnter={(e) => e.target.style.color = 'var(--color-accent)'}
-                  onMouseLeave={(e) => e.target.style.color = 'rgba(255,255,255,0.6)'}
+                  className="footer-link"
+                  style={{ fontSize: '0.875rem' }}
                 >
                   {link.label}
                 </Link>
@@ -153,20 +128,7 @@ export default function Footer() {
             </p>
             <Link
               href="/newsletter"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '10px 24px',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                background: 'var(--color-accent)',
-                color: 'var(--color-primary)',
-                borderRadius: 'var(--radius)',
-                transition: 'background 0.15s',
-                textDecoration: 'none',
-              }}
-              onMouseEnter={(e) => e.target.style.background = 'var(--color-accent-hover)'}
-              onMouseLeave={(e) => e.target.style.background = 'var(--color-accent)'}
+              className="footer-cta"
             >
               Subscribe Free
             </Link>

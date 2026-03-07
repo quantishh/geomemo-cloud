@@ -226,6 +226,56 @@ a {
   color: var(--color-accent);
 }
 
+/* Footer link hover */
+.footer-link {
+  color: rgba(255,255,255,0.6);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.footer-link:hover {
+  color: var(--color-accent);
+}
+
+/* Footer social icon */
+.footer-social {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.6);
+  transition: border-color 0.15s ease, color 0.15s ease;
+  text-decoration: none;
+}
+
+.footer-social:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Footer CTA button */
+.footer-cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 24px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--color-accent);
+  color: var(--color-primary);
+  border-radius: var(--radius);
+  transition: background 0.15s ease;
+  text-decoration: none;
+}
+
+.footer-cta:hover {
+  background: var(--color-accent-hover);
+}
+
 /* Article cluster responsive */
 @media (max-width: 640px) {
   .article-image {
