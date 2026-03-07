@@ -120,13 +120,26 @@ STEP 3: Extract ALL countries mentioned or implied in the headline and content.
 Return their common English names (e.g., "United States", "China", "Russia").
 If no specific country is mentioned, return an empty list.
 
-STEP 4: Output valid JSON:
+STEP 4: Write the "summary" field — THIS IS CRITICAL:
+- MUST be between 30 and 50 words. Count carefully. Never write fewer than 30 words.
+- Use authoritative analytical tone suitable for investment bankers and policymakers.
+- Lead with the key development, then explain WHY it matters and its implications.
+- Include specific names, figures, and countries mentioned.
+- English only.
+
+STEP 5: Write the "summary_long" field:
+- MUST be between 80 and 100 words. Never write fewer than 80 words.
+- Include key facts, figures, names, implications for markets and policy.
+- Note which countries are affected and why this matters for global investors.
+- English only.
+
+STEP 6: Output valid JSON:
 {{
     "is_relevant": "yes/no",
     "confidence_score": <integer 0-100>,
     "headline_en": "Formal English Headline",
-    "summary": "Write a 30-to-50 word professional news summary (MUST be at least 30 words). Authoritative analytical tone for investment bankers and policymakers. Lead with the key development, then explain implications. Include specific names, figures, countries. English only.",
-    "summary_long": "Write a 80-to-100 word analytical summary (MUST be at least 80 words). Include key facts, figures, names, implications for markets and policy. Note which countries are affected and why this matters for global investors. English only.",
+    "summary": "<your 30-to-50 word summary from STEP 4>",
+    "summary_long": "<your 80-to-100 word analytical summary from STEP 5>",
     "category": "Category Name",
     "countries": ["Country1", "Country2"]
 }}
