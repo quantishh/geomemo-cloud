@@ -29,6 +29,7 @@ class Article(BaseModel):
     country_codes: Optional[List[str]] = None
     region: Optional[str] = None
     og_image: Optional[str] = None
+    embedded_tweets: Optional[list] = None
 
 
 class StatusUpdate(BaseModel):

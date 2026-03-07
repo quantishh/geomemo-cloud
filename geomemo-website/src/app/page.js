@@ -36,7 +36,11 @@ export default async function Home() {
     });
   });
 
-  // Group clusters by category
+  // Separate top stories from regular stories
+  const topStoryClusters = clusters.filter((c) => c.parent.is_top_story);
+  const regularClusters = clusters.filter((c) => !c.parent.is_top_story);
+
+  // Group regular clusters by category
   const categoryOrder = [
     'Geopolitical Conflict',
     'Geopolitical Politics',
@@ -48,7 +52,7 @@ export default async function Home() {
   ];
 
   const byCategory = {};
-  clusters.forEach((cluster) => {
+  regularClusters.forEach((cluster) => {
     const cat = cluster.parent.category || 'Other';
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(cluster);
@@ -112,20 +116,9 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Section 2: Main News Feed */}
-      <section className="section">
-        <div className="container">
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            marginBottom: 'var(--space-8)',
-          }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Latest Intelligence</h2>
-            <div className="accent-bar" />
-          </div>
-
-          {articles.length === 0 ? (
+      {articles.length === 0 ? (
+        <section className="section">
+          <div className="container">
             <p style={{
               textAlign: 'center',
               color: 'var(--color-text-secondary)',
@@ -133,53 +126,104 @@ export default async function Home() {
             }}>
               No articles published yet today. Check back soon.
             </p>
-          ) : (
-            <div>
-              {orderedCategories.map((category) => (
-                <div key={category} style={{ marginBottom: 'var(--space-10)' }}>
-                  {/* Category header */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-3)',
-                    marginBottom: 'var(--space-5)',
-                    paddingBottom: 'var(--space-3)',
-                    borderBottom: '2px solid var(--color-border)',
+          </div>
+        </section>
+      ) : (
+        <>
+          {/* Section 2: Top News */}
+          {topStoryClusters.length > 0 && (
+            <section style={{ background: 'var(--color-surface)' }} className="section">
+              <div className="container">
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-3)',
+                  marginBottom: 'var(--space-8)',
+                }}>
+                  <h2 style={{
+                    fontSize: '1.5rem',
+                    fontWeight: 700,
+                    color: 'var(--color-primary)',
                   }}>
-                    <span className="badge">{category}</span>
-                    <span style={{
-                      fontSize: '0.75rem',
-                      color: 'var(--color-text-muted)',
-                    }}>
-                      {byCategory[category].length} {byCategory[category].length === 1 ? 'story' : 'stories'}
-                    </span>
-                  </div>
-
-                  {/* Articles in this category */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-                    {byCategory[category].map((cluster) => (
-                      <ArticleCluster
-                        key={cluster.parent.id}
-                        parent={cluster.parent}
-                        relatedArticles={cluster.children}
-                      />
-                    ))}
-                  </div>
+                    Top News
+                  </h2>
+                  <div className="accent-bar" />
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
 
-      {/* Section 3: Newest Updates */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+                  {topStoryClusters.map((cluster) => (
+                    <ArticleCluster
+                      key={cluster.parent.id}
+                      parent={cluster.parent}
+                      relatedArticles={cluster.children}
+                      isTopStory={true}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Section 3: Main News Feed by Category */}
+          <section className="section">
+            <div className="container">
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-3)',
+                marginBottom: 'var(--space-8)',
+              }}>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Latest Intelligence</h2>
+                <div className="accent-bar" />
+              </div>
+
+              <div>
+                {orderedCategories.map((category) => (
+                  <div key={category} style={{ marginBottom: 'var(--space-10)' }}>
+                    {/* Category header */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-3)',
+                      marginBottom: 'var(--space-5)',
+                      paddingBottom: 'var(--space-3)',
+                      borderBottom: '2px solid var(--color-border)',
+                    }}>
+                      <span className="badge">{category}</span>
+                      <span style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--color-text-muted)',
+                      }}>
+                        {byCategory[category].length} {byCategory[category].length === 1 ? 'story' : 'stories'}
+                      </span>
+                    </div>
+
+                    {/* Articles in this category */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+                      {byCategory[category].map((cluster) => (
+                        <ArticleCluster
+                          key={cluster.parent.id}
+                          parent={cluster.parent}
+                          relatedArticles={cluster.children}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* Section 4: Newest Updates */}
       <section style={{ background: 'var(--color-surface)' }} className="section">
         <div className="container">
           <NewestUpdates />
         </div>
       </section>
 
-      {/* Section 4: Newsletter CTA */}
+      {/* Section 5: Newsletter CTA */}
       <section style={{
         background: 'var(--color-primary)',
         color: 'var(--color-text-inverse)',

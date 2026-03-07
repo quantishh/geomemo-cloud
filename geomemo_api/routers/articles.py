@@ -73,7 +73,7 @@ ARTICLE_COLUMNS = """
     summary, category, status, publication_name, author, scraped_at,
     is_top_story, confidence_score, parent_id,
     source_id, relevance_score, repetition_score, auto_approval_score,
-    country_codes, region, og_image
+    country_codes, region, og_image, embedded_tweets
 """
 
 
