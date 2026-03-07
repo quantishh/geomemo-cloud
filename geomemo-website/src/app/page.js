@@ -4,6 +4,25 @@ import ArticleCluster from '@/components/ArticleCluster';
 
 export const dynamic = 'force-dynamic';
 
+function getTimeAgo(dateStr) {
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHrs = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHrs < 24) return `${diffHrs} hour${diffHrs === 1 ? '' : 's'} ago`;
+    if (diffDays === 1) return 'yesterday';
+    return `${diffDays} days ago`;
+  } catch {
+    return '';
+  }
+}
+
 export default async function Home() {
   const [articles, sponsors, podcasts, latestNews] = await Promise.all([
     fetchApprovedArticles(),
@@ -192,48 +211,48 @@ export default async function Home() {
                 ))}
               </div>
 
-              {/* MIDDLE COLUMN — Sponsors + Podcasts */}
+              {/* MIDDLE COLUMN — Sponsors + Podcasts (Techmeme-clean) */}
               <div className="middle-column">
 
-                {/* Sponsor Posts */}
+                {/* Sponsor Posts — clean, no card borders */}
                 {sponsors.length > 0 && (
-                  <div className="sidebar-section">
+                  <div>
                     <h3 className="sidebar-title">Sponsor Posts</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                       {sponsors.map((sponsor) => (
                         <a
                           key={sponsor.id}
                           href={sponsor.link_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="sponsor-sidebar-card"
+                          className="sponsor-item"
                         >
                           <div style={{
-                            fontSize: '0.6rem',
+                            fontSize: '0.65rem',
                             fontWeight: 700,
-                            letterSpacing: '0.08em',
+                            letterSpacing: '0.06em',
                             textTransform: 'uppercase',
                             color: 'var(--color-text-muted)',
-                            marginBottom: '4px',
+                            marginBottom: '3px',
                           }}>
                             {sponsor.company_name}
                           </div>
                           <div style={{
-                            fontSize: '0.82rem',
-                            fontWeight: 600,
-                            lineHeight: 1.4,
-                            color: 'var(--color-text)',
+                            fontSize: '0.88rem',
+                            fontWeight: 700,
+                            lineHeight: 1.35,
+                            color: 'var(--color-accent)',
+                            marginBottom: '4px',
                           }}>
                             {sponsor.headline}
                           </div>
                           <div style={{
-                            fontSize: '0.72rem',
+                            fontSize: '0.75rem',
                             color: 'var(--color-text-secondary)',
-                            lineHeight: 1.5,
-                            marginTop: '4px',
+                            lineHeight: 1.55,
                           }}>
-                            {sponsor.summary.length > 120
-                              ? sponsor.summary.substring(0, 120) + '...'
+                            {sponsor.summary.length > 150
+                              ? sponsor.summary.substring(0, 150) + '...'
                               : sponsor.summary}
                           </div>
                         </a>
@@ -242,60 +261,75 @@ export default async function Home() {
                   </div>
                 )}
 
-                {/* Featured Podcasts */}
+                {/* Featured Podcasts — Techmeme-style with floating artwork */}
                 {podcasts.length > 0 && (
-                  <div className="sidebar-section">
+                  <div>
                     <h3 className="sidebar-title">Featured Podcasts</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {podcasts.map((podcast) => (
                         <a
                           key={podcast.id}
                           href={podcast.link_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="podcast-sidebar-card"
+                          className="podcast-card"
                         >
-                          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                          <div style={{ overflow: 'hidden' }}>
                             {podcast.image_url && (
-                              <div style={{
-                                flexShrink: 0,
-                                width: '56px',
-                                height: '56px',
-                                borderRadius: 'var(--radius-sm)',
-                                overflow: 'hidden',
-                                background: 'var(--color-border)',
-                              }}>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={podcast.image_url.startsWith('/') ? `${process.env.NEXT_PUBLIC_API_URL || ''}${podcast.image_url}` : podcast.image_url}
-                                  alt=""
-                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                  loading="lazy"
-                                />
-                              </div>
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={podcast.image_url.startsWith('/') ? `${process.env.NEXT_PUBLIC_API_URL || ''}${podcast.image_url}` : podcast.image_url}
+                                alt=""
+                                style={{
+                                  float: 'right',
+                                  width: '88px',
+                                  height: '88px',
+                                  objectFit: 'cover',
+                                  borderRadius: 'var(--radius-sm)',
+                                  marginLeft: '10px',
+                                  marginBottom: '4px',
+                                }}
+                                loading="lazy"
+                              />
                             )}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{
-                                fontSize: '0.6rem',
-                                fontWeight: 700,
-                                letterSpacing: '0.08em',
-                                textTransform: 'uppercase',
-                                color: 'var(--color-text-muted)',
-                                marginBottom: '2px',
-                              }}>
-                                {podcast.show_name}
-                              </div>
-                              <div style={{
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                lineHeight: 1.35,
-                                color: 'var(--color-text)',
-                              }}>
-                                {podcast.episode_title.length > 80
-                                  ? podcast.episode_title.substring(0, 80) + '...'
-                                  : podcast.episode_title}
-                              </div>
+                            <div style={{
+                              fontSize: '0.72rem',
+                              color: 'var(--color-text-secondary)',
+                              marginBottom: '3px',
+                            }}>
+                              {podcast.show_name}:
                             </div>
+                            <div style={{
+                              fontSize: '0.88rem',
+                              fontWeight: 700,
+                              lineHeight: 1.35,
+                              color: 'var(--color-accent)',
+                              marginBottom: '6px',
+                            }}>
+                              {podcast.episode_title}
+                            </div>
+                            <div style={{
+                              fontSize: '0.72rem',
+                              color: 'var(--color-text-secondary)',
+                              lineHeight: 1.5,
+                            }}>
+                              {podcast.description
+                                ? (podcast.description.length > 120
+                                    ? podcast.description.substring(0, 120) + '...'
+                                    : podcast.description)
+                                : `Listen to ${podcast.show_name} for insightful analysis and discussion.`}
+                            </div>
+                          </div>
+                          <div style={{
+                            clear: 'both',
+                            fontSize: '0.7rem',
+                            color: 'var(--color-accent)',
+                            fontWeight: 600,
+                            marginTop: '8px',
+                            paddingTop: '6px',
+                            borderTop: '1px solid var(--color-border)',
+                          }}>
+                            Subscribe to {podcast.show_name}.
                           </div>
                         </a>
                       ))}
@@ -304,7 +338,7 @@ export default async function Home() {
                 )}
               </div>
 
-              {/* RIGHT COLUMN — Latest News */}
+              {/* RIGHT COLUMN — Latest News (Techmeme "Newest" style) */}
               <div className="right-column">
                 {latestNews.length > 0 && (
                   <div>
@@ -319,41 +353,36 @@ export default async function Home() {
                           }}
                         >
                           <div style={{
-                            fontSize: '0.65rem',
-                            color: 'var(--color-text-muted)',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            color: 'var(--color-text)',
                             marginBottom: '2px',
                           }}>
-                            {article.publication_name}
-                            {article.category && (
-                              <span style={{
-                                marginLeft: '6px',
-                                padding: '0 4px',
-                                fontSize: '0.58rem',
-                                border: '1px solid var(--color-accent)',
-                                borderRadius: '3px',
-                                color: 'var(--color-accent)',
-                              }}>
-                                {article.category}
-                              </span>
+                            {article.author ? (
+                              <>{article.author} / {article.publication_name}:</>
+                            ) : (
+                              <>{article.publication_name}:</>
                             )}
                           </div>
                           <a
                             href={article.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="hover-link"
-                            style={{
-                              fontSize: '0.76rem',
-                              lineHeight: 1.45,
-                              color: 'var(--color-text-secondary)',
-                            }}
+                            className="latest-news-link"
                           >
-                            {article.summary
-                              ? (article.summary.length > 180
-                                  ? article.summary.substring(0, 180) + '...'
-                                  : article.summary)
-                              : (article.headline || article.headline_en)}
+                            {(article.headline_en || article.headline || '').length > 140
+                              ? (article.headline_en || article.headline).substring(0, 140) + '...'
+                              : (article.headline_en || article.headline)}
                           </a>
+                          {article.scraped_at && (
+                            <div style={{
+                              fontSize: '0.62rem',
+                              color: 'var(--color-text-muted)',
+                              marginTop: '3px',
+                            }}>
+                              {getTimeAgo(article.scraped_at)}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
