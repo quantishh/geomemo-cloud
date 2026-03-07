@@ -6,6 +6,7 @@ import json
 import logging
 import re
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from typing import List
 
 import psycopg2.extras
@@ -75,8 +76,12 @@ def generate_newsletter(request: NewsletterGenerateRequest = NewsletterGenerateR
         if not articles:
             raise HTTPException(404, "No approved articles found")
 
-        # Determine the actual date from the articles (for daily_briefs storage)
-        target = articles[0]['scraped_at'].strftime('%Y-%m-%d')
+        # Determine the newsletter date — use US Eastern timezone (user's timezone)
+        # so the newsletter shows "March 6" when it's still March 6 in the US,
+        # even if the server (UTC) has already rolled over to March 7.
+        if not request.target_date:
+            target = datetime.now(ZoneInfo("America/New_York")).strftime('%Y-%m-%d')
+        # (when target_date was provided, `target` is already set from line 52)
 
         # 0. Check if brief already exists for this date (unless regenerate=True)
         if not request.regenerate:
