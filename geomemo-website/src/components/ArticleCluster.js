@@ -10,93 +10,55 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
       borderBottom: '1px solid var(--color-border)',
       ...(isTopStory ? { borderLeft: '3px solid var(--color-accent)', paddingLeft: 'var(--space-4)' } : {}),
     }}>
-      {/* Parent article */}
+      {/* Source */}
       <div style={{
-        display: 'flex',
-        gap: 'var(--space-4)',
-        alignItems: 'flex-start',
+        fontSize: '0.75rem',
+        color: 'var(--color-text-secondary)',
+        marginBottom: '4px',
       }}>
-        {/* Featured image (OG image) */}
-        {ogImage && (
-          <div style={{
-            flexShrink: 0,
-            width: isTopStory ? '160px' : '120px',
-            height: isTopStory ? '100px' : '80px',
-            borderRadius: 'var(--radius-sm)',
-            overflow: 'hidden',
-            background: 'var(--color-surface)',
-          }}
-            className="article-image"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={ogImage}
-              alt=""
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-              }}
-              loading="lazy"
-            />
-          </div>
+        {parent.publication_name}
+        {parent.author && (
+          <span style={{ fontStyle: 'italic' }}> / {parent.author}</span>
         )}
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Source */}
-          <div style={{
-            fontSize: '0.8rem',
-            color: 'var(--color-text-secondary)',
-            marginBottom: '4px',
-          }}>
-            {parent.publication_name}
-            {parent.author && (
-              <span style={{ fontStyle: 'italic' }}> / {parent.author}</span>
-            )}
-          </div>
-
-          {/* Headline */}
-          <h3 style={{
-            fontSize: isTopStory ? '1.3rem' : '1.1rem',
-            fontWeight: 700,
-            lineHeight: 1.3,
-            marginBottom: '6px',
-          }}>
-            <a
-              href={parent.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover-link"
-            >
-              {parent.headline_en || parent.headline}
-            </a>
-          </h3>
-
-          {/* Summary */}
-          <p style={{
-            fontSize: isTopStory ? '0.9rem' : '0.875rem',
-            color: 'var(--color-text-secondary)',
-            lineHeight: 1.6,
-            margin: 0,
-          }}>
-            {parent.summary}
-          </p>
-        </div>
       </div>
+
+      {/* Headline */}
+      <h3 style={{
+        fontSize: isTopStory ? '1.25rem' : '1.05rem',
+        fontWeight: 700,
+        lineHeight: 1.3,
+        marginBottom: '6px',
+      }}>
+        <a
+          href={parent.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover-link"
+        >
+          {parent.headline_en || parent.headline}
+        </a>
+      </h3>
+
+      {/* Summary */}
+      <p style={{
+        fontSize: isTopStory ? '0.88rem' : '0.84rem',
+        color: 'var(--color-text-secondary)',
+        lineHeight: 1.6,
+        margin: 0,
+      }}>
+        {parent.summary}
+      </p>
 
       {/* Embedded X Posts */}
       {hasTweets && (
         <div style={{
           marginTop: 'var(--space-3)',
-          paddingLeft: ogImage ? '136px' : '0',
           display: 'flex',
           flexDirection: 'column',
           gap: '8px',
-        }}
-          className="related-coverage"
-        >
+        }}>
           <span style={{
-            fontSize: '0.75rem',
+            fontSize: '0.72rem',
             fontWeight: 700,
             color: 'var(--color-text-muted)',
             textTransform: 'uppercase',
@@ -105,12 +67,12 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
             alignItems: 'center',
             gap: '6px',
           }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             Discussion:
           </span>
           {tweets.map((tweet, idx) => (
             <div key={idx} style={{
-              fontSize: '0.8rem',
+              fontSize: '0.78rem',
               lineHeight: 1.5,
               paddingLeft: 'var(--space-3)',
               borderLeft: '2px solid #1DA1F2',
@@ -122,13 +84,13 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover-link"
-                  style={{ fontWeight: 600, fontSize: '0.78rem' }}
+                  style={{ fontWeight: 600, fontSize: '0.76rem' }}
                 >
                   @{tweet.username}
                 </a>
               )}
               {tweet.text && (
-                <span style={{ display: 'block', marginTop: '2px', fontSize: '0.78rem' }}>
+                <span style={{ display: 'block', marginTop: '2px', fontSize: '0.76rem' }}>
                   {tweet.text.length > 200 ? tweet.text.substring(0, 200) + '...' : tweet.text}
                 </span>
               )}
@@ -139,14 +101,9 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
 
       {/* Related coverage (children) */}
       {hasChildren && (
-        <div style={{
-          marginTop: 'var(--space-3)',
-          paddingLeft: ogImage ? '136px' : '0',
-        }}
-          className="related-coverage"
-        >
+        <div style={{ marginTop: 'var(--space-3)' }}>
           <span style={{
-            fontSize: '0.75rem',
+            fontSize: '0.72rem',
             fontWeight: 700,
             color: 'var(--color-text-muted)',
             textTransform: 'uppercase',
@@ -164,7 +121,7 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
           }}>
             {relatedArticles.map((child) => (
               <li key={child.id} style={{
-                fontSize: '0.8rem',
+                fontSize: '0.78rem',
                 lineHeight: 1.5,
                 paddingLeft: 'var(--space-3)',
                 borderLeft: '2px solid var(--color-border)',
@@ -180,16 +137,6 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
                 >
                   {child.headline_en || child.headline}
                 </a>
-                {child.summary && (
-                  <span style={{
-                    display: 'block',
-                    fontSize: '0.75rem',
-                    color: 'var(--color-text-muted)',
-                    marginTop: '2px',
-                  }}>
-                    {child.summary}
-                  </span>
-                )}
               </li>
             ))}
           </ul>
