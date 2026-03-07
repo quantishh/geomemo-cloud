@@ -61,16 +61,12 @@ def generate_newsletter(request: NewsletterGenerateRequest = NewsletterGenerateR
             """, (target,))
         else:
             cursor.execute("""
-                WITH LatestBatch AS (
-                    SELECT MAX(scraped_at::date) as max_date
-                    FROM articles WHERE status = 'approved'
-                )
                 SELECT id, url, headline, headline_en, summary, category,
                        publication_name, author, scraped_at, is_top_story, parent_id,
                        embedded_tweets
                 FROM articles
                 WHERE status = 'approved'
-                  AND scraped_at::date = (SELECT max_date FROM LatestBatch)
+                  AND scraped_at >= NOW() - INTERVAL '36 hours'
                 ORDER BY is_top_story DESC, scraped_at DESC
             """)
 

@@ -205,15 +205,10 @@ def get_approved_articles():
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
         cursor.execute(f"""
-            WITH LatestBatch AS (
-                SELECT MAX(scraped_at::date) as max_date
-                FROM articles
-                WHERE status = 'approved'
-            )
             SELECT {ARTICLE_COLUMNS}
             FROM articles
             WHERE status = 'approved'
-            AND scraped_at::date = (SELECT max_date FROM LatestBatch)
+              AND scraped_at >= NOW() - INTERVAL '36 hours'
             ORDER BY is_top_story DESC, scraped_at DESC
         """)
         return [dict(row) for row in cursor.fetchall()]
