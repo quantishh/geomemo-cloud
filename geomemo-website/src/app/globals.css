@@ -276,6 +276,106 @@ a {
   background: var(--color-accent-hover);
 }
 
+/* ========================================
+   Homepage Grid — Techmeme-style layout
+   ======================================== */
+
+.homepage-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+}
+
+@media (min-width: 900px) {
+  .homepage-grid {
+    grid-template-columns: 1fr 320px;
+    gap: var(--space-8);
+  }
+}
+
+@media (min-width: 1100px) {
+  .homepage-grid {
+    grid-template-columns: 1fr 360px;
+  }
+}
+
+.main-column {
+  min-width: 0;
+}
+
+.sidebar-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Section headers */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-primary);
+}
+
+/* Sidebar section blocks */
+.sidebar-section {
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.sidebar-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--color-accent);
+}
+
+/* Sponsor card in sidebar */
+.sponsor-sidebar-card {
+  display: block;
+  padding: 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sponsor-sidebar-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* Podcast card in sidebar */
+.podcast-sidebar-card {
+  display: block;
+  padding: 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.podcast-sidebar-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
 /* Article cluster responsive */
 @media (max-width: 640px) {
   .article-image {

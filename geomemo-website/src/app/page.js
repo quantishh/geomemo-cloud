@@ -1,12 +1,16 @@
 import Link from 'next/link';
-import { fetchApprovedArticles } from '@/lib/api';
+import { fetchApprovedArticles, fetchSponsors, fetchPodcasts, fetchNewestUpdates } from '@/lib/api';
 import ArticleCluster from '@/components/ArticleCluster';
-import NewestUpdates from '@/components/NewestUpdates';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  const articles = await fetchApprovedArticles();
+  const [articles, sponsors, podcasts, latestNews] = await Promise.all([
+    fetchApprovedArticles(),
+    fetchSponsors(),
+    fetchPodcasts(),
+    fetchNewestUpdates(),
+  ]);
 
   // Group articles into clusters (parent + children) and standalone
   const clusters = [];
@@ -24,7 +28,7 @@ export default async function Home() {
   const processedIds = new Set();
   articles.forEach((article) => {
     if (processedIds.has(article.id)) return;
-    if (article.parent_id) return; // skip children, handled via parent
+    if (article.parent_id) return;
 
     const children = childMap[article.id] || [];
     children.forEach((c) => processedIds.add(c.id));
@@ -71,47 +75,45 @@ export default async function Home() {
 
   return (
     <>
-      {/* Section 1: Hero */}
+      {/* Hero — slim banner */}
       <section style={{
         background: 'var(--color-primary)',
         color: 'var(--color-text-inverse)',
-        padding: 'var(--space-12) 0',
-        textAlign: 'center',
+        padding: '20px 0',
       }}>
-        <div className="container">
-          <p style={{
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
-            color: 'var(--color-accent)',
-            marginBottom: 'var(--space-3)',
-          }}>
-            {today}
-          </p>
-          <h1 style={{
-            fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
-            fontWeight: 800,
-            letterSpacing: '-0.03em',
-            marginBottom: 'var(--space-3)',
-          }}>
-            Geopolitical Intelligence for<br />
-            <span style={{ color: 'var(--color-accent)' }}>Global Decision Makers</span>
-          </h1>
-          <p style={{
-            fontSize: '1rem',
-            color: 'rgba(255,255,255,0.65)',
-            maxWidth: '540px',
-            margin: '0 auto var(--space-6)',
-            lineHeight: 1.6,
-          }}>
-            Daily briefings on conflicts, trade, markets, and policy — curated for investment professionals and policymakers.
-          </p>
+        <div className="container" style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+        }}>
+          <div>
+            <p style={{
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase',
+              color: 'var(--color-accent)',
+              marginBottom: '4px',
+            }}>
+              {today}
+            </p>
+            <h1 style={{
+              fontSize: 'clamp(1.1rem, 2.5vw, 1.4rem)',
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              margin: 0,
+            }}>
+              Geopolitical Intelligence for{' '}
+              <span style={{ color: 'var(--color-accent)' }}>Global Decision Makers</span>
+            </h1>
+          </div>
           <Link href="/newsletter" className="btn-primary" style={{
-            fontSize: '0.9rem',
-            padding: '14px 32px',
+            fontSize: '0.8rem',
+            padding: '10px 24px',
           }}>
-            Subscribe to Daily Briefing
+            Subscribe Free
           </Link>
         </div>
       </section>
@@ -129,77 +131,55 @@ export default async function Home() {
           </div>
         </section>
       ) : (
-        <>
-          {/* Section 2: Top News */}
-          {topStoryClusters.length > 0 && (
-            <section style={{ background: 'var(--color-surface)' }} className="section">
-              <div className="container">
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-3)',
-                  marginBottom: 'var(--space-8)',
-                }}>
-                  <h2 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 700,
-                    color: 'var(--color-primary)',
-                  }}>
-                    Top News
-                  </h2>
-                  <div className="accent-bar" />
-                </div>
+        /* Main Content — Techmeme-style 2-column layout */
+        <section style={{ padding: 'var(--space-6) 0 var(--space-12)' }}>
+          <div className="container">
+            <div className="homepage-grid">
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-                  {topStoryClusters.map((cluster) => (
-                    <ArticleCluster
-                      key={cluster.parent.id}
-                      parent={cluster.parent}
-                      relatedArticles={cluster.children}
-                      isTopStory={true}
-                    />
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
+              {/* LEFT COLUMN — Main News */}
+              <div className="main-column">
 
-          {/* Section 3: Main News Feed by Category */}
-          <section className="section">
-            <div className="container">
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-3)',
-                marginBottom: 'var(--space-8)',
-              }}>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Latest Intelligence</h2>
-                <div className="accent-bar" />
-              </div>
+                {/* Top News */}
+                {topStoryClusters.length > 0 && (
+                  <div style={{ marginBottom: 'var(--space-8)' }}>
+                    <div className="section-header">
+                      <h2 className="section-title">Top News</h2>
+                      <div className="accent-bar" />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                      {topStoryClusters.map((cluster) => (
+                        <ArticleCluster
+                          key={cluster.parent.id}
+                          parent={cluster.parent}
+                          relatedArticles={cluster.children}
+                          isTopStory={true}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-              <div>
+                {/* Category sections */}
                 {orderedCategories.map((category) => (
-                  <div key={category} style={{ marginBottom: 'var(--space-10)' }}>
-                    {/* Category header */}
+                  <div key={category} style={{ marginBottom: 'var(--space-8)' }}>
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 'var(--space-3)',
-                      marginBottom: 'var(--space-5)',
-                      paddingBottom: 'var(--space-3)',
+                      marginBottom: 'var(--space-4)',
+                      paddingBottom: 'var(--space-2)',
                       borderBottom: '2px solid var(--color-border)',
                     }}>
                       <span className="badge">{category}</span>
                       <span style={{
-                        fontSize: '0.75rem',
+                        fontSize: '0.7rem',
                         color: 'var(--color-text-muted)',
                       }}>
                         {byCategory[category].length} {byCategory[category].length === 1 ? 'story' : 'stories'}
                       </span>
                     </div>
 
-                    {/* Articles in this category */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
                       {byCategory[category].map((cluster) => (
                         <ArticleCluster
                           key={cluster.parent.id}
@@ -211,43 +191,199 @@ export default async function Home() {
                   </div>
                 ))}
               </div>
+
+              {/* RIGHT COLUMN — Sidebar */}
+              <aside className="sidebar-column">
+
+                {/* Sponsor Posts */}
+                {sponsors.length > 0 && (
+                  <div className="sidebar-section">
+                    <h3 className="sidebar-title">Sponsor Posts</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {sponsors.map((sponsor) => (
+                        <a
+                          key={sponsor.id}
+                          href={sponsor.link_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="sponsor-sidebar-card"
+                        >
+                          <div style={{
+                            fontSize: '0.6rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.08em',
+                            textTransform: 'uppercase',
+                            color: 'var(--color-text-muted)',
+                            marginBottom: '4px',
+                          }}>
+                            {sponsor.company_name}
+                          </div>
+                          <div style={{
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            lineHeight: 1.4,
+                            color: 'var(--color-text)',
+                          }}>
+                            {sponsor.headline}
+                          </div>
+                          <div style={{
+                            fontSize: '0.72rem',
+                            color: 'var(--color-text-secondary)',
+                            lineHeight: 1.5,
+                            marginTop: '4px',
+                          }}>
+                            {sponsor.summary.length > 120
+                              ? sponsor.summary.substring(0, 120) + '...'
+                              : sponsor.summary}
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Featured Podcasts */}
+                {podcasts.length > 0 && (
+                  <div className="sidebar-section">
+                    <h3 className="sidebar-title">Featured Podcasts</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {podcasts.map((podcast) => (
+                        <a
+                          key={podcast.id}
+                          href={podcast.link_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="podcast-sidebar-card"
+                        >
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                            {podcast.image_url && (
+                              <div style={{
+                                flexShrink: 0,
+                                width: '56px',
+                                height: '56px',
+                                borderRadius: 'var(--radius-sm)',
+                                overflow: 'hidden',
+                                background: 'var(--color-border)',
+                              }}>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={podcast.image_url.startsWith('/') ? `${process.env.NEXT_PUBLIC_API_URL || ''}${podcast.image_url}` : podcast.image_url}
+                                  alt=""
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  loading="lazy"
+                                />
+                              </div>
+                            )}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{
+                                fontSize: '0.6rem',
+                                fontWeight: 700,
+                                letterSpacing: '0.08em',
+                                textTransform: 'uppercase',
+                                color: 'var(--color-text-muted)',
+                                marginBottom: '2px',
+                              }}>
+                                {podcast.show_name}
+                              </div>
+                              <div style={{
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                lineHeight: 1.35,
+                                color: 'var(--color-text)',
+                              }}>
+                                {podcast.episode_title.length > 80
+                                  ? podcast.episode_title.substring(0, 80) + '...'
+                                  : podcast.episode_title}
+                              </div>
+                            </div>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Latest News — 75+ score from cron */}
+                {latestNews.length > 0 && (
+                  <div className="sidebar-section">
+                    <h3 className="sidebar-title">Latest News</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      {latestNews.slice(0, 15).map((article) => (
+                        <div
+                          key={article.id}
+                          style={{
+                            padding: '8px 0',
+                            borderBottom: '1px solid var(--color-border)',
+                          }}
+                        >
+                          <div style={{
+                            fontSize: '0.65rem',
+                            color: 'var(--color-text-muted)',
+                            marginBottom: '2px',
+                          }}>
+                            {article.publication_name}
+                            {article.category && (
+                              <span style={{
+                                marginLeft: '6px',
+                                padding: '0 4px',
+                                fontSize: '0.58rem',
+                                border: '1px solid var(--color-accent)',
+                                borderRadius: '3px',
+                                color: 'var(--color-accent)',
+                              }}>
+                                {article.category}
+                              </span>
+                            )}
+                          </div>
+                          <a
+                            href={article.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover-link"
+                            style={{
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {article.headline || article.headline_en}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </aside>
             </div>
-          </section>
-        </>
+          </div>
+        </section>
       )}
 
-      {/* Section 4: Newest Updates */}
-      <section style={{ background: 'var(--color-surface)' }} className="section">
-        <div className="container">
-          <NewestUpdates />
-        </div>
-      </section>
-
-      {/* Section 5: Newsletter CTA */}
+      {/* Newsletter CTA — slim */}
       <section style={{
         background: 'var(--color-primary)',
         color: 'var(--color-text-inverse)',
-        padding: 'var(--space-12) 0',
+        padding: '28px 0',
         textAlign: 'center',
       }}>
-        <div className="container">
-          <h2 style={{
-            fontSize: 'clamp(1.25rem, 3vw, 1.75rem)',
-            fontWeight: 700,
-            marginBottom: 'var(--space-3)',
-          }}>
-            Never miss a geopolitical shift
-          </h2>
+        <div className="container" style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexWrap: 'wrap',
+          gap: 'var(--space-4)',
+        }}>
           <p style={{
             fontSize: '0.95rem',
-            color: 'rgba(255,255,255,0.6)',
-            marginBottom: 'var(--space-6)',
+            fontWeight: 600,
+            margin: 0,
           }}>
-            Join professionals who start their day with GeoMemo.
+            Never miss a geopolitical shift —{' '}
+            <span style={{ color: 'var(--color-accent)' }}>join professionals who start their day with GeoMemo</span>
           </p>
           <Link href="/newsletter" className="btn-primary" style={{
-            fontSize: '0.9rem',
-            padding: '14px 32px',
+            fontSize: '0.8rem',
+            padding: '10px 24px',
           }}>
             Subscribe Free
           </Link>
