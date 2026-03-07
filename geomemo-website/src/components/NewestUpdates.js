@@ -88,16 +88,12 @@ export default async function NewestUpdates() {
                   href={article.url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  className="hover-link"
                   style={{
                     fontSize: '0.875rem',
                     fontWeight: 600,
-                    color: 'var(--color-text)',
-                    textDecoration: 'none',
                     lineHeight: 1.4,
-                    transition: 'color 0.15s',
                   }}
-                  onMouseEnter={(e) => e.target.style.color = 'var(--color-accent)'}
-                  onMouseLeave={(e) => e.target.style.color = 'var(--color-text)'}
                 >
                   {article.headline_en || article.headline}
                 </a>

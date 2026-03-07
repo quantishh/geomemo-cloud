@@ -214,3 +214,25 @@ a {
   text-transform: uppercase;
   color: var(--color-text-muted);
 }
+
+/* Hover link style */
+.hover-link {
+  color: var(--color-text);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.hover-link:hover {
+  color: var(--color-accent);
+}
+
+/* Article cluster responsive */
+@media (max-width: 640px) {
+  .article-image {
+    width: 80px !important;
+    height: 56px !important;
+  }
+  .related-coverage {
+    padding-left: 0 !important;
+  }
+}

@@ -25,6 +25,7 @@ export default function ArticleCluster({ parent, children }) {
           }}
             className="article-image"
           >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={ogImage}
               alt=""
@@ -34,7 +35,6 @@ export default function ArticleCluster({ parent, children }) {
                 objectFit: 'cover',
               }}
               loading="lazy"
-              onError={(e) => { e.target.style.display = 'none'; }}
             />
           </div>
         )}
@@ -63,13 +63,7 @@ export default function ArticleCluster({ parent, children }) {
               href={parent.url}
               target="_blank"
               rel="noopener noreferrer"
-              style={{
-                color: 'var(--color-text)',
-                textDecoration: 'none',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={(e) => e.target.style.color = 'var(--color-accent)'}
-              onMouseLeave={(e) => e.target.style.color = 'var(--color-text)'}
+              className="hover-link"
             >
               {parent.headline_en || parent.headline}
             </a>
@@ -126,13 +120,7 @@ export default function ArticleCluster({ parent, children }) {
                   href={child.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{
-                    color: 'var(--color-text)',
-                    textDecoration: 'none',
-                    transition: 'color 0.15s',
-                  }}
-                  onMouseEnter={(e) => e.target.style.color = 'var(--color-accent)'}
-                  onMouseLeave={(e) => e.target.style.color = 'var(--color-text)'}
+                  className="hover-link"
                 >
                   {child.headline_en || child.headline}
                 </a>
@@ -151,18 +139,6 @@ export default function ArticleCluster({ parent, children }) {
           </ul>
         </div>
       )}
-
-      <style jsx>{`
-        @media (max-width: 640px) {
-          .article-image {
-            width: 80px !important;
-            height: 56px !important;
-          }
-          .related-coverage {
-            padding-left: 0 !important;
-          }
-        }
-      `}</style>
     </article>
   );
 }
