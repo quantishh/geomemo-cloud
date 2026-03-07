@@ -307,7 +307,7 @@ export default async function Home() {
               {/* RIGHT COLUMN — Latest News */}
               <div className="right-column">
                 {latestNews.length > 0 && (
-                  <div className="sidebar-section">
+                  <div>
                     <h3 className="sidebar-title">Latest News</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                       {latestNews.slice(0, 20).map((article) => (
@@ -343,12 +343,16 @@ export default async function Home() {
                             rel="noopener noreferrer"
                             className="hover-link"
                             style={{
-                              fontSize: '0.78rem',
-                              fontWeight: 600,
-                              lineHeight: 1.35,
+                              fontSize: '0.76rem',
+                              lineHeight: 1.45,
+                              color: 'var(--color-text-secondary)',
                             }}
                           >
-                            {article.headline || article.headline_en}
+                            {article.summary
+                              ? (article.summary.length > 180
+                                  ? article.summary.substring(0, 180) + '...'
+                                  : article.summary)
+                              : (article.headline || article.headline_en)}
                           </a>
                         </div>
                       ))}
