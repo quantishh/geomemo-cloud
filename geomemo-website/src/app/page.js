@@ -161,7 +161,7 @@ export default async function Home() {
                       <ArticleCluster
                         key={cluster.parent.id}
                         parent={cluster.parent}
-                        children={cluster.children}
+                        relatedArticles={cluster.children}
                       />
                     ))}
                   </div>

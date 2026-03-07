@@ -1,5 +1,5 @@
-export default function ArticleCluster({ parent, children }) {
-  const hasChildren = children && children.length > 0;
+export default function ArticleCluster({ parent, relatedArticles }) {
+  const hasChildren = relatedArticles && relatedArticles.length > 0;
   const ogImage = parent.og_image;
 
   return (
@@ -106,7 +106,7 @@ export default function ArticleCluster({ parent, children }) {
             flexDirection: 'column',
             gap: '4px',
           }}>
-            {children.map((child) => (
+            {relatedArticles.map((child) => (
               <li key={child.id} style={{
                 fontSize: '0.8rem',
                 lineHeight: 1.5,
