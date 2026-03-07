@@ -370,9 +370,11 @@ export default async function Home() {
                             rel="noopener noreferrer"
                             className="latest-news-link"
                           >
-                            {(article.headline_en || article.headline || '').length > 140
-                              ? (article.headline_en || article.headline).substring(0, 140) + '...'
-                              : (article.headline_en || article.headline)}
+                            {article.summary
+                              ? (article.summary.length > 180
+                                  ? article.summary.substring(0, 180) + '...'
+                                  : article.summary)
+                              : (article.headline_en || article.headline || '')}
                           </a>
                           {article.scraped_at && (
                             <div style={{
