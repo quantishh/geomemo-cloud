@@ -27,11 +27,15 @@ export async function fetchApprovedArticles() {
 
 export async function fetchNewestUpdates() {
   try {
-    const res = await fetch(`${API_URL}/articles/newest-updates`, {
-      cache: 'no-store',
-    });
+    // Use the general /articles endpoint with score filter (works on production)
+    const res = await fetch(
+      `${API_URL}/articles?status=approved&min_score=75&days=2&sort_by=auto_approval_score&order=desc&limit=20`,
+      { cache: 'no-store' }
+    );
     if (!res.ok) return [];
-    return res.json();
+    const data = await res.json();
+    // The endpoint returns {articles, total, ...} when limit is set
+    return data.articles || data;
   } catch (error) {
     console.error('Failed to fetch newest updates:', error);
     return [];
