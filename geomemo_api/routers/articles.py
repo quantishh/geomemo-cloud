@@ -208,7 +208,8 @@ def get_approved_articles():
             SELECT {ARTICLE_COLUMNS}
             FROM articles
             WHERE status = 'approved'
-              AND scraped_at >= NOW() - INTERVAL '36 hours'
+              AND (scraped_at AT TIME ZONE 'America/New_York')::date
+                  = (NOW() AT TIME ZONE 'America/New_York')::date
             ORDER BY is_top_story DESC, scraped_at DESC
         """)
         return [dict(row) for row in cursor.fetchall()]
