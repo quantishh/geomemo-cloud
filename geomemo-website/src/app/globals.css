@@ -51,6 +51,77 @@
   --space-16: 64px;
 }
 
+/* Dark mode overrides */
+[data-theme="dark"] {
+  --color-bg: #0F0F1A;
+  --color-surface: #1A1A2E;
+  --color-surface-hover: #252542;
+
+  --color-text: #E5E7EB;
+  --color-text-secondary: #9CA3AF;
+  --color-text-muted: #6B7280;
+  --color-text-inverse: #0F0F1A;
+
+  --color-border: #2A2A45;
+  --color-border-strong: #3A3A5C;
+
+  --color-accent-light: rgba(201, 168, 76, 0.15);
+}
+
+/* Dark mode — newsletter callout adjustments */
+[data-theme="dark"] .newsletter-callout {
+  background: #3D3520;
+  border-color: #5C4F30;
+  color: #F5E6B8;
+}
+[data-theme="dark"] .newsletter-callout:hover {
+  background: #4A4028;
+}
+[data-theme="dark"] .newsletter-callout::before {
+  border-bottom-color: #5C4F30;
+}
+[data-theme="dark"] .newsletter-callout::after {
+  border-bottom-color: #3D3520;
+}
+
+/* Dark mode — podcast card background */
+[data-theme="dark"] .podcast-card {
+  background: var(--color-surface);
+}
+
+/* Dark mode — sponsor sidebar card */
+[data-theme="dark"] .sponsor-sidebar-card {
+  background: var(--color-surface);
+}
+
+/* Dark mode — tweet popup */
+[data-theme="dark"] .tweet-popup {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+/* Theme toggle button */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-light);
+}
+
 @theme inline {
   --color-background: var(--color-bg);
   --color-foreground: var(--color-text);
@@ -335,7 +406,7 @@ a {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 
 /* Sidebar section blocks */
