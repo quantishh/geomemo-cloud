@@ -94,32 +94,32 @@ export default async function Home() {
 
   return (
     <>
-      {/* Hero — slim banner */}
+      {/* Hero — ultra-slim banner, no Subscribe button */}
       <section style={{
         background: 'var(--color-primary)',
         color: 'var(--color-text-inverse)',
-        padding: '20px 0',
+        padding: '12px 0',
       }}>
         <div className="container" style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '12px',
+          gap: '8px',
         }}>
           <div>
             <p style={{
-              fontSize: '0.7rem',
+              fontSize: '0.65rem',
               fontWeight: 600,
               letterSpacing: '0.15em',
               textTransform: 'uppercase',
               color: 'var(--color-accent)',
-              marginBottom: '4px',
+              marginBottom: '2px',
             }}>
               {today}
             </p>
             <h1 style={{
-              fontSize: 'clamp(1.1rem, 2.5vw, 1.4rem)',
+              fontSize: 'clamp(1rem, 2.5vw, 1.3rem)',
               fontWeight: 700,
               letterSpacing: '-0.02em',
               margin: 0,
@@ -128,12 +128,6 @@ export default async function Home() {
               <span style={{ color: 'var(--color-accent)' }}>Global Decision Makers</span>
             </h1>
           </div>
-          <Link href="/newsletter" className="btn-primary" style={{
-            fontSize: '0.8rem',
-            padding: '10px 24px',
-          }}>
-            Subscribe Free
-          </Link>
         </div>
       </section>
 
@@ -151,20 +145,25 @@ export default async function Home() {
         </section>
       ) : (
         /* Main Content — 3-column Techmeme-style layout */
-        <section style={{ padding: 'var(--space-6) 0 var(--space-12)' }}>
+        <section style={{ padding: 'var(--space-4) 0 var(--space-12)' }}>
           <div className="container">
+
+            {/* Newsletter callout — Techmeme-style bubble */}
+            <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+              <Link href="/newsletter" className="newsletter-callout">
+                Get our Daily Newsletter and never miss a story!
+              </Link>
+            </div>
+
             <div className="homepage-grid">
 
               {/* LEFT COLUMN — Main News */}
               <div className="main-column">
 
-                {/* Top News */}
+                {/* Top News — no gold bar */}
                 {topStoryClusters.length > 0 && (
                   <div style={{ marginBottom: 'var(--space-8)' }}>
-                    <div className="section-header">
-                      <h2 className="section-title">Top News</h2>
-                      <div className="accent-bar" />
-                    </div>
+                    <h2 className="section-title" style={{ marginBottom: 'var(--space-4)' }}>Top News</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
                       {topStoryClusters.map((cluster) => (
                         <ArticleCluster
@@ -211,10 +210,10 @@ export default async function Home() {
                 ))}
               </div>
 
-              {/* MIDDLE COLUMN — Sponsors + Podcasts (Techmeme-clean) */}
-              <div className="middle-column">
+              {/* MIDDLE COLUMN — Sponsors + Podcasts (with background) */}
+              <div className="middle-column middle-column-bg">
 
-                {/* Sponsor Posts — clean, no card borders */}
+                {/* Sponsor Posts — charcoal fonts, no gold */}
                 {sponsors.length > 0 && (
                   <div>
                     <h3 className="sidebar-title">Sponsor Posts</h3>
@@ -241,7 +240,7 @@ export default async function Home() {
                             fontSize: '0.88rem',
                             fontWeight: 700,
                             lineHeight: 1.35,
-                            color: 'var(--color-accent)',
+                            color: 'var(--color-text)',
                             marginBottom: '4px',
                           }}>
                             {sponsor.headline}
@@ -261,7 +260,7 @@ export default async function Home() {
                   </div>
                 )}
 
-                {/* Featured Podcasts — Techmeme-style with floating artwork */}
+                {/* Featured Podcasts — charcoal fonts */}
                 {podcasts.length > 0 && (
                   <div>
                     <h3 className="sidebar-title">Featured Podcasts</h3>
@@ -303,7 +302,7 @@ export default async function Home() {
                               fontSize: '0.88rem',
                               fontWeight: 700,
                               lineHeight: 1.35,
-                              color: 'var(--color-accent)',
+                              color: 'var(--color-text)',
                               marginBottom: '6px',
                             }}>
                               {podcast.episode_title}
@@ -323,7 +322,7 @@ export default async function Home() {
                           <div style={{
                             clear: 'both',
                             fontSize: '0.7rem',
-                            color: 'var(--color-accent)',
+                            color: 'var(--color-text-secondary)',
                             fontWeight: 600,
                             marginTop: '8px',
                             paddingTop: '6px',
@@ -338,7 +337,7 @@ export default async function Home() {
                 )}
               </div>
 
-              {/* RIGHT COLUMN — Latest News (Techmeme "Newest" style) */}
+              {/* RIGHT COLUMN — Latest News (charcoal fonts) */}
               <div className="right-column">
                 {latestNews.length > 0 && (
                   <div>

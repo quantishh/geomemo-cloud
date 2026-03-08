@@ -5,7 +5,7 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
   const tweets = parent.embedded_tweets;
   const hasTweets = tweets && tweets.length > 0;
 
-  // Separator logic: "A and B" for 2, "A, B, and C" for 3+
+  // Separator: "A and B" for 2, "A, B, and C" for 3+
   const listSep = (idx, total) => {
     if (idx >= total - 1) return '';
     if (total === 2) return ' and ';
@@ -20,10 +20,7 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
       ...(isTopStory ? { borderLeft: '3px solid var(--color-accent)', paddingLeft: 'var(--space-4)' } : {}),
     }}>
       {/* Source / Author — Techmeme style: "Author / Publication:" */}
-      <div style={{
-        fontSize: '0.82rem',
-        marginBottom: '2px',
-      }}>
+      <div style={{ fontSize: '0.82rem', marginBottom: '2px' }}>
         {parent.author ? (
           <>
             <span>{parent.author}</span>
@@ -35,7 +32,7 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
         )}
       </div>
 
-      {/* Headline + optional floating image + inline summary */}
+      {/* Summary displayed as headline + optional floating image */}
       <div style={{ overflow: 'hidden' }}>
         {ogImage && (
           <img
@@ -53,36 +50,24 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
             loading="lazy"
           />
         )}
-        <div style={{ lineHeight: 1.5 }}>
-          <h3 style={{
-            display: 'inline',
-            fontSize: isTopStory ? '1.15rem' : '1rem',
-            fontWeight: 700,
-            lineHeight: 1.35,
-            margin: 0,
-          }}>
-            <a
-              href={parent.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover-link"
-            >
-              {parent.headline_en || parent.headline}
-            </a>
-          </h3>
-          {parent.summary && (
-            <span style={{
-              fontSize: isTopStory ? '0.88rem' : '0.84rem',
-              color: 'var(--color-text-secondary)',
-              fontWeight: 400,
-            }}>
-              {' '}&mdash; {parent.summary}
-            </span>
-          )}
-        </div>
+        <h3 style={{
+          fontSize: isTopStory ? '1.15rem' : '1rem',
+          fontWeight: 700,
+          lineHeight: 1.35,
+          margin: 0,
+        }}>
+          <a
+            href={parent.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover-link"
+          >
+            {parent.summary || parent.headline_en || parent.headline}
+          </a>
+        </h3>
       </div>
 
-      {/* Related coverage — Techmeme "More:" style */}
+      {/* Related: "More:" with publication name links */}
       {hasChildren && (
         <div style={{ marginTop: '6px', fontSize: '0.78rem', lineHeight: 1.6 }}>
           <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>More:</span>{' '}
@@ -97,19 +82,24 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
         </div>
       )}
 
-      {/* Embedded X discussions — Techmeme "X:" style with @usernames */}
+      {/* X discussions — logo inline with usernames, popup on hover */}
       {hasTweets && (
-        <div style={{ marginTop: '2px', fontSize: '0.78rem', lineHeight: 1.6 }}>
-          <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ verticalAlign: '-1px', marginRight: '2px' }}>
+        <div style={{ marginTop: '2px', fontSize: '0.78rem', lineHeight: 1.8 }}>
+          <span style={{ fontWeight: 700, color: 'var(--color-accent)', whiteSpace: 'nowrap' }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'inline', verticalAlign: '-1px', marginRight: '1px' }}>
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-            </svg>:
-          </span>{' '}
+            </svg>:</span>{' '}
           {tweets.map((tweet, idx) => (
-            <span key={idx}>
+            <span key={idx} className="tweet-hover-wrapper">
               <a href={tweet.url || '#'} target="_blank" rel="noopener noreferrer" className="hover-link">
                 @{tweet.username}
               </a>
+              {tweet.text && (
+                <span className="tweet-popup">
+                  <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--color-text)' }}>@{tweet.username}</strong>
+                  {tweet.text.length > 280 ? tweet.text.substring(0, 280) + '...' : tweet.text}
+                </span>
+              )}
               {listSep(idx, tweets.length)}
               {idx === tweets.length - 1 && '.'}
             </span>
