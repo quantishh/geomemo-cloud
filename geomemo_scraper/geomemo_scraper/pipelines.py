@@ -120,25 +120,13 @@ STEP 3: Extract ALL countries mentioned or implied in the headline and content.
 Return their common English names (e.g., "United States", "China", "Russia").
 If no specific country is mentioned, return an empty list.
 
-STEP 4: Write the "summary" field:
-- 20-50 words. Write like a Reuters wire brief — punchy, present tense, active voice.
-- ACTIVE VOICE ONLY. Name the specific actor first: "Anthropic vows..." NOT "A court fight is vowed."
-- Preserve specific names and titles from the headline — do NOT generalize ("chief tech officer" stays, not "official").
-- Each sentence must add NEW information. NEVER restate the same fact in different words.
-- ONLY use facts from the headline and content provided. NEVER invent names, figures, or details.
-- No dates. No filler ("point of contention", "remains to be seen", "is a concern"). English only.
-
-STEP 5: Write the "summary_long" field:
-- 50-100 words. Same rules: active voice, actor-first, no repetition, no invented facts.
-- No dates. English only.
-
-STEP 6: Output valid JSON:
+STEP 4: Output valid JSON:
 {{
     "is_relevant": "yes/no",
     "confidence_score": <integer 0-100>,
     "headline_en": "Formal English Headline",
-    "summary": "<your 30-50 word summary from STEP 4>",
-    "summary_long": "<your 80-100 word analytical summary from STEP 5>",
+    "summary": "Professional 50-word MAX news summary. Write in authoritative analytical tone for investment bankers and policymakers. Lead with the key development, include specific names/figures/countries. ONLY use facts from the headline and content provided. NEVER invent names, figures, or details. Do NOT include dates. English only. Do NOT exceed 50 words.",
+    "summary_long": "100-word analytical summary for social media. Include key facts, figures, names, implications for markets and policy. Note which countries are affected and why this matters for global investors. ONLY use facts from the provided content. NEVER invent or hallucinate details. Do NOT include dates. English only.",
     "category": "Category Name",
     "countries": ["Country1", "Country2"]
 }}
@@ -381,26 +369,6 @@ Content: "{content_snippet}"
             adapter['headline_en'] = processed_data.get('headline_en', headline)
             adapter['summary'] = processed_data.get('summary', 'No summary.')
             adapter['summary_long'] = processed_data.get('summary_long', adapter['summary'])
-
-            # 3b. Post-process: if summary is too short, regenerate with dedicated call
-            summary_wc = len(adapter['summary'].split())
-            if summary_wc < 20:
-                try:
-                    enhance_resp = groq_client.chat.completions.create(
-                        messages=[
-                            {"role": "system", "content": "You are a Reuters wire editor. RULES: Active voice only — name the actor first. Preserve specific names/titles from the headline. Each sentence adds new information — never repeat. ONLY use facts from the source. NEVER invent details. No dates."},
-                            {"role": "user", "content": f"Rewrite as a 20-50 word wire brief. Active voice, actor-first. No dates. No repetition. Only facts from below.\n\nHeadline: {adapter['headline_en']}\nContent: {content_snippet}"}
-                        ],
-                        model="llama-3.3-70b-versatile",
-                        temperature=0.1,
-                    )
-                    enhanced = enhance_resp.choices[0].message.content.strip().strip('"')
-                    enhanced_wc = len(enhanced.split())
-                    if enhanced_wc > summary_wc:
-                        adapter['summary'] = enhanced
-                        self.logger.info(f"Summary enhanced: {summary_wc}→{enhanced_wc} words")
-                except Exception as e:
-                    self.logger.warning(f"Summary enhance failed: {e}")
 
             # 4. Generate Embedding AFTER Groq — use English headline + AI summary
             #    for accurate cross-language similarity matching
