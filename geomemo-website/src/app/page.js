@@ -148,8 +148,8 @@ export default async function Home() {
         <section style={{ padding: 'var(--space-4) 0 var(--space-12)' }}>
           <div className="container">
 
-            {/* Newsletter callout — Techmeme-style bubble */}
-            <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+            {/* Newsletter callout — right-aligned below Subscribe button */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 0 12px' }}>
               <Link href="/newsletter" className="newsletter-callout">
                 Get our Daily Newsletter and never miss a story!
               </Link>
