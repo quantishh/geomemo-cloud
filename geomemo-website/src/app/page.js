@@ -128,6 +128,10 @@ export default async function Home() {
               <span style={{ color: 'var(--color-accent)' }}>Global Decision Makers</span>
             </h1>
           </div>
+          {/* Newsletter callout — inside hero, below Subscribe button */}
+          <Link href="/newsletter" className="newsletter-callout">
+            Get our Daily Newsletter and never miss a story!
+          </Link>
         </div>
       </section>
 
@@ -147,13 +151,6 @@ export default async function Home() {
         /* Main Content — 3-column Techmeme-style layout */
         <section style={{ padding: 'var(--space-4) 0 var(--space-12)' }}>
           <div className="container">
-
-            {/* Newsletter callout — right-aligned below Subscribe button */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 0 12px' }}>
-              <Link href="/newsletter" className="newsletter-callout">
-                Get our Daily Newsletter and never miss a story!
-              </Link>
-            </div>
 
             <div className="homepage-grid">
 
