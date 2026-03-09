@@ -292,8 +292,8 @@ def get_website_feed():
     Live website feed — disconnected from the newsletter.
     Returns structured JSON with three sections:
     - top_stories: is_top_story=true from last published newsletter + score>=90 from 24h
-    - main_stories: score 80+ from 48h, topic-deduplicated, with related_sources
-    - more_news: score 70-79 from 48h, max 14 items
+    - main_stories: score 75+ from 48h, topic-deduplicated, with related_sources
+    - more_news: score 65-74 from 48h, max 14 items
     """
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -339,12 +339,12 @@ def get_website_feed():
                 top_stories.append(art)
                 top_story_ids.add(art['id'])
 
-        # 3. MAIN STORIES: score 80+ from 48h, topic-deduplicated
+        # 3. MAIN STORIES: score 75+ from 48h, topic-deduplicated
         cursor.execute(f"""
             SELECT {ARTICLE_COLUMNS}, embedding
             FROM articles
             WHERE status = 'approved'
-              AND auto_approval_score >= 80
+              AND auto_approval_score >= 75
               AND scraped_at >= NOW() - INTERVAL '48 hours'
             ORDER BY auto_approval_score DESC, scraped_at DESC
         """)
@@ -381,15 +381,15 @@ def get_website_feed():
             art.pop('topic_group', None)
             art.pop('topic_group_size', None)
 
-        # 4. MORE NEWS: score 70-79 from 48h, max 14 items
+        # 4. MORE NEWS: score 65-74 from 48h, max 14 items
         main_story_ids = {a['id'] for a in main_stories}
         all_used_ids = top_story_ids | main_story_ids
         cursor.execute(f"""
             SELECT {ARTICLE_COLUMNS}
             FROM articles
             WHERE status = 'approved'
-              AND auto_approval_score >= 70
-              AND auto_approval_score < 80
+              AND auto_approval_score >= 65
+              AND auto_approval_score < 75
               AND scraped_at >= NOW() - INTERVAL '48 hours'
             ORDER BY auto_approval_score DESC, scraped_at DESC
             LIMIT 20
