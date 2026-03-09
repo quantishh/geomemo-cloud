@@ -132,9 +132,9 @@ class NewsletterSignup(BaseModel):
     email: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    company: str
-    title: str
-    field: str
+    company: Optional[str] = ""
+    title: Optional[str] = ""
+    field: Optional[str] = ""
 
 
 # --- M3: Newsletter Generation Models ---

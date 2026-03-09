@@ -1,3 +1,5 @@
+import SubscribeForm from '@/components/SubscribeForm';
+
 export const metadata = {
   title: 'Subscribe — GeoMemo',
   description: 'Subscribe to the GeoMemo daily geopolitical intelligence briefing.',
@@ -51,26 +53,7 @@ export default function NewsletterPage() {
             maxWidth: '440px',
             margin: '0 auto',
           }}>
-            <iframe
-              src="https://embeds.beehiiv.com/f5b23597-6d09-4708-a9af-2b21e5e58e32?slim=true"
-              data-test-id="beehiiv-embed"
-              height="52"
-              frameBorder="0"
-              scrolling="no"
-              style={{
-                width: '100%',
-                border: 'none',
-                borderRadius: 'var(--radius)',
-                marginBottom: 'var(--space-2)',
-              }}
-            />
-            <p style={{
-              fontSize: '0.7rem',
-              color: 'rgba(255,255,255,0.4)',
-              margin: 0,
-            }}>
-              Free forever. No spam. Unsubscribe anytime.
-            </p>
+            <SubscribeForm variant="full" darkBackground={true} />
           </div>
         </div>
       </section>

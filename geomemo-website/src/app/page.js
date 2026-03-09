@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { fetchWebsiteFeed, fetchSponsors, fetchPodcasts, fetchNewestUpdates, fetchEvents } from '@/lib/api';
 import ArticleCluster from '@/components/ArticleCluster';
+import SubscribeForm from '@/components/SubscribeForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -547,34 +548,26 @@ export default async function Home() {
         </section>
       )}
 
-      {/* Newsletter CTA — slim */}
+      {/* Newsletter CTA — inline subscribe form */}
       <section style={{
         background: 'var(--color-primary)',
         color: 'var(--color-text-inverse)',
-        padding: '28px 0',
+        padding: '32px 0',
         textAlign: 'center',
       }}>
-        <div className="container" style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexWrap: 'wrap',
-          gap: 'var(--space-4)',
-        }}>
+        <div className="container" style={{ maxWidth: '640px' }}>
           <p style={{
             fontSize: '0.95rem',
             fontWeight: 600,
             margin: 0,
+            marginBottom: 'var(--space-4)',
           }}>
             Never miss a geopolitical shift —{' '}
             <span style={{ color: 'var(--color-accent)' }}>join professionals who start their day with GeoMemo</span>
           </p>
-          <Link href="/newsletter" className="btn-primary" style={{
-            fontSize: '0.8rem',
-            padding: '10px 24px',
-          }}>
-            Subscribe Free
-          </Link>
+          <div style={{ maxWidth: '440px', margin: '0 auto' }}>
+            <SubscribeForm variant="compact" darkBackground={true} />
+          </div>
         </div>
       </section>
     </>

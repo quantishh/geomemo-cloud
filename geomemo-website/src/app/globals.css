@@ -661,3 +661,26 @@ a {
     padding-left: 0 !important;
   }
 }
+
+/* ========================================
+   Subscribe Form
+   ======================================== */
+
+.subscribe-input:focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.2);
+}
+
+.subscribe-input::placeholder {
+  color: rgba(255,255,255,0.35);
+}
+
+/* Stack email + button vertically on small screens */
+@media (max-width: 480px) {
+  .subscribe-row {
+    flex-direction: column !important;
+  }
+  .subscribe-row .btn-primary {
+    width: 100%;
+  }
+}
