@@ -123,6 +123,7 @@ class Podcast(BaseModel):
     description: str
     link_url: str
     image_url: str
+    video_url: Optional[str] = None
     created_at: datetime
 
 

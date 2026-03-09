@@ -84,6 +84,13 @@
                     </div>
                     <input type="text" id="podcast-title" name="episode_title" placeholder="Episode Title" class="p-2 border rounded w-full" required>
                     <textarea id="podcast-desc" name="description" placeholder="Description" class="p-2 border rounded w-full h-20" required></textarea>
+                    <div>
+                        <label class="block text-xs mb-1" style="color: var(--text-muted);">YouTube Video URL (auto-filled if YouTube link)</label>
+                        <input type="url" id="podcast-video-url" name="video_url" placeholder="https://youtube.com/watch?v=..." class="p-2 border rounded w-full">
+                        <div id="podcast-video-preview" class="mt-2" style="display:none;">
+                            <iframe id="podcast-video-iframe" width="100%" height="200" frameborder="0" allowfullscreen style="border-radius:8px;"></iframe>
+                        </div>
+                    </div>
                     <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full">Add Content</button>
                 </form>
                 <h3 class="font-bold mb-2" style="color: var(--text-primary);">Active Content</h3>

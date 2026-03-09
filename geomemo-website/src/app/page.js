@@ -28,6 +28,12 @@ function stripHtml(str) {
   return str.replace(/<[^>]*>/g, '').trim();
 }
 
+function extractYouTubeId(url) {
+  if (!url) return '';
+  const match = url.match(/(?:v=|\/embed\/|youtu\.be\/)([\w-]{11})/);
+  return match ? match[1] : '';
+}
+
 export default async function Home() {
   const [articles, sponsors, podcasts, latestNews] = await Promise.all([
     fetchApprovedArticles(),
@@ -218,9 +224,9 @@ export default async function Home() {
                 {/* Sponsor Posts — charcoal fonts, no gold */}
                 {sponsors.length > 0 && (
                   <div>
-                    <h3 className="sidebar-title">Sponsor Posts</h3>
+                    <h3 className="sidebar-title">Featured Think Tanks</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                      {sponsors.map((sponsor) => (
+                      {sponsors.slice(0, 6).map((sponsor) => (
                         <a
                           key={sponsor.id}
                           href={sponsor.link_url}
@@ -267,73 +273,92 @@ export default async function Home() {
                   <div>
                     <h3 className="sidebar-title">Featured Podcasts</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {podcasts.map((podcast) => (
-                        <a
-                          key={podcast.id}
-                          href={podcast.link_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="podcast-card"
-                        >
-                          <div style={{ overflow: 'hidden' }}>
-                            {podcast.image_url && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={podcast.image_url.startsWith('/') ? `${process.env.NEXT_PUBLIC_API_URL || ''}${podcast.image_url}` : podcast.image_url}
-                                alt=""
-                                style={{
-                                  float: 'right',
-                                  width: '88px',
-                                  height: '88px',
-                                  objectFit: 'cover',
-                                  borderRadius: 'var(--radius-sm)',
-                                  marginLeft: '10px',
-                                  marginBottom: '4px',
-                                }}
-                                loading="lazy"
-                              />
-                            )}
-                            <div style={{
-                              fontSize: '0.72rem',
-                              color: 'var(--color-text-secondary)',
-                              marginBottom: '3px',
-                            }}>
-                              {podcast.show_name}:
-                            </div>
-                            <div style={{
-                              fontSize: '0.88rem',
-                              fontWeight: 700,
-                              lineHeight: 1.35,
-                              color: 'var(--color-text)',
-                              marginBottom: '6px',
-                            }}>
-                              {podcast.episode_title}
-                            </div>
-                            <div style={{
-                              fontSize: '0.72rem',
-                              color: 'var(--color-text-secondary)',
-                              lineHeight: 1.5,
-                            }}>
-                              {podcast.description
-                                ? (podcast.description.length > 120
-                                    ? podcast.description.substring(0, 120) + '...'
-                                    : podcast.description)
-                                : `Listen to ${podcast.show_name} for insightful analysis and discussion.`}
-                            </div>
+                      {podcasts.slice(0, 8).map((podcast) => {
+                        const youtubeId = podcast.video_url ? extractYouTubeId(podcast.video_url) : '';
+                        return (
+                          <div key={podcast.id} className="podcast-card">
+                            {/* YouTube embed if video_url present */}
+                            {youtubeId ? (
+                              <div style={{ marginBottom: '8px' }}>
+                                <iframe
+                                  width="100%"
+                                  height="160"
+                                  src={`https://www.youtube.com/embed/${youtubeId}`}
+                                  frameBorder="0"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                  style={{ borderRadius: 'var(--radius-sm)' }}
+                                  loading="lazy"
+                                />
+                              </div>
+                            ) : null}
+                            <a
+                              href={podcast.link_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ textDecoration: 'none', color: 'inherit' }}
+                            >
+                              <div style={{ overflow: 'hidden' }}>
+                                {!youtubeId && podcast.image_url && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={podcast.image_url.startsWith('/') ? `${process.env.NEXT_PUBLIC_API_URL || ''}${podcast.image_url}` : podcast.image_url}
+                                    alt=""
+                                    style={{
+                                      float: 'right',
+                                      width: '88px',
+                                      height: '88px',
+                                      objectFit: 'cover',
+                                      borderRadius: 'var(--radius-sm)',
+                                      marginLeft: '10px',
+                                      marginBottom: '4px',
+                                    }}
+                                    loading="lazy"
+                                  />
+                                )}
+                                <div style={{
+                                  fontSize: '0.72rem',
+                                  color: 'var(--color-text-secondary)',
+                                  marginBottom: '3px',
+                                }}>
+                                  {podcast.show_name}:
+                                </div>
+                                <div style={{
+                                  fontSize: '0.88rem',
+                                  fontWeight: 700,
+                                  lineHeight: 1.35,
+                                  color: 'var(--color-text)',
+                                  marginBottom: '6px',
+                                }}>
+                                  {podcast.episode_title}
+                                </div>
+                                <div style={{
+                                  fontSize: '0.72rem',
+                                  color: 'var(--color-text-secondary)',
+                                  lineHeight: 1.5,
+                                }}>
+                                  {podcast.description
+                                    ? (podcast.description.length > 120
+                                        ? podcast.description.substring(0, 120) + '...'
+                                        : podcast.description)
+                                    : `Listen to ${podcast.show_name} for insightful analysis and discussion.`}
+                                </div>
+                              </div>
+                              <div style={{
+                                clear: 'both',
+                                fontSize: '0.7rem',
+                                color: 'var(--color-text-secondary)',
+                                fontWeight: 600,
+                                marginTop: '8px',
+                                paddingTop: '6px',
+                                borderTop: '1px solid var(--color-border)',
+                              }}>
+                                Subscribe to {podcast.show_name}.
+                              </div>
+                            </a>
                           </div>
-                          <div style={{
-                            clear: 'both',
-                            fontSize: '0.7rem',
-                            color: 'var(--color-text-secondary)',
-                            fontWeight: 600,
-                            marginTop: '8px',
-                            paddingTop: '6px',
-                            borderTop: '1px solid var(--color-border)',
-                          }}>
-                            Subscribe to {podcast.show_name}.
-                          </div>
-                        </a>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -345,7 +370,7 @@ export default async function Home() {
                   <div>
                     <h3 className="sidebar-title">Latest News</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                      {latestNews.slice(0, 20).map((article) => (
+                      {latestNews.slice(0, 15).map((article) => (
                         <div
                           key={article.id}
                           style={{

@@ -203,6 +203,8 @@ def init_db():
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS og_image TEXT",
             # Events index for upcoming events query
             "CREATE INDEX IF NOT EXISTS idx_events_start_date ON events (start_date)",
+            # Podcast YouTube video embed support
+            "ALTER TABLE podcasts ADD COLUMN IF NOT EXISTS video_url TEXT",
         ]
         for sql in migrations:
             try:

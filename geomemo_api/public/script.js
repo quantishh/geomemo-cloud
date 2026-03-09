@@ -1614,16 +1614,29 @@ document.addEventListener('DOMContentLoaded', () => {
             if(!res.ok) throw new Error("Failed"); 
             const data = await res.json(); 
             
-            document.getElementById('podcast-show').value = data.site_name || "Featured"; 
-            document.getElementById('podcast-title').value = data.title || ""; 
-            document.getElementById('podcast-desc').value = data.description || ""; 
-            document.getElementById('podcast-image-url').value = data.image_url || ""; 
-        } catch(e) { 
-            alert("Failed: " + e.message); 
-        } finally { 
-            btn.textContent = "Fetch"; 
-            btn.disabled = false; 
-        } 
+            document.getElementById('podcast-show').value = data.site_name || "Featured";
+            document.getElementById('podcast-title').value = data.title || "";
+            document.getElementById('podcast-desc').value = data.description || "";
+            document.getElementById('podcast-image-url').value = data.image_url || "";
+
+            // Auto-fill video URL for YouTube links
+            const videoUrlField = document.getElementById('podcast-video-url');
+            const videoPreview = document.getElementById('podcast-video-preview');
+            const videoIframe = document.getElementById('podcast-video-iframe');
+            if ((url.includes('youtube.com') || url.includes('youtu.be')) && videoUrlField) {
+                videoUrlField.value = url;
+                const match = url.match(/(?:v=|\/embed\/|youtu\.be\/)([\w-]{11})/);
+                if (match && videoPreview && videoIframe) {
+                    videoIframe.src = `https://www.youtube.com/embed/${match[1]}`;
+                    videoPreview.style.display = 'block';
+                }
+            }
+        } catch(e) {
+            alert("Failed: " + e.message);
+        } finally {
+            btn.textContent = "Fetch";
+            btn.disabled = false;
+        }
     }
 
     // =========================================
@@ -1725,12 +1738,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
-    async function handlePodcastSubmit(e) { 
-        e.preventDefault(); 
-        const fd=new FormData(e.target); 
-        await fetch(`${API_BASE_URL}/podcasts`,{method:'POST', body:fd}); 
-        e.target.reset(); 
-        fetchPodcastsList(); 
+    async function handlePodcastSubmit(e) {
+        e.preventDefault();
+        const fd=new FormData(e.target);
+        await fetch(`${API_BASE_URL}/podcasts`,{method:'POST', body:fd});
+        e.target.reset();
+        // Hide video preview after submit
+        const vp = document.getElementById('podcast-video-preview');
+        if (vp) vp.style.display = 'none';
+        fetchPodcastsList();
     }
 
     async function fetchPodcastsList() {

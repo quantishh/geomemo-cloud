@@ -254,6 +254,7 @@ async def add_podcast(
     link_url: str = Form(...),
     image_url: Optional[str] = Form(None),
     image_file: UploadFile = File(None),
+    video_url: Optional[str] = Form(None),
 ):
     final_image = image_url
     if image_file:
@@ -264,8 +265,8 @@ async def add_podcast(
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "INSERT INTO podcasts (show_name, episode_title, description, link_url, image_url) VALUES (%s, %s, %s, %s, %s)",
-            (show_name, episode_title, description, link_url, final_image),
+            "INSERT INTO podcasts (show_name, episode_title, description, link_url, image_url, video_url) VALUES (%s, %s, %s, %s, %s, %s)",
+            (show_name, episode_title, description, link_url, final_image, video_url),
         )
         conn.commit()
         return {"message": "Podcast added"}
