@@ -376,6 +376,9 @@ def get_website_feed():
                     'author': art.get('author', ''),
                 })
 
+        # Limit to top 20 topic groups for the homepage
+        main_stories = main_stories[:20]
+
         # Clean up topic_group fields from output
         for art in main_stories:
             art.pop('topic_group', None)
