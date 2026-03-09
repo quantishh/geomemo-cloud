@@ -212,7 +212,34 @@
                         <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add Event</button>
                     </div>
                 </form>
-                <h3 class="font-bold mb-2" style="color: var(--text-primary);">Upcoming Events</h3>
+
+                <!-- Extract Events + Pending Queue -->
+                <div class="mb-6 p-4 rounded border" style="background-color: #fffbeb; border-color: #f59e0b;">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-bold" style="color: #92400e;">
+                            ⏳ Pending Events <span id="pending-count" class="text-sm font-normal">(0)</span>
+                        </h3>
+                        <button id="extract-events-btn" onclick="extractEventsNow()" class="px-3 py-1.5 rounded text-sm font-semibold text-white" style="background-color: #d97706;">
+                            🔍 Extract Events from Articles
+                        </button>
+                    </div>
+                    <table class="w-full text-sm text-left" style="color: var(--text-secondary);">
+                        <thead class="text-xs uppercase" style="background-color: rgba(245, 158, 11, 0.15); color: #92400e;">
+                            <tr>
+                                <th class="p-2">Date</th>
+                                <th class="p-2">Event</th>
+                                <th class="p-2">Location</th>
+                                <th class="p-2">Category</th>
+                                <th class="p-2">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pending-events-tbody">
+                            <tr><td colspan="5" class="p-2 text-center" style="color: #92400e;">No pending events</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="font-bold mb-2" style="color: var(--text-primary);">Approved Events</h3>
                 <table class="w-full text-sm text-left" style="color: var(--text-secondary);">
                     <thead class="text-xs uppercase" style="background-color: var(--bg-section); color: var(--text-muted);">
                         <tr>

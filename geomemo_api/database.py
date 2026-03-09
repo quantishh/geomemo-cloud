@@ -211,6 +211,13 @@ def init_db():
             # Website X posts: auto-fetched tweets cached per article (separate from newsletter embedded_tweets)
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS website_tweets JSONB",
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS website_tweets_fetched_at TIMESTAMPTZ",
+            # Automated event extraction from articles
+            "ALTER TABLE events ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'approved'",
+            "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_article_id INTEGER",
+            "ALTER TABLE events ADD COLUMN IF NOT EXISTS extracted_at TIMESTAMPTZ",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS events_extracted BOOLEAN DEFAULT FALSE",
+            "CREATE INDEX IF NOT EXISTS idx_events_status ON events (status)",
+            "CREATE INDEX IF NOT EXISTS idx_articles_events_extracted ON articles (events_extracted)",
         ]
         for sql in migrations:
             try:

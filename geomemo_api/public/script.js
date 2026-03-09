@@ -2789,7 +2789,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.getElementById('events-tbody');
         if (!tbody) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/events?past=true`);
+            const res = await fetch(`${API_BASE_URL}/events?past=true&status=approved`);
             if (!res.ok) throw new Error('Failed to fetch events');
             const events = await res.json();
             tbody.innerHTML = events.map(ev => {
@@ -2802,6 +2802,42 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td class="p-2">${ev.category || '—'}</td>
                     <td class="p-2">
                         <button onclick="deleteEvent(${ev.id})" class="text-red-500 hover:text-red-700 text-xs">Delete</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="5" class="p-2 text-red-500">${e.message}</td></tr>`;
+        }
+        // Also refresh pending events
+        fetchPendingEvents();
+    }
+
+    async function fetchPendingEvents() {
+        const tbody = document.getElementById('pending-events-tbody');
+        const countEl = document.getElementById('pending-count');
+        if (!tbody) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/events?status=pending&past=true`);
+            if (!res.ok) throw new Error('Failed to fetch pending events');
+            const events = await res.json();
+            if (countEl) countEl.textContent = `(${events.length})`;
+            if (events.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="p-2 text-center" style="color: #92400e;">No pending events</td></tr>';
+                return;
+            }
+            tbody.innerHTML = events.map(ev => {
+                const startStr = ev.start_date || '';
+                return `<tr class="border-b" style="border-color: #fbbf24;">
+                    <td class="p-2 whitespace-nowrap">${startStr}</td>
+                    <td class="p-2">
+                        ${ev.title}
+                        ${ev.description ? `<div class="text-xs mt-0.5" style="color:#78716c;">${ev.description.substring(0, 120)}${ev.description.length > 120 ? '...' : ''}</div>` : ''}
+                    </td>
+                    <td class="p-2">${ev.location || '—'}</td>
+                    <td class="p-2">${ev.category || '—'}</td>
+                    <td class="p-2 whitespace-nowrap">
+                        <button onclick="approveEvent(${ev.id})" class="text-green-600 hover:text-green-800 text-xs font-bold mr-2">✓ Approve</button>
+                        <button onclick="rejectEvent(${ev.id})" class="text-red-500 hover:text-red-700 text-xs font-bold">✗ Reject</button>
                     </td>
                 </tr>`;
             }).join('');
@@ -2845,6 +2881,47 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchEventsList();
         } catch (e) {
             alert('Error: ' + e.message);
+        }
+    };
+
+    // Approve a pending event
+    window.approveEvent = async function(eventId) {
+        try {
+            const res = await fetch(`${API_BASE_URL}/events/${eventId}/approve`, { method: 'PUT' });
+            if (!res.ok) throw new Error('Failed to approve');
+            fetchEventsList();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    };
+
+    // Reject a pending event
+    window.rejectEvent = async function(eventId) {
+        try {
+            const res = await fetch(`${API_BASE_URL}/events/${eventId}/reject`, { method: 'PUT' });
+            if (!res.ok) throw new Error('Failed to reject');
+            fetchEventsList();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    };
+
+    // Trigger event extraction from articles
+    window.extractEventsNow = async function() {
+        const btn = document.getElementById('extract-events-btn');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Extracting...'; }
+        try {
+            const res = await fetch(`${API_BASE_URL}/events/extract-from-articles?min_score=65&hours=48&limit=50`, {
+                method: 'POST',
+            });
+            if (!res.ok) throw new Error('Extraction failed');
+            const stats = await res.json();
+            alert(`Event Extraction Complete!\n\nArticles processed: ${stats.articles_processed}\nEvents found: ${stats.events_found}\nEvents added (pending): ${stats.events_inserted}\nDuplicates skipped: ${stats.duplicates_skipped}\nErrors: ${stats.errors}`);
+            fetchEventsList();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = '🔍 Extract Events from Articles'; }
         }
     };
 

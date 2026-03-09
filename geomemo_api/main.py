@@ -42,6 +42,7 @@ articles.init_models(embedding_model, groq_client)
 newsletter.init_models(groq_client)
 sources.init_models(groq_client)
 social.init_queue_groq(groq_client)
+events.init_models(groq_client)
 
 # --- FastAPI App ---
 app = FastAPI(title="GeoMemo API", version="2.0.0")
