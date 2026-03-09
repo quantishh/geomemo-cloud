@@ -26,7 +26,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
 # --- CORS Allowed Origins ---
 # Comma-separated list of allowed origins. If empty, defaults to same-origin only.
-_cors_raw = os.getenv("CORS_ORIGINS", "https://geomemo.news,http://localhost:3000,http://localhost:8000")
+_cors_raw = os.getenv("CORS_ORIGINS", "https://geomemo.news,http://localhost:3000,http://localhost:8000,http://3.147.70.170:3000")
 CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()] if _cors_raw.strip() else []
 
 # --- Directories ---

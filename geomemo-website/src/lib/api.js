@@ -34,8 +34,17 @@ export async function fetchNewestUpdates() {
     );
     if (!res.ok) return [];
     const data = await res.json();
-    // The endpoint returns {articles, total, ...} when limit is set
-    return data.articles || data;
+    const articles = data.articles || data;
+    if (articles.length > 0) return articles;
+
+    // Fallback: widen window to 7 days with lower score threshold
+    const fallback = await fetch(
+      `${API_URL}/articles?status=approved&min_score=70&days=7&sort_by=auto_approval_score&order=desc&limit=20`,
+      { cache: 'no-store' }
+    );
+    if (!fallback.ok) return [];
+    const fallbackData = await fallback.json();
+    return fallbackData.articles || fallbackData;
   } catch (error) {
     console.error('Failed to fetch newest updates:', error);
     return [];

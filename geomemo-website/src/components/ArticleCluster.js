@@ -1,4 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
+
+function stripHtml(str) {
+  if (!str) return '';
+  return str.replace(/<[^>]*>/g, '').trim();
+}
+
 export default function ArticleCluster({ parent, relatedArticles, isTopStory }) {
   const hasChildren = relatedArticles && relatedArticles.length > 0;
   const ogImage = parent.og_image;
@@ -62,7 +68,7 @@ export default function ArticleCluster({ parent, relatedArticles, isTopStory }) 
             rel="noopener noreferrer"
             className="hover-link"
           >
-            {parent.summary || parent.headline_en || parent.headline}
+            {stripHtml(parent.summary) || parent.headline_en || parent.headline}
           </a>
         </h3>
       </div>

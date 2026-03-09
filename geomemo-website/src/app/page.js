@@ -23,6 +23,11 @@ function getTimeAgo(dateStr) {
   }
 }
 
+function stripHtml(str) {
+  if (!str) return '';
+  return str.replace(/<[^>]*>/g, '').trim();
+}
+
 export default async function Home() {
   const [articles, sponsors, podcasts, latestNews] = await Promise.all([
     fetchApprovedArticles(),
@@ -367,9 +372,7 @@ export default async function Home() {
                             className="latest-news-link"
                           >
                             {article.summary
-                              ? (article.summary.length > 180
-                                  ? article.summary.substring(0, 180) + '...'
-                                  : article.summary)
+                              ? (() => { const s = stripHtml(article.summary); return s.length > 180 ? s.substring(0, 180) + '...' : s; })()
                               : (article.headline_en || article.headline || '')}
                           </a>
                           {article.scraped_at && (
