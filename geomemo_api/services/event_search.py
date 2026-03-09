@@ -1,29 +1,21 @@
 """
-Google Search event discovery for GeoMemo.
-Scrapes Google Search results for geopolitical events, then uses Groq LLM
-to extract structured event data. Events are inserted as 'pending' for admin review.
+Google Custom Search event discovery for GeoMemo.
+Uses Google Custom Search JSON API to find geopolitical events,
+then Groq LLM to extract structured event data.
+Events are inserted as 'pending' for admin review.
 """
 import json
 import logging
-import os
 import time
-import urllib.parse
 from datetime import date, datetime
 
 import psycopg2.extras
 import requests
-from bs4 import BeautifulSoup
 
-from config import BRIGHTDATA_PROXY_URL
+from config import GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX
 from database import get_db_connection
 
 logger = logging.getLogger(__name__)
-
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Safari/537.36"
-)
 
 SEARCH_EVENT_PROMPT = """You are a geopolitical event extraction specialist for GeoMemo.
 
@@ -63,79 +55,59 @@ STRICT RULES:
 Return valid JSON: {{"events": [...]}}"""
 
 
-def _scrape_google_search(query: str, num_pages: int = 5) -> list:
+def _google_custom_search(query: str, num_pages: int = 5) -> list:
     """
-    Scrape Google Search results pages.
+    Fetch Google search results via Custom Search JSON API.
+    Each API call returns 10 results. num_pages controls how many calls (1-5).
+    Free tier: 100 queries/day.
     Returns list of {title, snippet, url} dicts.
     """
+    if not GOOGLE_CSE_API_KEY or not GOOGLE_CSE_CX:
+        logger.error("Google CSE API key or CX not configured")
+        return []
+
     results = []
-    encoded_query = urllib.parse.quote_plus(query)
-
-    proxies = {}
-    if BRIGHTDATA_PROXY_URL:
-        proxies = {"http": BRIGHTDATA_PROXY_URL, "https": BRIGHTDATA_PROXY_URL}
-        logger.info(f"Using BrightData proxy for Google search")
-
-    headers = {"User-Agent": USER_AGENT, "Accept-Language": "en-US,en;q=0.9"}
-
+    # Custom Search API uses 1-indexed start param (1, 11, 21, ...)
     for page in range(num_pages):
-        start = page * 10
-        url = f"https://www.google.com/search?q={encoded_query}&start={start}&hl=en"
+        start = page * 10 + 1
 
         try:
-            # BrightData proxy uses its own SSL cert; disable verification when proxied
-            response = requests.get(
-                url, headers=headers, proxies=proxies,
-                timeout=30, verify=not bool(proxies),
+            resp = requests.get(
+                "https://www.googleapis.com/customsearch/v1",
+                params={
+                    "key": GOOGLE_CSE_API_KEY,
+                    "cx": GOOGLE_CSE_CX,
+                    "q": query,
+                    "start": start,
+                },
+                timeout=15,
             )
-            if response.status_code != 200:
-                logger.warning(f"Google search page {page+1} returned {response.status_code}")
+
+            if resp.status_code == 429:
+                logger.warning("Google CSE rate limit reached (100 queries/day)")
+                break
+            if resp.status_code != 200:
+                logger.warning(f"Google CSE page {page+1} returned {resp.status_code}: {resp.text[:200]}")
                 break
 
-            soup = BeautifulSoup(response.text, "html.parser")
+            data = resp.json()
+            items = data.get("items", [])
 
-            # Google search results are in divs with class 'g' or similar structures
-            # Extract h3 titles and their parent anchors
-            for h3 in soup.find_all("h3"):
-                parent_a = h3.find_parent("a")
-                if not parent_a:
-                    continue
+            if not items:
+                logger.info(f"Google CSE page {page+1}: no more results")
+                break
 
-                href = parent_a.get("href", "")
-                # Filter out Google internal links
-                if not href or href.startswith("/search") or "google.com" in href:
-                    continue
-
-                title = h3.get_text(strip=True)
-                if not title:
-                    continue
-
-                # Get snippet text from surrounding elements
-                snippet = ""
-                # Look for nearby text in the result container
-                result_div = h3.find_parent("div", recursive=True)
-                if result_div:
-                    # Find spans/divs with descriptive text after the link
-                    for text_el in result_div.find_all(["span", "div"], recursive=True):
-                        text = text_el.get_text(strip=True)
-                        if len(text) > 50 and text != title and title not in text:
-                            snippet = text[:300]
-                            break
-
+            for item in items:
                 results.append({
-                    "title": title,
-                    "snippet": snippet,
-                    "url": href,
+                    "title": item.get("title", ""),
+                    "snippet": item.get("snippet", ""),
+                    "url": item.get("link", ""),
                 })
 
-            logger.info(f"Google search page {page+1}: found {len(results)} results so far")
-
-            # Rate limit between pages
-            if page < num_pages - 1:
-                time.sleep(2)
+            logger.info(f"Google CSE page {page+1}: {len(items)} results (total: {len(results)})")
 
         except Exception as e:
-            logger.error(f"Google search page {page+1} error: {e}")
+            logger.error(f"Google CSE page {page+1} error: {e}")
             break
 
     return results
@@ -230,7 +202,7 @@ def _is_duplicate_event(cursor, title: str, start_date: str) -> bool:
 
 def search_and_extract_events(groq_client, query: str, num_pages: int = 5) -> dict:
     """
-    Full pipeline: Google Search → parse results → LLM extract → dedup → insert as pending.
+    Full pipeline: Google CSE API → LLM extract → dedup → insert as pending.
     """
     stats = {
         "query": query,
@@ -241,8 +213,8 @@ def search_and_extract_events(groq_client, query: str, num_pages: int = 5) -> di
         "errors": 0,
     }
 
-    # 1. Scrape Google Search
-    results = _scrape_google_search(query, num_pages)
+    # 1. Google Custom Search API
+    results = _google_custom_search(query, num_pages)
     stats["results_scraped"] = len(results)
 
     if not results:
@@ -286,6 +258,7 @@ def search_and_extract_events(groq_client, query: str, num_pages: int = 5) -> di
 
     except Exception as e:
         conn.rollback()
+        stats["errors"] += 1
         logger.error(f"Event insert error: {e}")
     finally:
         cursor.close()
@@ -339,9 +312,10 @@ def run_saved_searches(groq_client) -> dict:
             conn2.close()
 
             # Rate limit between queries
-            time.sleep(5)
+            time.sleep(2)
 
     except Exception as e:
+        aggregate["errors"] += 1
         logger.error(f"Run saved searches error: {e}")
 
     logger.info(f"Saved searches complete: {aggregate}")
