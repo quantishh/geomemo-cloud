@@ -363,7 +363,7 @@ a {
     grid-template-columns: 2.5fr 1.2fr 1.2fr;
     grid-template-rows: auto auto auto;
     column-gap: var(--space-6);
-    row-gap: var(--space-3);
+    row-gap: var(--space-2);
   }
 
   /* Main news column spans all 3 rows on the left */

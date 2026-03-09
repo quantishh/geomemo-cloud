@@ -168,15 +168,26 @@ export default async function Home() {
                   </a>
                 </h3>
                 <a href="https://monitor.geomemo.news" target="_blank" rel="noopener noreferrer"
-                   style={{ display: 'block' }}>
+                   style={{
+                     display: 'block',
+                     position: 'relative',
+                     width: '100%',
+                     height: '350px',
+                     overflow: 'hidden',
+                     borderRadius: 'var(--radius-sm)',
+                   }}>
                   <iframe
                     src="https://monitor.geomemo.news"
                     title="WorldMonitor Live Map"
                     style={{
-                      width: '100%',
-                      height: '400px',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '200%',
+                      height: '200%',
+                      transform: 'scale(0.5)',
+                      transformOrigin: 'top left',
                       border: 'none',
-                      borderRadius: 'var(--radius-sm)',
                       pointerEvents: 'none',
                     }}
                     loading="lazy"
