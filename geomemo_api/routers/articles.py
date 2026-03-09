@@ -941,21 +941,19 @@ async def analyze_and_approve_cluster(request: ClusterAnalysisRequest):
 
         cluster_system_prompt = """You are a senior geopolitical analyst writing for an intelligence newsletter read by investment bankers and policymakers.
 
-Synthesize these articles into a single comprehensive briefing. Requirements:
-1. Lead with the core story/event from the MAIN article
-2. Integrate additional facts, data points, and context from related articles
-3. When sources offer DIFFERENT perspectives, note the divergence (e.g., "While Reuters reports X, Al Jazeera emphasizes Y")
-4. When sources DISAGREE, highlight the disagreement clearly
-5. Include specific numbers, names, and dates when available
-6. Keep the tone professional and analytical — no editorializing
-7. Target 80-120 words
-8. Return HTML using <p> tags only. Use <strong> for key terms/names. No other HTML tags."""
+Rewrite ONLY the MAIN article's summary as a professional news brief. Requirements:
+1. Lead with the core development from the MAIN article ONLY
+2. Do NOT mention or reference other sources, publications, or related articles
+3. Include specific numbers, names, and countries from the MAIN article
+4. Keep the tone professional and analytical — no editorializing
+5. 50 words MAX. Do NOT exceed 50 words.
+6. ONLY use facts from the MAIN article. NEVER invent details.
+7. English only. Do NOT include dates."""
 
         cluster_user_prompt = (
             f"--- MAIN ARTICLE (Source: {orig.get('publication_name') or 'Unknown'}) ---\n"
             f"Headline: {orig.get('headline_en')}\n"
-            f"Summary: {orig.get('summary')}\n\n"
-            f"{related_txt}"
+            f"Summary: {orig.get('summary')}\n"
         )
 
         chat = groq_client.chat.completions.create(
@@ -973,23 +971,21 @@ Synthesize these articles into a single comprehensive briefing. Requirements:
             (new_sum, request.make_top_story, original_id),
         )
         if cluster_ids:
-            # Milestone D: Generate differentiated summaries for each child
-            # highlighting what's UNIQUE about each source
+            # Milestone D: Generate clean independent summaries for each child
             for aid in cluster_ids:
                 child_art = articles.get(aid, {})
                 try:
                     diff_chat = groq_client.chat.completions.create(
                         messages=[
                             {"role": "system", "content": (
-                                "You are a news editor. Given a MAIN cluster summary and a CHILD article, "
-                                "rewrite the child's summary to highlight ONLY what it adds beyond the main summary. "
-                                "Focus on: additional facts, different perspective, unique data, or contrarian views. "
-                                "50 words max. English only. If purely duplicate, write: 'Corroborates [topic] via [source name].'"
+                                "Rewrite this as a professional 50-word MAX news summary for investment bankers "
+                                "and policymakers. Authoritative analytical tone. Lead with the key development, "
+                                "include specific names/figures/countries. ONLY use facts from the provided content. "
+                                "NEVER invent details. English only. Do NOT exceed 50 words."
                             )},
                             {"role": "user", "content": (
-                                f"MAIN SUMMARY:\n{new_sum}\n\n"
-                                f"CHILD ARTICLE:\nHeadline: {child_art.get('headline_en', 'N/A')}\n"
-                                f"Original summary: {child_art.get('summary', 'N/A')}\n"
+                                f"Headline: {child_art.get('headline_en', 'N/A')}\n"
+                                f"Summary: {child_art.get('summary', 'N/A')}\n"
                                 f"Source: {child_art.get('publication_name', 'Unknown')}"
                             )},
                         ],
@@ -1002,7 +998,7 @@ Synthesize these articles into a single comprehensive briefing. Requirements:
                         (original_id, child_summary, aid),
                     )
                 except Exception as child_err:
-                    logger.warning(f"Child summary differentiation failed for {aid}: {child_err}")
+                    logger.warning(f"Child summary generation failed for {aid}: {child_err}")
                     cursor.execute(
                         "UPDATE articles SET status = 'approved', parent_id = %s WHERE id = %s",
                         (original_id, aid),

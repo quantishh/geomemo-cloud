@@ -612,8 +612,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // CORE ARTICLES LOGIC
     // =========================================
 
-    async function fetchArticles(preserveScroll = false) {
+    // Track which article to scroll to after re-render
+    let _scrollToArticleId = null;
+
+    async function fetchArticles(preserveScroll = false, scrollToId = null) {
         const currentScrollY = window.scrollY;
+        if (scrollToId) _scrollToArticleId = scrollToId;
         if (articlesTbody && articlesTbody.children.length === 0) showLoading(true);
         try {
             const params = new URLSearchParams();
@@ -629,11 +633,29 @@ document.addEventListener('DOMContentLoaded', () => {
             allArticlesCache = await response.json();
             renderArticles();
             updateScoreDistribution();
-            if (preserveScroll) window.scrollTo(0, currentScrollY);
-        } catch (error) { 
-            console.error('Error fetching articles:', error); 
-        } finally { 
-            if (articlesTbody) showLoading(false); 
+
+            // Scroll to specific article if requested, otherwise preserve Y offset
+            if (_scrollToArticleId) {
+                const targetRow = document.querySelector(`tr[data-article-id="${_scrollToArticleId}"]`);
+                if (targetRow) {
+                    // Ensure parent group is expanded if in topic-grouped mode
+                    if (targetRow.classList.contains('hidden')) {
+                        targetRow.classList.remove('hidden');
+                    }
+                    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Brief highlight effect
+                    targetRow.style.transition = 'background 0.3s';
+                    targetRow.style.background = '#fef9c3';
+                    setTimeout(() => { targetRow.style.background = ''; }, 2000);
+                }
+                _scrollToArticleId = null;
+            } else if (preserveScroll) {
+                window.scrollTo(0, currentScrollY);
+            }
+        } catch (error) {
+            console.error('Error fetching articles:', error);
+        } finally {
+            if (articlesTbody) showLoading(false);
         }
     }
 
@@ -800,65 +822,127 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Group articles by topic_group
         const topicGroups = {};
+        const ungroupedArticles = [];
         articles.forEach(a => {
             const gid = (a.topic_group != null) ? a.topic_group : 'ungrouped';
-            if (!topicGroups[gid]) topicGroups[gid] = [];
-            topicGroups[gid].push(a);
+            if (gid === 'ungrouped') {
+                ungroupedArticles.push(a);
+            } else {
+                if (!topicGroups[gid]) topicGroups[gid] = [];
+                topicGroups[gid].push(a);
+            }
         });
 
-        const groupKeys = Object.keys(topicGroups);
-
-        groupKeys.forEach((gid, idx) => {
-            const group = topicGroups[gid];
-            const groupSize = group.length;
-
-            // Topic Group Header (only for groups with 2+ articles)
-            if (groupSize >= 2) {
-                const headerRow = document.createElement('tr');
-                headerRow.className = 'topic-group-header';
-                const leadHeadline = group[0].headline || group[0].headline_original || 'Topic Group';
-                // Truncate to 80 chars for display
-                const headerText = leadHeadline.length > 80 ? leadHeadline.substring(0, 77) + '...' : leadHeadline;
-                headerRow.innerHTML = `
-                    <td colspan="7" class="p-2 border-b-2" style="background:linear-gradient(90deg,#eef2ff,#fff);border-color:#6366f1;">
-                        <div class="flex items-center">
-                            <span class="inline-block w-4 mr-2 cursor-pointer text-gray-500 toggle-icon">▼</span>
-                            <span class="font-semibold text-indigo-700 text-sm">🔗 ${groupSize} similar articles</span>
-                            <span class="text-xs text-gray-500 ml-3 truncate">${headerText}</span>
-                        </div>
-                    </td>
-                `;
-                headerRow.addEventListener('click', () => {
-                    const rows = document.querySelectorAll(`.article-row[data-topic-group="${gid}"]`);
-                    const icon = headerRow.querySelector('.toggle-icon');
-                    let isHidden = false;
-                    rows.forEach((row, i) => {
-                        if (i === 0) return; // Always show first article
-                        row.classList.toggle('hidden');
-                        if (row.classList.contains('hidden')) isHidden = true;
-                    });
-                    icon.textContent = isHidden ? '▶' : '▼';
-                });
-                articlesTbody.appendChild(headerRow);
+        // Separate multi-article groups from singles mixed in topic groups
+        const multiGroups = {};
+        const singleGroupArticles = [];
+        Object.keys(topicGroups).forEach(gid => {
+            if (topicGroups[gid].length >= 2) {
+                multiGroups[gid] = topicGroups[gid];
+            } else {
+                singleGroupArticles.push(...topicGroups[gid]);
             }
+        });
 
+        // All singles + ungrouped go into "Other News"
+        const otherArticles = [...singleGroupArticles, ...ungroupedArticles];
+
+        const groupKeys = Object.keys(multiGroups);
+
+        // Render multi-article topic groups — ALL COLLAPSED by default
+        groupKeys.forEach((gid, idx) => {
+            const group = multiGroups[gid];
+            const groupSize = group.length;
+            const leadHeadline = group[0].headline || group[0].headline_original || 'Topic Group';
+            const headerText = leadHeadline.length > 80 ? leadHeadline.substring(0, 77) + '...' : leadHeadline;
+
+            const headerRow = document.createElement('tr');
+            headerRow.className = 'topic-group-header';
+            headerRow.innerHTML = `
+                <td colspan="7" class="p-2 border-b-2" style="background:linear-gradient(90deg,#eef2ff,#fff);border-color:#6366f1;">
+                    <div class="flex items-center">
+                        <span class="inline-block w-4 mr-2 cursor-pointer text-gray-500 toggle-icon">▶</span>
+                        <span class="font-semibold text-indigo-700 text-sm">🔗 ${groupSize} similar articles</span>
+                        <span class="text-xs text-gray-500 ml-3 truncate">${headerText}</span>
+                    </div>
+                </td>
+            `;
+            headerRow.addEventListener('click', () => {
+                const rows = document.querySelectorAll(`.article-row[data-topic-group="${gid}"]`);
+                const icon = headerRow.querySelector('.toggle-icon');
+                const isCurrentlyCollapsed = icon.textContent === '▶';
+                rows.forEach(row => {
+                    if (isCurrentlyCollapsed) {
+                        row.classList.remove('hidden');
+                    } else {
+                        row.classList.add('hidden');
+                    }
+                });
+                icon.textContent = isCurrentlyCollapsed ? '▼' : '▶';
+            });
+            articlesTbody.appendChild(headerRow);
+
+            // All rows start hidden (collapsed)
             group.forEach((article, artIdx) => {
-                const isSubItem = (groupSize >= 2 && artIdx > 0);
+                const isSubItem = artIdx > 0;
                 const row = createArticleRow(article, isSubItem);
                 row.setAttribute('data-topic-group', gid);
-                if (groupSize >= 2) {
-                    row.setAttribute('data-date', ''); // Clear date grouping interference
-                }
+                row.setAttribute('data-date', '');
+                row.classList.add('hidden');
                 articlesTbody.appendChild(row);
             });
 
-            // Add spacing between topic groups
-            if (idx < groupKeys.length - 1 && groupSize >= 2) {
+            // Spacing between groups
+            if (idx < groupKeys.length - 1) {
                 const spacer = document.createElement('tr');
                 spacer.innerHTML = '<td colspan="7" style="height:8px;background:transparent;border:none;"></td>';
                 articlesTbody.appendChild(spacer);
             }
         });
+
+        // Render "Other News" section — all ungrouped/single articles, collapsed
+        if (otherArticles.length > 0) {
+            // Spacer before Other News
+            if (groupKeys.length > 0) {
+                const spacer = document.createElement('tr');
+                spacer.innerHTML = '<td colspan="7" style="height:8px;background:transparent;border:none;"></td>';
+                articlesTbody.appendChild(spacer);
+            }
+
+            const otherHeader = document.createElement('tr');
+            otherHeader.className = 'topic-group-header';
+            otherHeader.innerHTML = `
+                <td colspan="7" class="p-2 border-b-2" style="background:linear-gradient(90deg,#fef3c7,#fff);border-color:#f59e0b;">
+                    <div class="flex items-center">
+                        <span class="inline-block w-4 mr-2 cursor-pointer text-gray-500 toggle-icon">▶</span>
+                        <span class="font-semibold text-amber-700 text-sm">📰 Other News</span>
+                        <span class="text-xs text-gray-500 ml-3">(${otherArticles.length} unique articles)</span>
+                    </div>
+                </td>
+            `;
+            otherHeader.addEventListener('click', () => {
+                const rows = document.querySelectorAll('.article-row[data-topic-group="other-news"]');
+                const icon = otherHeader.querySelector('.toggle-icon');
+                const isCurrentlyCollapsed = icon.textContent === '▶';
+                rows.forEach(row => {
+                    if (isCurrentlyCollapsed) {
+                        row.classList.remove('hidden');
+                    } else {
+                        row.classList.add('hidden');
+                    }
+                });
+                icon.textContent = isCurrentlyCollapsed ? '▼' : '▶';
+            });
+            articlesTbody.appendChild(otherHeader);
+
+            otherArticles.forEach(article => {
+                const row = createArticleRow(article, false);
+                row.setAttribute('data-topic-group', 'other-news');
+                row.setAttribute('data-date', '');
+                row.classList.add('hidden');
+                articlesTbody.appendChild(row);
+            });
+        }
 
         updateCheckboxStates();
     }
@@ -969,8 +1053,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const starBtn = tr.querySelector('.star-btn');
         if(starBtn) {
-            starBtn.addEventListener('click', async () => { 
-                try { await fetch(`${API_BASE_URL}/articles/${article.id}/toggle-top`, { method: 'POST' }); fetchArticles(true); } catch(err) {} 
+            starBtn.addEventListener('click', async () => {
+                try {
+                    await fetch(`${API_BASE_URL}/articles/${article.id}/toggle-top`, { method: 'POST' });
+                    // Optimistic update: toggle in cache + update star color
+                    const cached = allArticlesCache.find(a => a.id === article.id);
+                    if (cached) cached.is_top_story = !cached.is_top_story;
+                    const isNowTop = cached ? cached.is_top_story : !article.is_top_story;
+                    starBtn.className = `star-btn block mt-2 ${isNowTop ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'} transition-colors text-lg`;
+                } catch(err) {}
             });
         }
         
@@ -983,33 +1074,71 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function handleEnhanceSubmit() {
         if (!currentEnhanceId) return;
-        
-        // ** FIX: Update SUMMARY, not Headline **
-        const payload = { 
-            summary: enhanceInput.value, 
-            publication_name: enhancePubInput.value, 
-            author: enhanceAuthorInput.value 
+
+        const payload = {
+            summary: enhanceInput.value,
+            publication_name: enhancePubInput.value,
+            author: enhanceAuthorInput.value
         };
-        
+
         const btn = document.getElementById('confirm-enhance-btn');
         const originalText = btn.textContent;
-        btn.textContent = "Saving..."; 
+        btn.textContent = "Enhancing...";
         btn.disabled = true;
-        
+
+        // Show a pulse on the row being enhanced
+        const targetRow = document.querySelector(`tr[data-article-id="${currentEnhanceId}"]`);
+        if (targetRow) {
+            targetRow.style.transition = 'opacity 0.3s';
+            targetRow.style.opacity = '0.6';
+        }
+
         try {
-            const response = await fetch(`${API_BASE_URL}/articles/${currentEnhanceId}/enhance`, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify(payload) 
+            const response = await fetch(`${API_BASE_URL}/articles/${currentEnhanceId}/enhance`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
             if (!response.ok) throw new Error("Failed to update article");
-            closeEnhanceModal(); 
-            fetchArticles(true);
-        } catch (error) { 
-            alert("Error: " + error.message); 
-        } finally { 
-            btn.textContent = originalText; 
-            btn.disabled = false; 
+            const data = await response.json();
+
+            // Optimistic cache update — no full re-fetch needed
+            const cached = allArticlesCache.find(a => a.id === currentEnhanceId);
+            if (cached) {
+                cached.summary = data.new_summary;
+                cached.status = 'pending';
+                if (payload.publication_name && payload.publication_name.trim()) {
+                    cached.publication_name = payload.publication_name;
+                }
+                if (payload.author && payload.author.trim()) {
+                    cached.author = payload.author;
+                }
+            }
+
+            // Swap just the affected row instead of full table re-render
+            if (targetRow && cached) {
+                const isChild = targetRow.querySelector('.border-l-4') !== null;
+                const newRow = createArticleRow(cached, isChild);
+                // Preserve data attributes
+                for (const attr of targetRow.attributes) {
+                    if (attr.name.startsWith('data-')) {
+                        newRow.setAttribute(attr.name, attr.value);
+                    }
+                }
+                targetRow.replaceWith(newRow);
+                // Highlight the updated row
+                newRow.style.transition = 'background 0.3s';
+                newRow.style.background = '#ecfdf5';
+                setTimeout(() => { newRow.style.background = ''; }, 2000);
+            }
+
+            closeEnhanceModal();
+        } catch (error) {
+            if (targetRow) targetRow.style.opacity = '1';
+            alert("Error: " + error.message);
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
         }
     }
 
@@ -1198,11 +1327,11 @@ document.addEventListener('DOMContentLoaded', () => {
             resText.innerHTML = "Success! " + result.new_summary; 
             btn.textContent = "Done";
             
-            setTimeout(() => { 
-                overlay.classList.remove('visible'); 
-                setTimeout(() => document.body.removeChild(overlay), 200); 
-                fetchArticles(true); 
-            }, 2000); 
+            setTimeout(() => {
+                overlay.classList.remove('visible');
+                setTimeout(() => document.body.removeChild(overlay), 200);
+                fetchArticles(false, parseInt(oid));
+            }, 2000);
             
         } catch (error) { 
             resText.textContent = 'Error: ' + error.message; 
@@ -1635,9 +1764,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentScoreFilter = 'auto-approve';
         renderArticles();
 
-        // Step 2: Ask user to commit
-        // NOTE: auto-approve API operates on ALL pending articles across all dates,
-        // not just the filtered view. Show both scoped and total counts.
+        // Step 2: Show "Commit" button — let the browser paint the preview first
+        // (Previously used confirm() which blocked paint and skipped preview)
         const allPendingAbove = allArticlesCache.filter(
             a => a.status === 'pending' && (a.auto_approval_score || 0) >= val
         ).length;
@@ -1647,29 +1775,61 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        let confirmMsg = `This will approve ${allPendingAbove} pending articles with score ≥ ${val} across ALL dates.`;
+        // Show a commit banner at the top of the articles area
+        let commitBanner = document.getElementById('auto-approve-commit-banner');
+        if (commitBanner) commitBanner.remove();
+        commitBanner = document.createElement('div');
+        commitBanner.id = 'auto-approve-commit-banner';
+        commitBanner.style.cssText = 'background:#ecfdf5;border:2px solid #10b981;border-radius:8px;padding:12px 20px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;';
+
+        let countText = `<strong>${allPendingAbove}</strong> pending articles with score ≥ ${val} across ALL dates will be approved.`;
         if (currentDateFilter !== 'All') {
             const scopedAbove = allArticlesCache.filter(
                 a => a.status === 'pending' && (a.auto_approval_score || 0) >= val && getArticleLocalDate(a) === currentDateFilter
             ).length;
-            confirmMsg = `Currently viewing ${scopedAbove} for selected date.\nTotal: ${allPendingAbove} pending articles with score ≥ ${val} across ALL dates will be approved.`;
+            countText = `Previewing <strong>${scopedAbove}</strong> for selected date. Total: <strong>${allPendingAbove}</strong> across ALL dates.`;
         }
-        confirmMsg += `\n\nCommit auto-approve now? (Click Cancel to just preview)`;
-        if (!confirm(confirmMsg)) return;
 
-        try {
-            const res = await fetch(`${API_BASE_URL}/articles/auto-approve`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ threshold: val })
-            });
-            if (!res.ok) throw new Error("Failed");
-            const data = await res.json();
-            alert(data.message);
-            fetchArticles(true);
-        } catch (e) {
-            alert("Error: " + e.message);
+        commitBanner.innerHTML = `
+            <span style="font-size:0.85rem;color:#065f46;">📋 Preview: ${countText}</span>
+            <div style="display:flex;gap:8px;flex-shrink:0;">
+                <button id="commit-auto-approve-btn" style="background:#10b981;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-weight:600;font-size:0.85rem;cursor:pointer;">✓ Commit Auto-Approve</button>
+                <button id="cancel-auto-approve-btn" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:8px 16px;border-radius:6px;font-size:0.85rem;cursor:pointer;">Cancel</button>
+            </div>
+        `;
+
+        const tableContainer = articlesTbody ? articlesTbody.closest('table')?.parentElement : null;
+        if (tableContainer) {
+            tableContainer.insertBefore(commitBanner, tableContainer.firstChild);
         }
+
+        // Commit button handler
+        document.getElementById('commit-auto-approve-btn').addEventListener('click', async () => {
+            const commitBtn = document.getElementById('commit-auto-approve-btn');
+            commitBtn.textContent = 'Approving...';
+            commitBtn.disabled = true;
+            try {
+                const res = await fetch(`${API_BASE_URL}/articles/auto-approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ threshold: val })
+                });
+                if (!res.ok) throw new Error("Failed");
+                const data = await res.json();
+                commitBanner.remove();
+                alert(data.message);
+                fetchArticles(true);
+            } catch (e) {
+                commitBtn.textContent = '✓ Commit Auto-Approve';
+                commitBtn.disabled = false;
+                alert("Error: " + e.message);
+            }
+        });
+
+        // Cancel button handler
+        document.getElementById('cancel-auto-approve-btn').addEventListener('click', () => {
+            commitBanner.remove();
+        });
     }
 
     async function handleAutoReject() {

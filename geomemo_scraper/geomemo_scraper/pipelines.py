@@ -16,6 +16,90 @@ except ImportError:
     pycountry = None
     logging.warning("pycountry not installed. Country code resolution will be skipped.")
 
+# --- Non-English source name → English display name mapping ---
+SOURCE_NAME_MAP = {
+    # Persian / Farsi (Iran)
+    'اطلاعات': 'Ettela\'at',
+    'انتخاب': 'Entekhab',
+    'فارس نیوز': 'Farsnews',
+    'دیپلماسی ایرانی': 'Iran Diplomacy',
+    'کیهان': 'Kayhan',
+    # Arabic (Middle East & North Africa)
+    'الإمارات اليوم': 'Emarat Al Youm',
+    'عكاظ': 'Okaz',
+    'البيان': 'Al Bayan',
+    'الاتحاد': 'Al Etihad',
+    'المصري اليوم': 'Al-Masry Al-Youm',
+    'الشروق': 'Shorouk News',
+    'الأخبار': 'Al Akhbar',
+    'الجزيرة': 'Al Jazeera',
+    'العربية': 'Al Arabiya',
+    'الشرق الأوسط': 'Asharq Al-Awsat',
+    'الأهرام': 'Al-Ahram',
+    # Greek
+    'Καθημερινή': 'Kathimerini',
+    'Τα Νέα': 'Ta Nea',
+    'Το Βήμα': 'To Vima',
+    'Πρώτο Θέμα': 'Protothema',
+    'Η Εφημερίδα των Συντακτών': 'Efimerida Syntakton',
+    # Vietnamese
+    'VnExpress': 'VnExpress',
+    'Tuổi Trẻ': 'Tuoi Tre',
+    'Thanh Niên': 'Thanh Nien',
+    # Turkish
+    'Hürriyet': 'Hurriyet',
+    'Sabah': 'Sabah',
+    'Cumhuriyet': 'Cumhuriyet',
+    # Chinese
+    '新华网': 'Xinhua',
+    '人民日报': 'People\'s Daily',
+    '环球时报': 'Global Times',
+    # Korean
+    '조선일보': 'Chosun Ilbo',
+    '중앙일보': 'JoongAng Ilbo',
+    '한겨레': 'Hankyoreh',
+    # Japanese
+    '朝日新聞': 'Asahi Shimbun',
+    '読売新聞': 'Yomiuri Shimbun',
+    '毎日新聞': 'Mainichi Shimbun',
+    # French
+    'Le Monde diplomatique': 'Le Monde Diplomatique',
+    # Domain-based fallbacks (when RSS returns URL as source name)
+    'ettelaat.com': 'Ettela\'at',
+    'entekhab.ir': 'Entekhab',
+    'farsnews.ir': 'Farsnews',
+    'irdiplomacy.ir': 'Iran Diplomacy',
+    'kayhan.ir': 'Kayhan',
+    'almasryalyoum.com': 'Al-Masry Al-Youm',
+    'shorouknews.com': 'Shorouk News',
+    'emaratalyoum.com': 'Emarat Al Youm',
+    'okaz.com.sa': 'Okaz',
+    'albayan.ae': 'Al Bayan',
+    'aletihad.ae': 'Al Etihad',
+    'kathimerini.gr': 'Kathimerini',
+    'tanea.gr': 'Ta Nea',
+    'tovima.gr': 'To Vima',
+    'protothema.gr': 'Protothema',
+    'efsyn.gr': 'Efimerida Syntakton',
+    'vnexpress.net': 'VnExpress',
+    'tuoitre.vn': 'Tuoi Tre',
+    'thanhnien.vn': 'Thanh Nien',
+}
+
+def normalize_source_name(name):
+    """Map non-English source names to their English equivalents."""
+    if not name:
+        return name
+    # Exact match first
+    if name in SOURCE_NAME_MAP:
+        return SOURCE_NAME_MAP[name]
+    # Check if the name contains a mapped domain
+    name_lower = name.lower().strip()
+    for key, english_name in SOURCE_NAME_MAP.items():
+        if key.lower() in name_lower:
+            return english_name
+    return name
+
 # --- Load models ---
 try:
     embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -353,6 +437,11 @@ Content: "{content_snippet}"
         headline = adapter['headline']
         content_snippet = adapter.get('description', '') or ""
         publication_name = adapter.get('publication_name')
+
+        # Normalize non-English source names to English
+        if publication_name:
+            publication_name = normalize_source_name(publication_name)
+            adapter['publication_name'] = publication_name
 
         self.logger.info(f"Processing: '{headline}'")
 
