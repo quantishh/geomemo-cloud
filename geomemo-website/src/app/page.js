@@ -355,175 +355,153 @@ export default async function Home() {
                 )}
               </div>
 
+              {/* EVENTS CALENDAR — spans columns 2-3, below middle + right columns */}
+              <div className="events-calendar-section">
+                <h2 className="section-title" style={{ marginBottom: 'var(--space-3)', fontSize: '0.95rem' }}>
+                  Upcoming Geopolitical Events
+                </h2>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    fontSize: '0.78rem',
+                  }}>
+                    <thead>
+                      <tr style={{
+                        borderBottom: '2px solid var(--color-border)',
+                      }}>
+                        <th style={{ textAlign: 'left', padding: '6px 8px 6px 0', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Date</th>
+                        <th style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Event</th>
+                        <th style={{ textAlign: 'left', padding: '6px 0 6px 8px', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Location</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {events.length > 0 ? (
+                        events.slice(0, 20).map((event) => {
+                          const startDate = new Date(event.start_date);
+                          const dateStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                          return (
+                            <tr key={event.id} style={{
+                              borderBottom: '1px solid var(--color-border)',
+                            }}>
+                              <td style={{
+                                padding: '6px 8px 6px 0',
+                                fontWeight: 600,
+                                color: 'var(--color-accent)',
+                                whiteSpace: 'nowrap',
+                                fontSize: '0.75rem',
+                              }}>
+                                {dateStr}
+                              </td>
+                              <td style={{ padding: '6px 8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  {event.url ? (
+                                    <a href={event.url} target="_blank" rel="noopener noreferrer" className="hover-link" style={{ fontWeight: 600, fontSize: '0.78rem' }}>
+                                      {event.title}
+                                    </a>
+                                  ) : (
+                                    <span style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.78rem' }}>{event.title}</span>
+                                  )}
+                                  {event.is_featured && event.register_url && (
+                                    <a
+                                      href={event.register_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        fontSize: '0.55rem',
+                                        fontWeight: 700,
+                                        padding: '1px 6px',
+                                        borderRadius: '999px',
+                                        background: 'var(--color-accent)',
+                                        color: 'var(--color-primary)',
+                                        textDecoration: 'none',
+                                        letterSpacing: '0.04em',
+                                        textTransform: 'uppercase',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      Register Now
+                                    </a>
+                                  )}
+                                </div>
+                              </td>
+                              <td style={{
+                                padding: '6px 0 6px 8px',
+                                color: 'var(--color-text-secondary)',
+                                fontSize: '0.72rem',
+                              }}>
+                                {event.location || ''}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        /* Empty placeholder rows — 20 rows with subtle skeleton lines */
+                        Array.from({ length: 20 }, (_, i) => (
+                          <tr key={`empty-${i}`} style={{
+                            borderBottom: '1px solid var(--color-border)',
+                            opacity: i === 0 ? 1 : Math.max(0.15, 1 - i * 0.045),
+                          }}>
+                            <td style={{
+                              padding: '6px 8px 6px 0',
+                              fontWeight: 600,
+                              color: 'var(--color-text-muted)',
+                              whiteSpace: 'nowrap',
+                              fontSize: '0.75rem',
+                            }}>
+                              {i === 0 ? '—' : ''}
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              {i === 0 ? (
+                                <span style={{
+                                  fontSize: '0.78rem',
+                                  color: 'var(--color-text-muted)',
+                                  fontStyle: 'italic',
+                                }}>
+                                  Events will appear here as they are added.
+                                </span>
+                              ) : (
+                                <div style={{
+                                  height: '6px',
+                                  background: 'var(--color-border)',
+                                  borderRadius: '3px',
+                                  width: `${35 + ((i * 37) % 45)}%`,
+                                  opacity: 0.3,
+                                }} />
+                              )}
+                            </td>
+                            <td style={{ padding: '6px 0 6px 8px' }}>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Footer links */}
+                <div style={{
+                  display: 'flex',
+                  gap: 'var(--space-3)',
+                  marginTop: 'var(--space-3)',
+                  fontSize: '0.72rem',
+                  flexWrap: 'wrap',
+                }}>
+                  <Link href="/events" className="hover-link" style={{ fontWeight: 600, color: 'var(--color-accent)' }}>
+                    View all events
+                  </Link>
+                  <Link href="/calendar" className="hover-link" style={{ fontWeight: 600, color: 'var(--color-accent)' }}>
+                    Add to your calendar
+                  </Link>
+                  <Link href="/advertise" className="hover-link" style={{ fontWeight: 600, color: 'var(--color-accent)' }}>
+                    Add your event here
+                  </Link>
+                </div>
+              </div>
+
             </div>
           </div>
         </section>
       )}
-
-      {/* Upcoming Events Calendar — always visible, placed prominently after main grid */}
-      <section style={{
-        padding: 'var(--space-6) 0 var(--space-12)',
-      }}>
-        <div className="container">
-          <div style={{
-            borderTop: '2px solid var(--color-border)',
-            paddingTop: 'var(--space-6)',
-          }}>
-            <h2 className="section-title" style={{ marginBottom: 'var(--space-4)' }}>
-              Upcoming Geopolitical Events
-            </h2>
-            <div style={{ overflowX: 'auto', minHeight: '680px' }}>
-              <table style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: '0.82rem',
-                tableLayout: 'fixed',
-              }}>
-                <colgroup>
-                  <col style={{ width: '100px' }} />
-                  <col style={{ width: 'auto' }} />
-                  <col style={{ width: '180px' }} />
-                </colgroup>
-                <thead>
-                  <tr style={{
-                    borderBottom: '2px solid var(--color-border)',
-                  }}>
-                    <th style={{ textAlign: 'left', padding: '8px 12px 8px 0', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Date</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Event</th>
-                    <th style={{ textAlign: 'left', padding: '8px 0 8px 12px', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Location</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.length > 0 ? (
-                    events.slice(0, 20).map((event) => {
-                      const startDate = new Date(event.start_date);
-                      const dateStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                      return (
-                        <tr key={event.id} style={{
-                          borderBottom: '1px solid var(--color-border)',
-                        }}>
-                          <td style={{
-                            padding: '8px 12px 8px 0',
-                            fontWeight: 600,
-                            color: 'var(--color-accent)',
-                            whiteSpace: 'nowrap',
-                            fontSize: '0.78rem',
-                          }}>
-                            {dateStr}
-                          </td>
-                          <td style={{ padding: '8px 12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                              {event.url ? (
-                                <a href={event.url} target="_blank" rel="noopener noreferrer" className="hover-link" style={{ fontWeight: 600 }}>
-                                  {event.title}
-                                </a>
-                              ) : (
-                                <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{event.title}</span>
-                              )}
-                              {event.is_featured && event.register_url && (
-                                <a
-                                  href={event.register_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{
-                                    fontSize: '0.6rem',
-                                    fontWeight: 700,
-                                    padding: '2px 8px',
-                                    borderRadius: '999px',
-                                    background: 'var(--color-accent)',
-                                    color: 'var(--color-primary)',
-                                    textDecoration: 'none',
-                                    letterSpacing: '0.04em',
-                                    textTransform: 'uppercase',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  Register
-                                </a>
-                              )}
-                            </div>
-                          </td>
-                          <td style={{
-                            padding: '8px 0 8px 12px',
-                            color: 'var(--color-text-secondary)',
-                            fontSize: '0.78rem',
-                          }}>
-                            {event.location || '—'}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    /* Empty placeholder rows — 20 rows with subtle skeleton lines */
-                    Array.from({ length: 20 }, (_, i) => (
-                      <tr key={`empty-${i}`} style={{
-                        borderBottom: '1px solid var(--color-border)',
-                        opacity: i === 0 ? 1 : 0.4 + (0.6 * (1 - i / 20)),
-                      }}>
-                        <td style={{
-                          padding: '8px 12px 8px 0',
-                          fontWeight: 600,
-                          color: 'var(--color-text-muted)',
-                          whiteSpace: 'nowrap',
-                          fontSize: '0.78rem',
-                        }}>
-                          {i === 0 ? '—' : ''}
-                        </td>
-                        <td style={{ padding: '8px 12px' }}>
-                          {i === 0 ? (
-                            <span style={{
-                              fontSize: '0.82rem',
-                              color: 'var(--color-text-muted)',
-                              fontStyle: 'italic',
-                            }}>
-                              Events will appear here as they are added. Check back soon.
-                            </span>
-                          ) : (
-                            <div style={{
-                              height: '8px',
-                              background: 'var(--color-border)',
-                              borderRadius: '4px',
-                              width: `${40 + ((i * 37) % 40)}%`,
-                              opacity: 0.3,
-                            }} />
-                          )}
-                        </td>
-                        <td style={{
-                          padding: '8px 0 8px 12px',
-                          color: 'var(--color-text-muted)',
-                          fontSize: '0.78rem',
-                        }}>
-                          {i === 0 ? '' : ''}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {/* Footer links */}
-            <div style={{
-              display: 'flex',
-              gap: 'var(--space-4)',
-              marginTop: 'var(--space-4)',
-              fontSize: '0.75rem',
-              flexWrap: 'wrap',
-            }}>
-              <Link href="/events" className="hover-link" style={{ fontWeight: 600 }}>
-                View all events
-              </Link>
-              <span style={{ color: 'var(--color-text-muted)' }}>|</span>
-              <Link href="/calendar" className="hover-link" style={{ fontWeight: 600 }}>
-                Add to your calendar
-              </Link>
-              <span style={{ color: 'var(--color-text-muted)' }}>|</span>
-              <Link href="/advertise" className="hover-link" style={{ fontWeight: 600 }}>
-                Add your event here
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* More News — two-column section below calendar */}
       {more_news.length > 0 && (
