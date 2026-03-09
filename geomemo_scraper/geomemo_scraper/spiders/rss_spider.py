@@ -299,13 +299,54 @@ class RssSpider(scrapy.Spider):
             self.logger.info(f"Loaded {len(self.start_urls)} hardcoded RSS feeds (fallback mode)")
 
     # The parse method is called for every downloaded response
+    def _extract_image_from_node(self, node, node_type):
+        """Extract image URL from RSS/Atom item using common media tags."""
+        img = None
+
+        # 1. media:content / media:thumbnail (Yahoo Media RSS)
+        img = img or node.xpath('media:content/@url').get()
+        img = img or node.xpath('media:thumbnail/@url').get()
+        img = img or node.xpath('*[local-name()="content"]/@url').get()
+        img = img or node.xpath('*[local-name()="thumbnail"]/@url').get()
+
+        # 2. <enclosure> tag (standard RSS)
+        if not img:
+            enc_type = node.xpath('enclosure/@type').get() or ''
+            if 'image' in enc_type:
+                img = node.xpath('enclosure/@url').get()
+            elif not enc_type:
+                # Some feeds have enclosure without type; check URL extension
+                enc_url = node.xpath('enclosure/@url').get()
+                if enc_url and any(enc_url.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp', '.gif')):
+                    img = enc_url
+
+        # 3. <image> child element
+        img = img or node.xpath('image/url/text()').get()
+        img = img or node.xpath('image/@href').get()
+
+        # 4. Extract from description/content HTML (img src)
+        if not img:
+            desc_html = node.xpath('description/text()').get() or ''
+            if not desc_html and node_type == 'atom':
+                desc_html = node.xpath('atom:content/text()').get() or ''
+            img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', desc_html)
+            if img_match:
+                candidate = img_match.group(1)
+                # Filter out tiny tracking pixels and icons
+                if not any(skip in candidate.lower() for skip in ['pixel', 'tracking', '1x1', 'beacon', 'spacer', 'logo']):
+                    img = candidate
+
+        # Validate: must be a proper URL
+        if img and img.startswith('http'):
+            return img.strip()
+        return None
+
     def parse(self, response):
         try:
             sel = Selector(text=response.text, type='xml')
             sel.register_namespace('dc', 'http://purl.org/dc/elements/1.1/')
             sel.register_namespace('atom', 'http://www.w3.org/2005/Atom')
-            # Google News often uses media namespace for source, but it's unreliable
-            # sel.register_namespace('media', 'http://search.yahoo.com/mrss/') # Optional
+            sel.register_namespace('media', 'http://search.yahoo.com/mrss/')
 
         except (XMLSyntaxError, TypeError) as e:
             self.logger.warning(f"Failed to parse XML from {response.url}. Error: {e}. Skipping.")
@@ -386,6 +427,9 @@ class RssSpider(scrapy.Spider):
             item['publication_name'] = publication_name or (feed_title.strip() if feed_title else response.url)
             item['author'] = author
             item['description'] = description # Pass description to pipeline
+
+            # Extract image from RSS media tags
+            item['og_image'] = self._extract_image_from_node(node, node_type)
 
             # Pass source_id from DB-loaded feeds (avoids re-lookup in pipeline)
             if response.meta.get('source_id'):

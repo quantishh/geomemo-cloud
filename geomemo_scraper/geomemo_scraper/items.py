@@ -19,3 +19,4 @@ class ArticleItem(scrapy.Item):
     embedding = scrapy.Field()
     confidence_score = scrapy.Field()
     source_id = scrapy.Field()  # Pre-resolved source ID from DB-loaded feeds
+    og_image = scrapy.Field()   # OG image URL from RSS media tags or article page

@@ -406,36 +406,42 @@ export default async function Home() {
         </section>
       )}
 
-      {/* Upcoming Events Calendar */}
-      {events.length > 0 && (
-        <section style={{
-          padding: '0 0 var(--space-12)',
-        }}>
-          <div className="container">
-            <div style={{
-              borderTop: '2px solid var(--color-border)',
-              paddingTop: 'var(--space-6)',
-            }}>
-              <h2 className="section-title" style={{ marginBottom: 'var(--space-4)' }}>
-                Upcoming Geopolitical Events
-              </h2>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  fontSize: '0.82rem',
-                }}>
-                  <thead>
-                    <tr style={{
-                      borderBottom: '2px solid var(--color-border)',
-                    }}>
-                      <th style={{ textAlign: 'left', padding: '8px 12px 8px 0', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Date</th>
-                      <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Event</th>
-                      <th style={{ textAlign: 'left', padding: '8px 0 8px 12px', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Location</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {events.slice(0, 20).map((event) => {
+      {/* Upcoming Events Calendar — always visible with predefined 20-row layout */}
+      <section style={{
+        padding: '0 0 var(--space-12)',
+      }}>
+        <div className="container">
+          <div style={{
+            borderTop: '2px solid var(--color-border)',
+            paddingTop: 'var(--space-6)',
+          }}>
+            <h2 className="section-title" style={{ marginBottom: 'var(--space-4)' }}>
+              Upcoming Geopolitical Events
+            </h2>
+            <div style={{ overflowX: 'auto', minHeight: '680px' }}>
+              <table style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '0.82rem',
+                tableLayout: 'fixed',
+              }}>
+                <colgroup>
+                  <col style={{ width: '100px' }} />
+                  <col style={{ width: 'auto' }} />
+                  <col style={{ width: '180px' }} />
+                </colgroup>
+                <thead>
+                  <tr style={{
+                    borderBottom: '2px solid var(--color-border)',
+                  }}>
+                    <th style={{ textAlign: 'left', padding: '8px 12px 8px 0', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Date</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Event</th>
+                    <th style={{ textAlign: 'left', padding: '8px 0 8px 12px', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Location</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.length > 0 ? (
+                    events.slice(0, 20).map((event) => {
                       const startDate = new Date(event.start_date);
                       const dateStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                       return (
@@ -492,34 +498,78 @@ export default async function Home() {
                           </td>
                         </tr>
                       );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {/* Footer links */}
-              <div style={{
-                display: 'flex',
-                gap: 'var(--space-4)',
-                marginTop: 'var(--space-4)',
-                fontSize: '0.75rem',
-                flexWrap: 'wrap',
-              }}>
-                <Link href="/events" className="hover-link" style={{ fontWeight: 600 }}>
-                  View all events
-                </Link>
-                <span style={{ color: 'var(--color-text-muted)' }}>|</span>
-                <Link href="/calendar" className="hover-link" style={{ fontWeight: 600 }}>
-                  Add to your calendar
-                </Link>
-                <span style={{ color: 'var(--color-text-muted)' }}>|</span>
-                <Link href="/advertise" className="hover-link" style={{ fontWeight: 600 }}>
-                  Add your event here
-                </Link>
-              </div>
+                    })
+                  ) : (
+                    /* Empty placeholder rows — 20 rows with subtle dashed borders */
+                    Array.from({ length: 20 }, (_, i) => (
+                      <tr key={`empty-${i}`} style={{
+                        borderBottom: '1px solid var(--color-border)',
+                        opacity: i === 0 ? 1 : 0.4 + (0.6 * (1 - i / 20)),
+                      }}>
+                        <td style={{
+                          padding: '8px 12px 8px 0',
+                          fontWeight: 600,
+                          color: 'var(--color-text-muted)',
+                          whiteSpace: 'nowrap',
+                          fontSize: '0.78rem',
+                        }}>
+                          {i === 0 ? '—' : ''}
+                        </td>
+                        <td style={{ padding: '8px 12px' }}>
+                          {i === 0 ? (
+                            <span style={{
+                              fontSize: '0.82rem',
+                              color: 'var(--color-text-muted)',
+                              fontStyle: 'italic',
+                            }}>
+                              Events will appear here as they are added. Check back soon.
+                            </span>
+                          ) : (
+                            <div style={{
+                              height: '8px',
+                              background: 'var(--color-border)',
+                              borderRadius: '4px',
+                              width: `${40 + ((i * 37) % 40)}%`,
+                              opacity: 0.3,
+                            }} />
+                          )}
+                        </td>
+                        <td style={{
+                          padding: '8px 0 8px 12px',
+                          color: 'var(--color-text-muted)',
+                          fontSize: '0.78rem',
+                        }}>
+                          {i === 0 ? '' : ''}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {/* Footer links */}
+            <div style={{
+              display: 'flex',
+              gap: 'var(--space-4)',
+              marginTop: 'var(--space-4)',
+              fontSize: '0.75rem',
+              flexWrap: 'wrap',
+            }}>
+              <Link href="/events" className="hover-link" style={{ fontWeight: 600 }}>
+                View all events
+              </Link>
+              <span style={{ color: 'var(--color-text-muted)' }}>|</span>
+              <Link href="/calendar" className="hover-link" style={{ fontWeight: 600 }}>
+                Add to your calendar
+              </Link>
+              <span style={{ color: 'var(--color-text-muted)' }}>|</span>
+              <Link href="/advertise" className="hover-link" style={{ fontWeight: 600 }}>
+                Add your event here
+              </Link>
             </div>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* Newsletter CTA — slim */}
       <section style={{

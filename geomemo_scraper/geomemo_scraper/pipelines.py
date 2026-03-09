@@ -1,5 +1,7 @@
 import psycopg2
 import json
+import re
+import urllib.request
 from itemadapter import ItemAdapter
 from scrapy.exceptions import DropItem
 import logging
@@ -562,6 +564,34 @@ Content: "{content_snippet}"
             return None
 
     # =========================================
+    # OG IMAGE EXTRACTION
+    # =========================================
+
+    def _fetch_og_image(self, url: str) -> str:
+        """
+        Fetch the article URL and extract og:image meta tag.
+        Reads only the first 20KB to minimize latency.
+        Returns the image URL or None.
+        """
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; GeoMemoBot/1.0)"
+            })
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                html = resp.read(20000).decode("utf-8", errors="ignore")
+            # Try both meta tag orderings
+            pat1 = r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']'
+            pat2 = r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']'
+            match = re.search(pat1, html, re.IGNORECASE) or re.search(pat2, html, re.IGNORECASE)
+            if match:
+                img_url = match.group(1).strip()
+                if img_url.startswith('http'):
+                    return img_url
+        except Exception as e:
+            self.logger.debug(f"OG image fetch failed for {url[:60]}: {e}")
+        return None
+
+    # =========================================
     # MAIN PROCESSING
     # =========================================
 
@@ -635,6 +665,13 @@ Content: "{content_snippet}"
             # Use pre-resolved source_id from DB-loaded feeds if available
             source_id = adapter.get('source_id') or self._lookup_or_create_source(publication_name)
 
+            # 11. OG Image: use RSS-extracted image, or fetch from article URL
+            og_image = adapter.get('og_image')
+            if not og_image:
+                og_image = self._fetch_og_image(adapter['url'])
+            if og_image:
+                self.logger.info(f"OG Image: {og_image[:80]}")
+
             self.logger.info(
                 f"Scored: '{headline}' | Confidence: {adapter['confidence_score']} | "
                 f"Credibility: {source_credibility} | Novelty: {novelty_score:.1f} | "
@@ -642,16 +679,16 @@ Content: "{content_snippet}"
                 f"Countries: {country_codes}"
             )
 
-            # 11. Save to DB (M2: expanded INSERT with all new fields)
+            # 12. Save to DB (expanded INSERT with og_image)
             self.cursor.execute(
                 """
                 INSERT INTO articles
                 (url, headline, publication_name, author, headline_en, summary,
                  summary_long, category, status, scraped_at, embedding, confidence_score,
                  source_id, repetition_score, auto_approval_score,
-                 country_codes, region)
+                 country_codes, region, og_image)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', NOW(), %s, %s,
-                        %s, %s, %s, %s, %s)
+                        %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (url) DO NOTHING
                 """,
                 (
@@ -662,7 +699,7 @@ Content: "{content_snippet}"
                     adapter['embedding'], adapter['confidence_score'],
                     source_id, repetition_score, auto_approval_score,
                     country_codes if country_codes else None,
-                    region
+                    region, og_image
                 )
             )
             self.connection.commit()
