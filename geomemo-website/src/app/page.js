@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { fetchWebsiteFeed, fetchSponsors, fetchPodcasts, fetchNewestUpdates } from '@/lib/api';
+import { fetchWebsiteFeed, fetchSponsors, fetchPodcasts, fetchNewestUpdates, fetchEvents } from '@/lib/api';
 import ArticleCluster from '@/components/ArticleCluster';
 
 export const dynamic = 'force-dynamic';
@@ -35,11 +35,12 @@ function extractYouTubeId(url) {
 }
 
 export default async function Home() {
-  const [feed, sponsors, podcasts, latestNews] = await Promise.all([
+  const [feed, sponsors, podcasts, latestNews, events] = await Promise.all([
     fetchWebsiteFeed(),
     fetchSponsors(),
     fetchPodcasts(),
     fetchNewestUpdates(),
+    fetchEvents(),
   ]);
 
   const { top_stories = [], main_stories = [], more_news = [] } = feed;
@@ -399,6 +400,121 @@ export default async function Home() {
                     />
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Upcoming Events Calendar */}
+      {events.length > 0 && (
+        <section style={{
+          padding: '0 0 var(--space-12)',
+        }}>
+          <div className="container">
+            <div style={{
+              borderTop: '2px solid var(--color-border)',
+              paddingTop: 'var(--space-6)',
+            }}>
+              <h2 className="section-title" style={{ marginBottom: 'var(--space-4)' }}>
+                Upcoming Geopolitical Events
+              </h2>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: '0.82rem',
+                }}>
+                  <thead>
+                    <tr style={{
+                      borderBottom: '2px solid var(--color-border)',
+                    }}>
+                      <th style={{ textAlign: 'left', padding: '8px 12px 8px 0', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Date</th>
+                      <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Event</th>
+                      <th style={{ textAlign: 'left', padding: '8px 0 8px 12px', fontWeight: 700, color: 'var(--color-text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Location</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {events.slice(0, 20).map((event) => {
+                      const startDate = new Date(event.start_date);
+                      const dateStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                      return (
+                        <tr key={event.id} style={{
+                          borderBottom: '1px solid var(--color-border)',
+                        }}>
+                          <td style={{
+                            padding: '8px 12px 8px 0',
+                            fontWeight: 600,
+                            color: 'var(--color-accent)',
+                            whiteSpace: 'nowrap',
+                            fontSize: '0.78rem',
+                          }}>
+                            {dateStr}
+                          </td>
+                          <td style={{ padding: '8px 12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              {event.url ? (
+                                <a href={event.url} target="_blank" rel="noopener noreferrer" className="hover-link" style={{ fontWeight: 600 }}>
+                                  {event.title}
+                                </a>
+                              ) : (
+                                <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{event.title}</span>
+                              )}
+                              {event.is_featured && event.register_url && (
+                                <a
+                                  href={event.register_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    fontSize: '0.6rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '999px',
+                                    background: 'var(--color-accent)',
+                                    color: 'var(--color-primary)',
+                                    textDecoration: 'none',
+                                    letterSpacing: '0.04em',
+                                    textTransform: 'uppercase',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  Register
+                                </a>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{
+                            padding: '8px 0 8px 12px',
+                            color: 'var(--color-text-secondary)',
+                            fontSize: '0.78rem',
+                          }}>
+                            {event.location || '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {/* Footer links */}
+              <div style={{
+                display: 'flex',
+                gap: 'var(--space-4)',
+                marginTop: 'var(--space-4)',
+                fontSize: '0.75rem',
+                flexWrap: 'wrap',
+              }}>
+                <Link href="/events" className="hover-link" style={{ fontWeight: 600 }}>
+                  View all events
+                </Link>
+                <span style={{ color: 'var(--color-text-muted)' }}>|</span>
+                <Link href="/calendar" className="hover-link" style={{ fontWeight: 600 }}>
+                  Add to your calendar
+                </Link>
+                <span style={{ color: 'var(--color-text-muted)' }}>|</span>
+                <Link href="/advertise" className="hover-link" style={{ fontWeight: 600 }}>
+                  Add your event here
+                </Link>
               </div>
             </div>
           </div>

@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sponsorForm = document.getElementById('sponsor-form');
     const podcastForm = document.getElementById('podcast-form');
     const fetchMetaBtn = document.getElementById('fetch-podcast-meta-btn');
+    const eventForm = document.getElementById('event-form');
 
     // --- STATE ---
     let allArticlesCache = [];
@@ -93,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchSponsorsList();
     fetchPodcastsList();
     fetchSourcesList();
+    fetchEventsList();
 
     // --- EVENT LISTENERS ---
     if (categoryFilter) categoryFilter.addEventListener('change', () => { renderArticles(); updateScoreDistribution(); });
@@ -116,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sponsorForm) sponsorForm.addEventListener('submit', handleSponsorSubmit);
     if (podcastForm) podcastForm.addEventListener('submit', handlePodcastSubmit);
     if (fetchMetaBtn) fetchMetaBtn.addEventListener('click', handleFetchMeta);
+    if (eventForm) eventForm.addEventListener('submit', handleEventSubmit);
 
     // M2: Smart Curation Listeners
     if (autoApproveBtn) autoApproveBtn.addEventListener('click', handleAutoApprove);
@@ -2777,5 +2780,72 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btn) { btn.disabled = false; btn.textContent = '📢 Post to Telegram'; }
         }
     }
+
+    // ================================================
+    // EVENTS CALENDAR MANAGEMENT
+    // ================================================
+
+    async function fetchEventsList() {
+        const tbody = document.getElementById('events-tbody');
+        if (!tbody) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/events?past=true`);
+            if (!res.ok) throw new Error('Failed to fetch events');
+            const events = await res.json();
+            tbody.innerHTML = events.map(ev => {
+                const startStr = ev.start_date || '';
+                const featured = ev.is_featured ? '<span style="color:#C9A84C;font-weight:700;">★</span>' : '';
+                return `<tr class="border-b" style="border-color: var(--border-default);">
+                    <td class="p-2 whitespace-nowrap">${startStr}</td>
+                    <td class="p-2">${featured} ${ev.title}${ev.register_url ? ` <a href="${ev.register_url}" target="_blank" class="text-blue-500 text-xs">[Register]</a>` : ''}</td>
+                    <td class="p-2">${ev.location || '—'}</td>
+                    <td class="p-2">${ev.category || '—'}</td>
+                    <td class="p-2">
+                        <button onclick="deleteEvent(${ev.id})" class="text-red-500 hover:text-red-700 text-xs">Delete</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="5" class="p-2 text-red-500">${e.message}</td></tr>`;
+        }
+    }
+
+    async function handleEventSubmit(e) {
+        e.preventDefault();
+        const title = document.getElementById('event-title').value;
+        const url = document.getElementById('event-url').value || null;
+        const start_date = document.getElementById('event-start').value;
+        const end_date = document.getElementById('event-end').value || null;
+        const category = document.getElementById('event-category').value;
+        const location = document.getElementById('event-location').value || null;
+        const register_url = document.getElementById('event-register-url').value || null;
+        const is_featured = document.getElementById('event-is-featured').checked;
+        const description = document.getElementById('event-description').value || null;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, url, start_date, end_date, category, location, register_url, is_featured, description }),
+            });
+            if (!res.ok) throw new Error('Failed to create event');
+            eventForm.reset();
+            fetchEventsList();
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+
+    // Make deleteEvent globally accessible
+    window.deleteEvent = async function(eventId) {
+        if (!confirm('Delete this event?')) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/events/${eventId}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed');
+            fetchEventsList();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    };
 
 });

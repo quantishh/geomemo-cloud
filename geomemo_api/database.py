@@ -205,6 +205,9 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_events_start_date ON events (start_date)",
             # Podcast YouTube video embed support
             "ALTER TABLE podcasts ADD COLUMN IF NOT EXISTS video_url TEXT",
+            # Events: registration URL + featured flag
+            "ALTER TABLE events ADD COLUMN IF NOT EXISTS register_url TEXT",
+            "ALTER TABLE events ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE",
         ]
         for sql in migrations:
             try:

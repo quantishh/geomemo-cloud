@@ -165,6 +165,69 @@
             </div>
         </details>
 
+        <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
+            <summary class="p-4 cursor-pointer font-semibold text-lg hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b" style="color: var(--text-primary);">
+                📅 Events Calendar
+            </summary>
+            <div class="p-6">
+                <form id="event-form" class="space-y-3 mb-6 border-b pb-6">
+                    <h3 class="font-bold" style="color: var(--text-primary);">Add Event</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" id="event-title" name="title" placeholder="Event Title" class="p-2 border rounded w-full" required>
+                        <input type="url" id="event-url" name="url" placeholder="Event URL" class="p-2 border rounded w-full">
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs mb-1" style="color: var(--text-muted);">Start Date</label>
+                            <input type="date" id="event-start" name="start_date" class="p-2 border rounded w-full" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs mb-1" style="color: var(--text-muted);">End Date (optional)</label>
+                            <input type="date" id="event-end" name="end_date" class="p-2 border rounded w-full">
+                        </div>
+                        <div>
+                            <label class="block text-xs mb-1" style="color: var(--text-muted);">Category</label>
+                            <select id="event-category" name="category" class="p-2 border rounded w-full">
+                                <option value="Conference">Conference</option>
+                                <option value="Summit">Summit</option>
+                                <option value="Election">Election</option>
+                                <option value="UN Session">UN Session</option>
+                                <option value="Trade Summit">Trade Summit</option>
+                                <option value="Military">Military</option>
+                                <option value="Diplomatic">Diplomatic</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" id="event-location" name="location" placeholder="Location (e.g. Geneva, Switzerland)" class="p-2 border rounded w-full">
+                        <input type="url" id="event-register-url" name="register_url" placeholder="Registration URL (optional)" class="p-2 border rounded w-full">
+                    </div>
+                    <textarea id="event-description" name="description" placeholder="Description (optional)" class="p-2 border rounded w-full h-16"></textarea>
+                    <div class="flex justify-between items-center">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" id="event-is-featured" name="is_featured">
+                            <span class="text-sm" style="color: var(--text-secondary);">Featured Event (shows gold "Register" badge on website)</span>
+                        </label>
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add Event</button>
+                    </div>
+                </form>
+                <h3 class="font-bold mb-2" style="color: var(--text-primary);">Upcoming Events</h3>
+                <table class="w-full text-sm text-left" style="color: var(--text-secondary);">
+                    <thead class="text-xs uppercase" style="background-color: var(--bg-section); color: var(--text-muted);">
+                        <tr>
+                            <th class="p-2">Date</th>
+                            <th class="p-2">Event</th>
+                            <th class="p-2">Location</th>
+                            <th class="p-2">Category</th>
+                            <th class="p-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="events-tbody"></tbody>
+                </table>
+            </div>
+        </details>
+
         <details class="mb-4 bg-white rounded-lg shadow-sm border border-gray-200" open>
             <summary class="p-4 cursor-pointer font-semibold text-lg hover:bg-gray-50 bg-gray-50 rounded-t-lg border-b" style="color: var(--text-primary);">
                 📰 Article Curation
