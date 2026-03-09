@@ -309,6 +309,94 @@ def search_recent_tweets(
     return results[:max_results]
 
 
+def fetch_tweets_for_article(headline: str, summary: str = "", max_results: int = 10) -> list:
+    """
+    Fetch tweets for an article using dual search strategy:
+    1. Search by headline (captures direct discussion)
+    2. Search by extracted keywords/entities (captures broader commentary)
+
+    Deduplicates, merges, re-ranks by engagement + expert priority.
+    Returns list of tweet dicts ready for JSONB storage.
+    """
+    if not TWITTER_BEARER_TOKEN:
+        logger.warning("TWITTER_BEARER_TOKEN not set — skipping tweet fetch")
+        return []
+
+    all_tweets = {}  # keyed by tweet ID for dedup
+
+    # --- Search 1: Headline-based (captures direct discussion) ---
+    try:
+        headline_results = search_recent_tweets(
+            query=headline,
+            max_results=15,
+            exclude_publications=True,
+            boost_experts=True,
+            include_replies=True,
+        )
+        for t in headline_results:
+            all_tweets[t['id']] = t
+    except Exception as e:
+        logger.warning(f"Headline tweet search failed: {e}")
+
+    # --- Search 2: Keyword/entity extraction (captures broader commentary) ---
+    try:
+        combined_text = f"{headline} {summary}"
+        # Extract proper nouns (names, countries, organizations)
+        entities = re.findall(r'\b[A-Z][a-z]{2,}\b', combined_text)
+        # Also extract quoted terms or significant phrases
+        # Remove common English proper nouns that aren't useful for search
+        common_skip = {'The', 'This', 'That', 'They', 'Their', 'There', 'These',
+                       'Those', 'What', 'When', 'Where', 'Which', 'While', 'With',
+                       'After', 'Before', 'About', 'Over', 'Under', 'Between',
+                       'During', 'Through', 'Against', 'According', 'Also', 'More',
+                       'Says', 'Said', 'Would', 'Could', 'Should', 'Will', 'Has',
+                       'Have', 'Been', 'Being', 'Into', 'From', 'Some', 'Other'}
+        unique_entities = []
+        seen = set()
+        for e in entities:
+            if e not in common_skip and e.lower() not in seen:
+                seen.add(e.lower())
+                unique_entities.append(e)
+
+        # Build keyword query from top entities (max 6 for focused search)
+        if len(unique_entities) >= 2:
+            keyword_query = ' '.join(unique_entities[:6])
+            keyword_results = search_recent_tweets(
+                query=keyword_query,
+                max_results=15,
+                exclude_publications=True,
+                boost_experts=True,
+                include_replies=True,
+            )
+            for t in keyword_results:
+                if t['id'] not in all_tweets:
+                    all_tweets[t['id']] = t
+    except Exception as e:
+        logger.warning(f"Keyword tweet search failed: {e}")
+
+    if not all_tweets:
+        return []
+
+    # Re-rank merged results by relevance_score
+    merged = sorted(all_tweets.values(), key=lambda t: t['relevance_score'], reverse=True)
+
+    # Return top N in storage format
+    return [
+        {
+            'username': t['author_username'],
+            'text': t['text'],
+            'url': t['url'],
+            'like_count': t.get('like_count', 0),
+            'retweet_count': t.get('retweet_count', 0),
+            'reply_count': t.get('reply_count', 0),
+            'followers_count': t.get('followers_count', 0),
+            'relevance_score': t.get('relevance_score', 0),
+            'is_reply': t.get('is_reply', False),
+        }
+        for t in merged[:max_results]
+    ]
+
+
 def get_monthly_post_count() -> int:
     """
     Count how many tweets we've posted this month.

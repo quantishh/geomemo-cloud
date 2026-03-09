@@ -208,6 +208,9 @@ def init_db():
             # Events: registration URL + featured flag
             "ALTER TABLE events ADD COLUMN IF NOT EXISTS register_url TEXT",
             "ALTER TABLE events ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE",
+            # Website X posts: auto-fetched tweets cached per article (separate from newsletter embedded_tweets)
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS website_tweets JSONB",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS website_tweets_fetched_at TIMESTAMPTZ",
         ]
         for sql in migrations:
             try:

@@ -73,7 +73,7 @@ ARTICLE_COLUMNS = """
     summary, category, status, publication_name, author, scraped_at,
     is_top_story, confidence_score, parent_id,
     source_id, relevance_score, repetition_score, auto_approval_score,
-    country_codes, region, og_image, embedded_tweets
+    country_codes, region, og_image, embedded_tweets, website_tweets
 """
 
 
@@ -400,8 +400,14 @@ def get_website_feed():
         more_news_candidates = [dict(row) for row in cursor.fetchall()]
         more_news = [a for a in more_news_candidates if a['id'] not in all_used_ids][:14]
 
-        # 5. Auto-match X posts for main_stories (keyword-based matching)
-        _attach_matched_tweets(cursor, main_stories)
+        # 5. Attach cached X posts for all sections
+        all_feed_articles = top_stories + main_stories + more_news
+        _attach_matched_tweets(cursor, all_feed_articles)
+
+        # Clean up raw website_tweets from response (matched_tweets is the formatted version)
+        for art in all_feed_articles:
+            art.pop('website_tweets', None)
+            art.pop('website_tweets_fetched_at', None)
 
         return {
             "top_stories": top_stories,
@@ -420,67 +426,27 @@ def get_website_feed():
 
 def _attach_matched_tweets(cursor, articles: list):
     """
-    Auto-match tweets to articles (score 80+) using keyword matching.
-    Extracts key entities (country names, leader names) from headline/summary
-    and searches tweets table for matching content.
+    Attach cached website_tweets to articles for the website feed.
+    Reads pre-fetched tweets from the website_tweets JSONB column.
+    Falls back to empty list if no cached tweets exist.
     """
     if not articles:
         return
 
-    # Fetch recent tweets (last 7 days)
-    cursor.execute("""
-        SELECT id, content, url, author, image_url, created_at
-        FROM tweets
-        WHERE created_at >= NOW() - INTERVAL '7 days'
-        ORDER BY created_at DESC
-        LIMIT 200
-    """)
-    recent_tweets = [dict(row) for row in cursor.fetchall()]
-
-    if not recent_tweets:
-        for art in articles:
-            art['matched_tweets'] = []
-        return
-
     for art in articles:
-        # Build keyword set from headline and summary
-        text = f"{art.get('headline') or ''} {art.get('summary') or ''}"
-        text = text.lower()
-        # Extract meaningful words (4+ chars, skip common words)
-        stop_words = {'that', 'this', 'with', 'from', 'have', 'been', 'were', 'they',
-                      'their', 'will', 'would', 'could', 'should', 'about', 'after',
-                      'before', 'which', 'where', 'while', 'also', 'more', 'than',
-                      'into', 'over', 'some', 'what', 'when', 'other', 'said', 'says',
-                      'according', 'between', 'under', 'against', 'during', 'through'}
-        import re as _re
-        words = set(_re.findall(r'\b[a-z]{4,}\b', text)) - stop_words
-
-        # Also extract capitalized names/entities from original text
-        orig_text = f"{art.get('headline') or ''} {art.get('summary') or ''}"
-        entities = set(_re.findall(r'\b[A-Z][a-z]{2,}\b', orig_text))
-        keywords = words | {e.lower() for e in entities}
-
-        # Score each tweet by keyword overlap
-        matched = []
-        for tweet in recent_tweets:
-            tweet_text = (tweet.get('content') or '').lower()
-            if not tweet_text:
-                continue
-            overlap = sum(1 for kw in keywords if kw in tweet_text)
-            if overlap >= 3:  # At least 3 keyword matches
-                matched.append({
-                    'username': tweet.get('author') or '',
-                    'text': tweet.get('content') or '',
-                    'url': tweet.get('url') or '',
-                    'score': overlap,
-                })
-
-        # Sort by score, take top 5
-        matched.sort(key=lambda t: t['score'], reverse=True)
-        art['matched_tweets'] = [
-            {'username': m['username'], 'text': m['text'], 'url': m['url']}
-            for m in matched[:5]
-        ]
+        cached = art.get('website_tweets')
+        if cached and isinstance(cached, list) and len(cached) > 0:
+            # Use cached website tweets — format for frontend
+            art['matched_tweets'] = [
+                {
+                    'username': t.get('username', ''),
+                    'text': t.get('text', ''),
+                    'url': t.get('url', ''),
+                }
+                for t in cached[:10]
+            ]
+        else:
+            art['matched_tweets'] = []
 
 
 @router.get("/articles/approved", response_model=List[Article])
@@ -1211,6 +1177,122 @@ Rewrite ONLY the MAIN article's summary as a professional news brief. Requiremen
     except Exception as e:
         conn.rollback()
         raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Website X Posts: batch-fetch tweets for approved articles ---
+
+@router.post("/articles/fetch-website-tweets")
+def fetch_website_tweets(
+    min_score: float = Query(75, description="Minimum auto_approval_score"),
+    hours: int = Query(48, description="Look back N hours"),
+    limit: int = Query(30, description="Max articles to process"),
+    force: bool = Query(False, description="Re-fetch even if already cached"),
+):
+    """
+    Background job: fetch X posts for website-eligible articles.
+    Uses dual search (headline + keywords) via the X API, caches results
+    in website_tweets JSONB column. Skips articles already fetched unless force=True.
+
+    Call periodically (every 30-60 min) or after article approval.
+    """
+    import time
+    import json as _json
+
+    try:
+        from services.social.twitter import fetch_tweets_for_article, is_configured as twitter_is_configured
+    except ImportError:
+        raise HTTPException(500, "Twitter service not available")
+
+    if not twitter_is_configured():
+        raise HTTPException(400, "X/Twitter API not configured. Set TWITTER_BEARER_TOKEN in .env")
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        # Find website-eligible articles that need tweet fetching
+        if force:
+            cursor.execute("""
+                SELECT id, headline_en, summary
+                FROM articles
+                WHERE status = 'approved'
+                  AND auto_approval_score >= %s
+                  AND scraped_at >= NOW() - make_interval(hours => %s)
+                ORDER BY auto_approval_score DESC, scraped_at DESC
+                LIMIT %s
+            """, (min_score, hours, limit))
+        else:
+            cursor.execute("""
+                SELECT id, headline_en, summary
+                FROM articles
+                WHERE status = 'approved'
+                  AND auto_approval_score >= %s
+                  AND scraped_at >= NOW() - make_interval(hours => %s)
+                  AND (website_tweets IS NULL OR website_tweets_fetched_at IS NULL
+                       OR website_tweets_fetched_at < NOW() - INTERVAL '6 hours')
+                ORDER BY auto_approval_score DESC, scraped_at DESC
+                LIMIT %s
+            """, (min_score, hours, limit))
+
+        articles = [dict(row) for row in cursor.fetchall()]
+        logger.info(f"Fetching tweets for {len(articles)} articles (min_score={min_score}, hours={hours})")
+
+        results = {"processed": 0, "fetched": 0, "skipped": 0, "errors": 0, "details": []}
+
+        for art in articles:
+            article_id = art['id']
+            headline = art.get('headline_en') or ''
+            summary = art.get('summary') or ''
+
+            if not headline:
+                results['skipped'] += 1
+                continue
+
+            try:
+                tweets = fetch_tweets_for_article(headline, summary, max_results=10)
+                results['processed'] += 1
+
+                if tweets:
+                    cursor.execute("""
+                        UPDATE articles
+                        SET website_tweets = %s::jsonb,
+                            website_tweets_fetched_at = NOW()
+                        WHERE id = %s
+                    """, (_json.dumps(tweets), article_id))
+                    conn.commit()
+                    results['fetched'] += 1
+                    results['details'].append({
+                        'article_id': article_id,
+                        'headline': headline[:80],
+                        'tweets_found': len(tweets),
+                    })
+                else:
+                    # Mark as fetched (empty) so we don't retry immediately
+                    cursor.execute("""
+                        UPDATE articles
+                        SET website_tweets = '[]'::jsonb,
+                            website_tweets_fetched_at = NOW()
+                        WHERE id = %s
+                    """, (article_id,))
+                    conn.commit()
+                    results['skipped'] += 1
+
+                # Rate-limit politeness: pause between API calls
+                time.sleep(2)
+
+            except Exception as e:
+                conn.rollback()
+                results['errors'] += 1
+                logger.warning(f"Tweet fetch failed for article {article_id}: {e}")
+                continue
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Batch tweet fetch error: {e}")
+        raise HTTPException(500, f"Batch tweet fetch error: {e}")
     finally:
         cursor.close()
         conn.close()
