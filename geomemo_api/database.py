@@ -164,6 +164,18 @@ def init_db():
             );
         """)
 
+        # --- Event search queries table ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS event_search_queries (
+                id SERIAL PRIMARY KEY,
+                query TEXT NOT NULL UNIQUE,
+                is_active BOOLEAN DEFAULT TRUE,
+                last_run_at TIMESTAMPTZ,
+                events_found INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+
         # --- Migrations (safe ADD COLUMN IF NOT EXISTS) ---
         migrations = [
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS parent_id INTEGER",
@@ -218,6 +230,8 @@ def init_db():
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS events_extracted BOOLEAN DEFAULT FALSE",
             "CREATE INDEX IF NOT EXISTS idx_events_status ON events (status)",
             "CREATE INDEX IF NOT EXISTS idx_articles_events_extracted ON articles (events_extracted)",
+            # Google Search event discovery
+            "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_query TEXT",
         ]
         for sql in migrations:
             try:

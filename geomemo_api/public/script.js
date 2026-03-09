@@ -2808,8 +2808,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             tbody.innerHTML = `<tr><td colspan="5" class="p-2 text-red-500">${e.message}</td></tr>`;
         }
-        // Also refresh pending events
+        // Also refresh pending events and saved queries
         fetchPendingEvents();
+        fetchSavedSearchQueries();
     }
 
     async function fetchPendingEvents() {
@@ -2905,6 +2906,111 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Error: ' + e.message);
         }
     };
+
+    // --- Google Search Event Discovery ---
+
+    // Search web for events (preset or custom query)
+    window.searchWebForEvents = async function(presetQuery) {
+        const input = document.getElementById('event-search-query');
+        const query = presetQuery || (input ? input.value.trim() : '');
+        if (!query) { alert('Enter a search query'); return; }
+        if (input && !presetQuery) input.value = query;
+        if (input && presetQuery) input.value = presetQuery;
+
+        const btn = document.getElementById('event-search-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Searching...'; }
+        try {
+            const res = await fetch(`${API_BASE_URL}/events/search-web?q=${encodeURIComponent(query)}&pages=5`, { method: 'POST' });
+            if (!res.ok) throw new Error('Search failed');
+            const stats = await res.json();
+            alert(`Web Search Complete!\n\nQuery: "${query}"\nResults scraped: ${stats.results_scraped}\nEvents found: ${stats.events_found}\nEvents added (pending): ${stats.events_inserted}\nDuplicates skipped: ${stats.duplicates_skipped}\nErrors: ${stats.errors}`);
+            fetchEventsList();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = 'Search'; }
+        }
+    };
+
+    // Save current search query
+    window.saveCurrentSearchQuery = async function() {
+        const input = document.getElementById('event-search-query');
+        const query = input ? input.value.trim() : '';
+        if (!query) { alert('Enter a search query first'); return; }
+        try {
+            const res = await fetch(`${API_BASE_URL}/events/search-queries`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query }),
+            });
+            if (!res.ok) throw new Error('Failed to save query');
+            fetchSavedSearchQueries();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    };
+
+    // Fetch and render saved search queries
+    async function fetchSavedSearchQueries() {
+        const container = document.getElementById('saved-queries-list');
+        if (!container) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/events/search-queries`);
+            if (!res.ok) throw new Error('Failed');
+            const queries = await res.json();
+            if (queries.length === 0) {
+                container.innerHTML = '<div class="text-xs" style="color: #6b7280;">No saved queries yet.</div>';
+                return;
+            }
+            container.innerHTML = queries.map(q => {
+                const lastRun = q.last_run_at ? new Date(q.last_run_at).toLocaleDateString() : 'Never';
+                return `<div class="flex items-center justify-between p-1.5 rounded text-xs" style="background-color: #f0f9ff;">
+                    <div class="flex-1">
+                        <span class="font-medium" style="color: #1e40af;">${q.query}</span>
+                        <span style="color: #6b7280;"> — Last run: ${lastRun} | Found: ${q.events_found}</span>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="searchWebForEvents('${q.query.replace(/'/g, "\\'")}')" class="px-2 py-0.5 rounded text-xs" style="background-color: #dbeafe; color: #1e40af;">Run</button>
+                        <button onclick="deleteSavedSearchQuery(${q.id})" class="px-2 py-0.5 rounded text-xs" style="background-color: #fee2e2; color: #dc2626;">Delete</button>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            container.innerHTML = `<div class="text-xs text-red-500">${e.message}</div>`;
+        }
+    }
+
+    // Delete a saved search query
+    window.deleteSavedSearchQuery = async function(queryId) {
+        if (!confirm('Delete this saved query?')) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/events/search-queries/${queryId}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed');
+            fetchSavedSearchQueries();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    };
+
+    // Run all saved searches
+    window.runAllSavedSearches = async function() {
+        const btn = document.getElementById('run-all-searches-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Running...'; }
+        try {
+            const res = await fetch(`${API_BASE_URL}/events/run-saved-searches`, { method: 'POST' });
+            if (!res.ok) throw new Error('Failed');
+            const stats = await res.json();
+            alert(`All Saved Searches Complete!\n\nQueries run: ${stats.queries_run}\nTotal events found: ${stats.total_events_found}\nTotal events inserted: ${stats.total_events_inserted}\nTotal duplicates: ${stats.total_duplicates_skipped}\nErrors: ${stats.errors}`);
+            fetchSavedSearchQueries();
+            fetchEventsList();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = 'Run All Saved Searches'; }
+        }
+    };
+
+    // Load saved queries on page init (called from fetchEventsList)
 
     // Trigger event extraction from articles
     window.extractEventsNow = async function() {

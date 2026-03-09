@@ -76,6 +76,9 @@ AUTO_REJECT_THRESHOLD = 30
 # Default source credibility for unknown sources
 DEFAULT_SOURCE_CREDIBILITY = 50
 
+# --- BrightData Proxy (for Google Search scraping) ---
+BRIGHTDATA_PROXY_URL = os.getenv("BRIGHTDATA_PROXY_URL", "")
+
 # --- Social Media: Telegram ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "")

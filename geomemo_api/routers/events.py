@@ -60,7 +60,21 @@ class EventResponse(BaseModel):
     is_featured: bool = False
     status: str = "approved"
     source_article_id: Optional[int] = None
+    source_query: Optional[str] = None
     extracted_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class SearchQueryCreate(BaseModel):
+    query: str
+
+
+class SearchQueryResponse(BaseModel):
+    id: int
+    query: str
+    is_active: bool = True
+    last_run_at: Optional[str] = None
+    events_found: int = 0
     created_at: Optional[str] = None
 
 
@@ -68,7 +82,7 @@ EVENT_COLUMNS = """id, title, url, location, start_date, end_date,
                    description, category, register_url,
                    COALESCE(is_featured, FALSE) AS is_featured,
                    COALESCE(status, 'approved') AS status,
-                   source_article_id,
+                   source_article_id, source_query,
                    extracted_at::text,
                    created_at::text"""
 
@@ -270,6 +284,104 @@ def extract_events_from_articles(
 
     from services.event_extractor import batch_extract_events
     stats = batch_extract_events(_groq_client, min_score=min_score, hours=hours, limit=limit)
+    return stats
+
+
+@router.post("/events/search-web")
+def search_web_for_events(
+    q: str = Query(..., description="Google search query for events"),
+    pages: int = Query(5, description="Number of Google result pages to scrape"),
+):
+    """Scrape Google Search results and extract events using Groq LLM."""
+    if not _groq_client:
+        raise HTTPException(500, "Groq client not initialized")
+
+    from services.event_search import search_and_extract_events
+    stats = search_and_extract_events(_groq_client, query=q, num_pages=pages)
+    return stats
+
+
+@router.get("/events/search-queries", response_model=List[SearchQueryResponse])
+def list_search_queries():
+    """List all saved event search queries."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("""
+            SELECT id, query, is_active, last_run_at::text, events_found, created_at::text
+            FROM event_search_queries
+            ORDER BY created_at DESC
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"List search queries error: {e}")
+        raise HTTPException(500, "DB Error")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/events/search-queries", response_model=SearchQueryResponse)
+def create_search_query(body: SearchQueryCreate):
+    """Save a new event search query."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("""
+            INSERT INTO event_search_queries (query)
+            VALUES (%s)
+            ON CONFLICT (query) DO NOTHING
+            RETURNING id, query, is_active, last_run_at::text, events_found, created_at::text
+        """, (body.query,))
+        conn.commit()
+        row = cursor.fetchone()
+        if not row:
+            # Already exists
+            cursor.execute(
+                "SELECT id, query, is_active, last_run_at::text, events_found, created_at::text FROM event_search_queries WHERE query = %s",
+                (body.query,),
+            )
+            row = cursor.fetchone()
+        return dict(row)
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Create search query error: {e}")
+        raise HTTPException(500, "DB Error")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/events/search-queries/{query_id}")
+def delete_search_query(query_id: int):
+    """Delete a saved search query."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM event_search_queries WHERE id = %s RETURNING id", (query_id,))
+        conn.commit()
+        if cursor.fetchone() is None:
+            raise HTTPException(404, "Query not found")
+        return {"message": "Query deleted", "id": query_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Delete search query error: {e}")
+        raise HTTPException(500, "DB Error")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/events/run-saved-searches")
+def run_saved_searches_endpoint():
+    """Run all active saved search queries (for cron)."""
+    if not _groq_client:
+        raise HTTPException(500, "Groq client not initialized")
+
+    from services.event_search import run_saved_searches
+    stats = run_saved_searches(_groq_client)
     return stats
 
 
