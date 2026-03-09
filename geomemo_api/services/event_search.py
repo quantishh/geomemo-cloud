@@ -83,9 +83,10 @@ def _scrape_google_search(query: str, num_pages: int = 5) -> list:
         url = f"https://www.google.com/search?q={encoded_query}&start={start}&hl=en"
 
         try:
+            # BrightData proxy uses its own SSL cert; disable verification when proxied
             response = requests.get(
                 url, headers=headers, proxies=proxies,
-                timeout=30, verify=True,
+                timeout=30, verify=not bool(proxies),
             )
             if response.status_code != 200:
                 logger.warning(f"Google search page {page+1} returned {response.status_code}")
