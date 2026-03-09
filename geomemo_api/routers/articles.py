@@ -329,7 +329,7 @@ def get_website_feed():
             FROM articles
             WHERE status = 'approved'
               AND auto_approval_score >= 90
-              AND scraped_at >= NOW() - INTERVAL '24 hours'
+              AND scraped_at >= NOW() - INTERVAL '72 hours'
             ORDER BY auto_approval_score DESC, scraped_at DESC
             LIMIT 5
         """)
@@ -339,13 +339,13 @@ def get_website_feed():
                 top_stories.append(art)
                 top_story_ids.add(art['id'])
 
-        # 3. MAIN STORIES: score 75+ from 48h, topic-deduplicated
+        # 3. MAIN STORIES: score 70+ from 72h, topic-deduplicated
         cursor.execute(f"""
             SELECT {ARTICLE_COLUMNS}, embedding
             FROM articles
             WHERE status = 'approved'
-              AND auto_approval_score >= 75
-              AND scraped_at >= NOW() - INTERVAL '48 hours'
+              AND auto_approval_score >= 70
+              AND scraped_at >= NOW() - INTERVAL '72 hours'
             ORDER BY auto_approval_score DESC, scraped_at DESC
         """)
         main_candidates = [dict(row) for row in cursor.fetchall()]
@@ -384,21 +384,21 @@ def get_website_feed():
             art.pop('topic_group', None)
             art.pop('topic_group_size', None)
 
-        # 4. MORE NEWS: score 65-74 from 48h, max 14 items
+        # 4. MORE NEWS: score 60-69 from 72h, max 20 items
         main_story_ids = {a['id'] for a in main_stories}
         all_used_ids = top_story_ids | main_story_ids
         cursor.execute(f"""
             SELECT {ARTICLE_COLUMNS}
             FROM articles
             WHERE status = 'approved'
-              AND auto_approval_score >= 65
-              AND auto_approval_score < 75
-              AND scraped_at >= NOW() - INTERVAL '48 hours'
+              AND auto_approval_score >= 60
+              AND auto_approval_score < 70
+              AND scraped_at >= NOW() - INTERVAL '72 hours'
             ORDER BY auto_approval_score DESC, scraped_at DESC
-            LIMIT 20
+            LIMIT 30
         """)
         more_news_candidates = [dict(row) for row in cursor.fetchall()]
-        more_news = [a for a in more_news_candidates if a['id'] not in all_used_ids][:14]
+        more_news = [a for a in more_news_candidates if a['id'] not in all_used_ids][:20]
 
         # 5. Attach cached X posts for all sections
         all_feed_articles = top_stories + main_stories + more_news
