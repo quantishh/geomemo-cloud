@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { fetchApprovedArticles, fetchSponsors, fetchPodcasts, fetchNewestUpdates } from '@/lib/api';
+import { fetchWebsiteFeed, fetchSponsors, fetchPodcasts, fetchNewestUpdates } from '@/lib/api';
 import ArticleCluster from '@/components/ArticleCluster';
 
 export const dynamic = 'force-dynamic';
@@ -35,64 +35,15 @@ function extractYouTubeId(url) {
 }
 
 export default async function Home() {
-  const [articles, sponsors, podcasts, latestNews] = await Promise.all([
-    fetchApprovedArticles(),
+  const [feed, sponsors, podcasts, latestNews] = await Promise.all([
+    fetchWebsiteFeed(),
     fetchSponsors(),
     fetchPodcasts(),
     fetchNewestUpdates(),
   ]);
 
-  // Group articles into clusters (parent + children) and standalone
-  const clusters = [];
-  const childMap = {};
-
-  // First pass: identify children
-  articles.forEach((article) => {
-    if (article.parent_id) {
-      if (!childMap[article.parent_id]) childMap[article.parent_id] = [];
-      childMap[article.parent_id].push(article);
-    }
-  });
-
-  // Second pass: build clusters
-  const processedIds = new Set();
-  articles.forEach((article) => {
-    if (processedIds.has(article.id)) return;
-    if (article.parent_id) return;
-
-    const children = childMap[article.id] || [];
-    children.forEach((c) => processedIds.add(c.id));
-    processedIds.add(article.id);
-
-    clusters.push({
-      parent: article,
-      children,
-    });
-  });
-
-  // Separate top stories from regular stories
-  const topStoryClusters = clusters.filter((c) => c.parent.is_top_story);
-  const regularClusters = clusters.filter((c) => !c.parent.is_top_story);
-
-  // Group regular clusters by category
-  const categoryOrder = [
-    'Geopolitical Conflict',
-    'Geopolitical Politics',
-    'Geopolitical Economics',
-    'Global Markets',
-    'GeoNatDisaster',
-    'GeoLocal',
-    'Other',
-  ];
-
-  const byCategory = {};
-  regularClusters.forEach((cluster) => {
-    const cat = cluster.parent.category || 'Other';
-    if (!byCategory[cat]) byCategory[cat] = [];
-    byCategory[cat].push(cluster);
-  });
-
-  const orderedCategories = categoryOrder.filter((c) => byCategory[c]?.length > 0);
+  const { top_stories = [], main_stories = [], more_news = [] } = feed;
+  const hasContent = top_stories.length > 0 || main_stories.length > 0;
 
   // Today's date
   const today = new Date().toLocaleDateString('en-US', {
@@ -146,7 +97,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {articles.length === 0 ? (
+      {!hasContent ? (
         <section className="section">
           <div className="container">
             <p style={{
@@ -165,19 +116,21 @@ export default async function Home() {
 
             <div className="homepage-grid">
 
-              {/* LEFT COLUMN — Main News */}
+              {/* LEFT COLUMN — Main News (flat: Top News → Main Stories, no categories) */}
               <div className="main-column">
 
-                {/* Top News — no gold bar */}
-                {topStoryClusters.length > 0 && (
+                {/* Top News */}
+                {top_stories.length > 0 && (
                   <div style={{ marginBottom: 'var(--space-8)' }}>
                     <h2 className="section-title" style={{ marginBottom: 'var(--space-4)' }}>Top News</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-                      {topStoryClusters.map((cluster) => (
+                      {top_stories.map((article) => (
                         <ArticleCluster
-                          key={cluster.parent.id}
-                          parent={cluster.parent}
-                          relatedArticles={cluster.children}
+                          key={article.id}
+                          parent={article}
+                          relatedArticles={[]}
+                          relatedSources={[]}
+                          matchedTweets={[]}
                           isTopStory={true}
                         />
                       ))}
@@ -185,37 +138,22 @@ export default async function Home() {
                   </div>
                 )}
 
-                {/* Category sections */}
-                {orderedCategories.map((category) => (
-                  <div key={category} style={{ marginBottom: 'var(--space-8)' }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-3)',
-                      marginBottom: 'var(--space-4)',
-                      paddingBottom: 'var(--space-2)',
-                      borderBottom: '2px solid var(--color-border)',
-                    }}>
-                      <span className="badge">{category}</span>
-                      <span style={{
-                        fontSize: '0.7rem',
-                        color: 'var(--color-text-muted)',
-                      }}>
-                        {byCategory[category].length} {byCategory[category].length === 1 ? 'story' : 'stories'}
-                      </span>
-                    </div>
-
+                {/* Main Stories — flat list, no category headers */}
+                {main_stories.length > 0 && (
+                  <div style={{ marginBottom: 'var(--space-8)' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-                      {byCategory[category].map((cluster) => (
+                      {main_stories.map((article) => (
                         <ArticleCluster
-                          key={cluster.parent.id}
-                          parent={cluster.parent}
-                          relatedArticles={cluster.children}
+                          key={article.id}
+                          parent={article}
+                          relatedArticles={[]}
+                          relatedSources={article.related_sources || []}
+                          matchedTweets={article.matched_tweets || []}
                         />
                       ))}
                     </div>
                   </div>
-                ))}
+                )}
               </div>
 
               {/* MIDDLE COLUMN — Sponsors + Podcasts (with background) */}
@@ -416,6 +354,52 @@ export default async function Home() {
                 )}
               </div>
 
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* More News — two-column section below main grid */}
+      {more_news.length > 0 && (
+        <section style={{
+          padding: '0 0 var(--space-12)',
+        }}>
+          <div className="container">
+            <div style={{
+              borderTop: '2px solid var(--color-border)',
+              paddingTop: 'var(--space-6)',
+            }}>
+              <h2 className="section-title" style={{ marginBottom: 'var(--space-4)' }}>More News</h2>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                gap: 'var(--space-6)',
+              }}>
+                {/* Left column */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                  {more_news.slice(0, Math.ceil(more_news.length / 2)).map((article) => (
+                    <ArticleCluster
+                      key={article.id}
+                      parent={article}
+                      relatedArticles={[]}
+                      relatedSources={[]}
+                      matchedTweets={[]}
+                    />
+                  ))}
+                </div>
+                {/* Right column */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                  {more_news.slice(Math.ceil(more_news.length / 2)).map((article) => (
+                    <ArticleCluster
+                      key={article.id}
+                      parent={article}
+                      relatedArticles={[]}
+                      relatedSources={[]}
+                      matchedTweets={[]}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>

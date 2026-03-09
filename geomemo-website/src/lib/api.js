@@ -25,6 +25,22 @@ export async function fetchApprovedArticles() {
   }
 }
 
+export async function fetchWebsiteFeed() {
+  try {
+    const res = await fetch(`${API_URL}/articles/website-feed`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      console.error('Website feed returned', res.status);
+      return { top_stories: [], main_stories: [], more_news: [], last_newsletter_date: null };
+    }
+    return res.json();
+  } catch (error) {
+    console.error('Failed to fetch website feed:', error);
+    return { top_stories: [], main_stories: [], more_news: [], last_newsletter_date: null };
+  }
+}
+
 export async function fetchNewestUpdates() {
   try {
     // Use the general /articles endpoint with score filter (works on production)

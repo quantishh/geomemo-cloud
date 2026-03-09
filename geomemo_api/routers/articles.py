@@ -286,6 +286,200 @@ def get_archived_articles():
         conn.close()
 
 
+@router.get("/articles/website-feed")
+def get_website_feed():
+    """
+    Live website feed — disconnected from the newsletter.
+    Returns structured JSON with three sections:
+    - top_stories: is_top_story=true from last published newsletter + score>=90 from 24h
+    - main_stories: score 80+ from 48h, topic-deduplicated, with related_sources
+    - more_news: score 70-79 from 48h, max 14 items
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        # 1. Find last published newsletter date
+        cursor.execute("""
+            SELECT date FROM daily_briefs
+            WHERE published = TRUE OR newsletter_html IS NOT NULL
+            ORDER BY date DESC LIMIT 1
+        """)
+        last_newsletter_row = cursor.fetchone()
+        last_newsletter_date = str(last_newsletter_row['date']) if last_newsletter_row else None
+
+        # 2. TOP STORIES: from last newsletter (is_top_story=true) + high scorers (>=90) from 24h
+        top_stories = []
+
+        # 2a. Newsletter top stories (persist until next newsletter is published)
+        if last_newsletter_date:
+            cursor.execute(f"""
+                SELECT {ARTICLE_COLUMNS}
+                FROM articles
+                WHERE status = 'approved'
+                  AND is_top_story = TRUE
+                  AND scraped_at::date = %s::date
+                ORDER BY scraped_at DESC
+            """, (last_newsletter_date,))
+            top_stories = [dict(row) for row in cursor.fetchall()]
+
+        # 2b. Also include any score>=90 from last 24h that aren't already top stories
+        top_story_ids = {a['id'] for a in top_stories}
+        cursor.execute(f"""
+            SELECT {ARTICLE_COLUMNS}
+            FROM articles
+            WHERE status = 'approved'
+              AND auto_approval_score >= 90
+              AND scraped_at >= NOW() - INTERVAL '24 hours'
+            ORDER BY auto_approval_score DESC, scraped_at DESC
+            LIMIT 5
+        """)
+        for row in cursor.fetchall():
+            art = dict(row)
+            if art['id'] not in top_story_ids:
+                top_stories.append(art)
+                top_story_ids.add(art['id'])
+
+        # 3. MAIN STORIES: score 80+ from 48h, topic-deduplicated
+        cursor.execute(f"""
+            SELECT {ARTICLE_COLUMNS}, embedding
+            FROM articles
+            WHERE status = 'approved'
+              AND auto_approval_score >= 80
+              AND scraped_at >= NOW() - INTERVAL '48 hours'
+            ORDER BY auto_approval_score DESC, scraped_at DESC
+        """)
+        main_candidates = [dict(row) for row in cursor.fetchall()]
+
+        # Exclude articles already in top_stories
+        main_candidates = [a for a in main_candidates if a['id'] not in top_story_ids]
+
+        # Topic-deduplicate using existing _group_by_topic
+        grouped = _group_by_topic(main_candidates, threshold=0.70)
+
+        # Build main_stories: pick highest scorer per group, collect related_sources
+        main_stories = []
+        seen_groups = {}
+        for art in grouped:
+            gid = art.get('topic_group', -1)
+            if gid not in seen_groups:
+                # This is the top article in the group
+                art['related_sources'] = []
+                seen_groups[gid] = art
+                main_stories.append(art)
+            else:
+                # This is a related article — add as a related source with summary for hover
+                parent_art = seen_groups[gid]
+                parent_art['related_sources'].append({
+                    'publication_name': art.get('publication_name') or 'Unknown',
+                    'url': art.get('url', ''),
+                    'summary': art.get('summary', ''),
+                    'author': art.get('author', ''),
+                })
+
+        # Clean up topic_group fields from output
+        for art in main_stories:
+            art.pop('topic_group', None)
+            art.pop('topic_group_size', None)
+
+        # 4. MORE NEWS: score 70-79 from 48h, max 14 items
+        main_story_ids = {a['id'] for a in main_stories}
+        all_used_ids = top_story_ids | main_story_ids
+        cursor.execute(f"""
+            SELECT {ARTICLE_COLUMNS}
+            FROM articles
+            WHERE status = 'approved'
+              AND auto_approval_score >= 70
+              AND auto_approval_score < 80
+              AND scraped_at >= NOW() - INTERVAL '48 hours'
+            ORDER BY auto_approval_score DESC, scraped_at DESC
+            LIMIT 20
+        """)
+        more_news_candidates = [dict(row) for row in cursor.fetchall()]
+        more_news = [a for a in more_news_candidates if a['id'] not in all_used_ids][:14]
+
+        # 5. Auto-match X posts for main_stories (keyword-based matching)
+        _attach_matched_tweets(cursor, main_stories)
+
+        return {
+            "top_stories": top_stories,
+            "main_stories": main_stories,
+            "more_news": more_news,
+            "last_newsletter_date": last_newsletter_date,
+        }
+
+    except Exception as e:
+        logger.error(f"Website feed error: {e}")
+        raise HTTPException(500, f"Feed error: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _attach_matched_tweets(cursor, articles: list):
+    """
+    Auto-match tweets to articles (score 80+) using keyword matching.
+    Extracts key entities (country names, leader names) from headline/summary
+    and searches tweets table for matching content.
+    """
+    if not articles:
+        return
+
+    # Fetch recent tweets (last 7 days)
+    cursor.execute("""
+        SELECT id, content, url, author, image_url, created_at
+        FROM tweets
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+        ORDER BY created_at DESC
+        LIMIT 200
+    """)
+    recent_tweets = [dict(row) for row in cursor.fetchall()]
+
+    if not recent_tweets:
+        for art in articles:
+            art['matched_tweets'] = []
+        return
+
+    for art in articles:
+        # Build keyword set from headline and summary
+        text = f"{art.get('headline') or ''} {art.get('summary') or ''}"
+        text = text.lower()
+        # Extract meaningful words (4+ chars, skip common words)
+        stop_words = {'that', 'this', 'with', 'from', 'have', 'been', 'were', 'they',
+                      'their', 'will', 'would', 'could', 'should', 'about', 'after',
+                      'before', 'which', 'where', 'while', 'also', 'more', 'than',
+                      'into', 'over', 'some', 'what', 'when', 'other', 'said', 'says',
+                      'according', 'between', 'under', 'against', 'during', 'through'}
+        import re as _re
+        words = set(_re.findall(r'\b[a-z]{4,}\b', text)) - stop_words
+
+        # Also extract capitalized names/entities from original text
+        orig_text = f"{art.get('headline') or ''} {art.get('summary') or ''}"
+        entities = set(_re.findall(r'\b[A-Z][a-z]{2,}\b', orig_text))
+        keywords = words | {e.lower() for e in entities}
+
+        # Score each tweet by keyword overlap
+        matched = []
+        for tweet in recent_tweets:
+            tweet_text = (tweet.get('content') or '').lower()
+            if not tweet_text:
+                continue
+            overlap = sum(1 for kw in keywords if kw in tweet_text)
+            if overlap >= 3:  # At least 3 keyword matches
+                matched.append({
+                    'username': tweet.get('author') or '',
+                    'text': tweet.get('content') or '',
+                    'url': tweet.get('url') or '',
+                    'score': overlap,
+                })
+
+        # Sort by score, take top 5
+        matched.sort(key=lambda t: t['score'], reverse=True)
+        art['matched_tweets'] = [
+            {'username': m['username'], 'text': m['text'], 'url': m['url']}
+            for m in matched[:5]
+        ]
+
+
 @router.get("/articles/approved", response_model=List[Article])
 def get_approved_articles():
     conn = get_db_connection()
