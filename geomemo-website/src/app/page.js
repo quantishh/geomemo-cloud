@@ -360,55 +360,9 @@ export default async function Home() {
         </section>
       )}
 
-      {/* More News — two-column section below main grid */}
-      {more_news.length > 0 && (
-        <section style={{
-          padding: '0 0 var(--space-12)',
-        }}>
-          <div className="container">
-            <div style={{
-              borderTop: '2px solid var(--color-border)',
-              paddingTop: 'var(--space-6)',
-            }}>
-              <h2 className="section-title" style={{ marginBottom: 'var(--space-4)' }}>More News</h2>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                gap: 'var(--space-6)',
-              }}>
-                {/* Left column */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                  {more_news.slice(0, Math.ceil(more_news.length / 2)).map((article) => (
-                    <ArticleCluster
-                      key={article.id}
-                      parent={article}
-                      relatedArticles={[]}
-                      relatedSources={[]}
-                      matchedTweets={[]}
-                    />
-                  ))}
-                </div>
-                {/* Right column */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                  {more_news.slice(Math.ceil(more_news.length / 2)).map((article) => (
-                    <ArticleCluster
-                      key={article.id}
-                      parent={article}
-                      relatedArticles={[]}
-                      relatedSources={[]}
-                      matchedTweets={[]}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Upcoming Events Calendar — always visible with predefined 20-row layout */}
+      {/* Upcoming Events Calendar — always visible, placed prominently after main grid */}
       <section style={{
-        padding: '0 0 var(--space-12)',
+        padding: 'var(--space-6) 0 var(--space-12)',
       }}>
         <div className="container">
           <div style={{
@@ -500,7 +454,7 @@ export default async function Home() {
                       );
                     })
                   ) : (
-                    /* Empty placeholder rows — 20 rows with subtle dashed borders */
+                    /* Empty placeholder rows — 20 rows with subtle skeleton lines */
                     Array.from({ length: 20 }, (_, i) => (
                       <tr key={`empty-${i}`} style={{
                         borderBottom: '1px solid var(--color-border)',
@@ -570,6 +524,52 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {/* More News — two-column section below calendar */}
+      {more_news.length > 0 && (
+        <section style={{
+          padding: '0 0 var(--space-12)',
+        }}>
+          <div className="container">
+            <div style={{
+              borderTop: '2px solid var(--color-border)',
+              paddingTop: 'var(--space-6)',
+            }}>
+              <h2 className="section-title" style={{ marginBottom: 'var(--space-4)' }}>More News</h2>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                gap: 'var(--space-6)',
+              }}>
+                {/* Left column */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                  {more_news.slice(0, Math.ceil(more_news.length / 2)).map((article) => (
+                    <ArticleCluster
+                      key={article.id}
+                      parent={article}
+                      relatedArticles={[]}
+                      relatedSources={[]}
+                      matchedTweets={[]}
+                    />
+                  ))}
+                </div>
+                {/* Right column */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                  {more_news.slice(Math.ceil(more_news.length / 2)).map((article) => (
+                    <ArticleCluster
+                      key={article.id}
+                      parent={article}
+                      relatedArticles={[]}
+                      relatedSources={[]}
+                      matchedTweets={[]}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Newsletter CTA — slim */}
       <section style={{
