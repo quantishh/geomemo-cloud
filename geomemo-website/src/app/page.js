@@ -158,6 +158,32 @@ export default async function Home() {
                 )}
               </div>
 
+              {/* WORLDMONITOR — live map embed, spans cols 2-3, row 1 */}
+              <div className="worldmonitor-section">
+                <h3 className="sidebar-title" style={{ marginBottom: 'var(--space-3)' }}>
+                  Monitor the World Live —{' '}
+                  <a href="https://monitor.geomemo.news" target="_blank" rel="noopener noreferrer"
+                     style={{ color: 'var(--color-accent)', textDecoration: 'none', fontWeight: 600 }}>
+                    powered by WorldMonitor
+                  </a>
+                </h3>
+                <a href="https://monitor.geomemo.news" target="_blank" rel="noopener noreferrer"
+                   style={{ display: 'block' }}>
+                  <iframe
+                    src="https://monitor.geomemo.news"
+                    title="WorldMonitor Live Map"
+                    style={{
+                      width: '100%',
+                      height: '400px',
+                      border: 'none',
+                      borderRadius: 'var(--radius-sm)',
+                      pointerEvents: 'none',
+                    }}
+                    loading="lazy"
+                  />
+                </a>
+              </div>
+
               {/* MIDDLE COLUMN — Sponsors + Podcasts (with background) */}
               <div className="middle-column middle-column-bg">
 
