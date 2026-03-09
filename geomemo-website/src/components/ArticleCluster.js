@@ -32,16 +32,13 @@ export default function ArticleCluster({ parent, relatedArticles, relatedSources
       paddingBottom: 'var(--space-5)',
       borderBottom: '1px solid var(--color-border)',
     }}>
-      {/* Source / Author line — bold weight, secondary color + right-aligned category badge */}
+      {/* Source / Author line — bold weight, secondary color + inline category */}
       <div style={{
         fontSize: '0.82rem',
         marginBottom: '2px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '8px',
+        lineHeight: 1.5,
       }}>
-        <div style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>
+        <span style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>
           {parent.author ? (
             <>
               <span>{parent.author}</span>
@@ -51,15 +48,18 @@ export default function ArticleCluster({ parent, relatedArticles, relatedSources
           ) : (
             <span>{parent.publication_name}:</span>
           )}
-        </div>
+        </span>
         {category && (
-          <span className="badge" style={{
-            fontSize: '0.6rem',
-            padding: '2px 6px',
-            flexShrink: 0,
-          }}>
-            {category}
-          </span>
+          <>
+            {' '}
+            <span style={{
+              fontWeight: 300,
+              fontSize: '0.78rem',
+              color: 'var(--color-accent)',
+            }}>
+              {category}
+            </span>
+          </>
         )}
       </div>
 
