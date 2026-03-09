@@ -172,7 +172,7 @@ export default async function Home() {
                      display: 'block',
                      position: 'relative',
                      width: '100%',
-                     height: '350px',
+                     height: '600px',
                      overflow: 'hidden',
                      borderRadius: 'var(--radius-sm)',
                    }}>
