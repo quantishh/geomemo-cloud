@@ -362,7 +362,8 @@ a {
     display: grid;
     grid-template-columns: 2.5fr 1.2fr 1.2fr;
     grid-template-rows: auto auto auto;
-    gap: var(--space-6);
+    column-gap: var(--space-6);
+    row-gap: var(--space-3);
   }
 
   /* Main news column spans all 3 rows on the left */
