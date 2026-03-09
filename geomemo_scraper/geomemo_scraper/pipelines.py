@@ -17,87 +17,225 @@ except ImportError:
     logging.warning("pycountry not installed. Country code resolution will be skipped.")
 
 # --- Non-English source name → English display name mapping ---
+# Exact matches for full strings found in the DB, plus partial matches for variations
 SOURCE_NAME_MAP = {
+    # === EXACT MATCHES (full publication_name as stored in DB) ===
     # Persian / Farsi (Iran)
-    'اطلاعات': 'Ettela\'at',
-    'انتخاب': 'Entekhab',
-    'فارس نیوز': 'Farsnews',
-    'دیپلماسی ایرانی': 'Iran Diplomacy',
+    'پایگاه خبری تحلیلی انتخاب | Entekhab.ir': 'Entekhab',
+    'اطلاعات آنلاین': 'Ettela\'at Online',
+    'همشهری آنلاین، سایت خبری روزنامه همشهری | hamshahrionline': 'Hamshahri Online',
+    'همشهری آنلاین': 'Hamshahri Online',
+    'روزنامه همشهری': 'Hamshahri',
+    'آخرین اخبار | خبرگزاری تسنیم | Tasnim': 'Tasnim News Agency',
+    'آخرین اخبار, اخبار روز | خبرگزاری تسنیم | Tasnim': 'Tasnim News Agency',
+    'تسنیم': 'Tasnim News Agency',
+    'ایسنا': 'ISNA',
+    'فارس': 'Fars News Agency',
+    'ایرنا': 'IRNA',
+    'مهر': 'Mehr News Agency',
     'کیهان': 'Kayhan',
+    'ایران اینترنشنال': 'Iran International',
+    'صدا و سیما': 'IRIB',
+    'فرهیختگان': 'Farhikhtegan',
+    'شفقنا': 'Shafaqna',
+    'باشگاه خبرنگاران جوان': 'Young Journalists Club',
+    'خبرآنلاین': 'Khabar Online',
+    'نورنیوز': 'Nour News',
+    'میزان': 'Mizan News',
+    'جوان': 'Javan',
+    'مشرق': 'Mashregh News',
+    'ایران': 'Iran Daily',
+    'ایلنا': 'ILNA',
+    'خبرگزاری برنا': 'BORNA News Agency',
+    'خبرگزاری اطلس': 'Atlas News Agency',
+    'اخبار': 'Akhbar News',
+    'محليات': 'Local News',
     # Arabic (Middle East & North Africa)
-    'الإمارات اليوم': 'Emarat Al Youm',
-    'عكاظ': 'Okaz',
-    'البيان': 'Al Bayan',
-    'الاتحاد': 'Al Etihad',
-    'المصري اليوم': 'Al-Masry Al-Youm',
-    'الشروق': 'Shorouk News',
-    'الأخبار': 'Al Akhbar',
-    'الجزيرة': 'Al Jazeera',
-    'العربية': 'Al Arabiya',
-    'الشرق الأوسط': 'Asharq Al-Awsat',
-    'الأهرام': 'Al-Ahram',
+    'شفق نيوز': 'Shafaq News',
+    'صحيفة مال': 'Mal Newspaper',
+    'وزارة الخارجية الإماراتية': 'UAE Foreign Ministry',
+    'اسلام تايمز': 'Islam Times',
+    'الهيئة العامة للاستعلامات': 'State Information Service',
+    'شبكة تواصل الإخبارية': 'Tawasul News',
+    'وكالة الأنباء السعودية': 'Saudi Press Agency',
+    'وكالة صدى نيوز': 'Sada News Agency',
+    'وزارة الخارجية القطرية': 'Qatar Foreign Ministry',
+    'صحيفة الأنباط': 'Al-Anbat',
+    'وكالة أنباء البحرين': 'Bahrain News Agency',
+    'وكالة وام': 'WAM',
+    'يمن مونيتور': 'Yemen Monitor',
+    'الوكالة الموريتانية للأنباء': 'Mauritanian News Agency',
+    'المتداول العربي': 'Arab Trader',
+    'الصحيفة': 'Al-Sahifa',
+    'صوت الإمارات': 'Voice of UAE',
+    'سانا': 'SANA',
+    'ارقام': 'Argaam',
+    'ارقام : اخبار ومعلومات سوق الأسهم السعودي - تاسي': 'Argaam',
+    'موقع عمان نت': 'Amman Net',
+    'عالم تسعة': 'Alam Tis3a',
+    'مركز الروابط للدراسات الاستراتيجية والسياسية': 'Rawabet Center',
+    'مركز المستقبل': 'Future Center',
+    'خبرگزاری صدای افغان(آوا)': 'AVA Press',
     # Greek
-    'Καθημερινή': 'Kathimerini',
-    'Τα Νέα': 'Ta Nea',
-    'Το Βήμα': 'To Vima',
+    'Πρώτο Θέμα: RSS': 'Protothema',
     'Πρώτο Θέμα': 'Protothema',
+    'ΤΟ ΒΗΜΑ': 'To Vima',
+    'ΒΗΜΑ': 'To Vima',
+    'ΤΑ ΝΕΑ': 'Ta Nea',
+    'Καθημερινή': 'Kathimerini',
     'Η Εφημερίδα των Συντακτών': 'Efimerida Syntakton',
     # Vietnamese
-    'VnExpress': 'VnExpress',
-    'Tuổi Trẻ': 'Tuoi Tre',
-    'Thanh Niên': 'Thanh Nien',
+    'Tuổi Trẻ Online - Tin mới nhất - RSS Feed': 'Tuoi Tre',
+    'Tuổi Trẻ Online': 'Tuoi Tre',
+    'Báo Thanh Niên': 'Thanh Nien',
+    'Thời sự - VnExpress RSS': 'VnExpress',
+    'Báo VietNamNet': 'VietNamNet',
+    'Thông tấn xã Việt Nam': 'Vietnam News Agency',
+    'Việt Báo': 'Viet Bao',
+    'BỘ NỘI VỤ': 'Vietnam Ministry of Home Affairs',
     # Turkish
+    'Anadolu Ajansı': 'Anadolu Agency',
     'Hürriyet': 'Hurriyet',
-    'Sabah': 'Sabah',
-    'Cumhuriyet': 'Cumhuriyet',
-    # Chinese
-    '新华网': 'Xinhua',
-    '人民日报': 'People\'s Daily',
-    '环球时报': 'Global Times',
+    'Hürriyet Daily News': 'Hurriyet Daily News',
+    'Yeni Şafak': 'Yeni Safak',
+    'Evrim Ağacı': 'Evrim Agaci',
+    'Türkiye Today': 'Turkiye Today',
+    # German
+    'DIE ZEIT | Nachrichten, News, Hintergründe und Debatten': 'Die Zeit',
+    'Münchner Sicherheitskonferenz': 'Munich Security Conference',
     # Korean
     '조선일보': 'Chosun Ilbo',
-    '중앙일보': 'JoongAng Ilbo',
+    '매일경제': 'Maeil Business Newspaper',
+    '아시아경제': 'Asia Economy',
     '한겨레': 'Hankyoreh',
+    '디지털투데이': 'Digital Today',
+    '위키리크스한국': 'WikiLeaks Korea',
+    '포스코그룹 뉴스룸': 'POSCO Group Newsroom',
+    'IT조선': 'IT Chosun',
+    # Chinese
+    '富途牛牛': 'Futu Moomoo',
+    '富途资讯': 'Futu News',
+    '新华网': 'Xinhua',
+    '香港電台新聞網': 'RTHK News',
+    '香港電台': 'RTHK',
+    'Rti 中央廣播電臺': 'RTI Taiwan',
+    'TVBS新聞網': 'TVBS News',
+    '點新聞': 'Dot Dot News',
+    '天下雜誌': 'CommonWealth Magazine',
+    '中华人民共和国驻大韩民国大使馆': 'Chinese Embassy in South Korea',
+    '中国科技网': 'China Science & Tech Net',
+    '中安在线': 'Zhongan Online',
+    '极目新闻': 'Jimu News',
+    '群众新闻网': 'Qunzhong News',
+    '荆楚网': 'Jingchu Net',
+    '昆明信息港': 'Kunming Info',
+    '深潮TechFlow': 'DeepTide TechFlow',
+    '公益財団法人日本国際問題研究所': 'JIIA Japan',
+    '驻印度大使馆': 'Chinese Embassy in India',
+    '驻韩国大使馆': 'Chinese Embassy in South Korea',
     # Japanese
     '朝日新聞': 'Asahi Shimbun',
-    '読売新聞': 'Yomiuri Shimbun',
     '毎日新聞': 'Mainichi Shimbun',
+    '沖縄タイムス社': 'Okinawa Times',
+    '第一生命経済研究所': 'Dai-ichi Life Research Institute',
+    # Ukrainian
+    'Букви': 'Bukvy',
+    'Українська правда': 'Ukrainska Pravda',
+    'Українські Національні Новини (УНН)': 'Ukrainian National News',
+    'Українські Національні Новини': 'Ukrainian National News',
+    'Українські Новини': 'Ukrainian News',
+    'Прямий': 'Pryamiy',
+    'Цензор.НЕТ': 'Censor.NET',
+    'ТСН': 'TSN',
+    # Russian
+    'Военное дело': 'Military Affairs',
+    'Министерство иностранных дел России': 'Russian Foreign Ministry',
+    'Улправда': 'Ulpravda',
+    'Геополитика.RU': 'Geopolitika.RU',
+    'Акчабар': 'Akchebar',
+    'Газета.uz': 'Gazeta.uz',
+    'ТопЖир': 'TopZhyr',
+    'Азия-Плюс': 'Asia-Plus',
+    'сайт ОДКБ': 'CSTO',
+    'Святлана Ціханоўская': 'Sviatlana Tsikhanouskaya',
+    # Azerbaijani
+    'Operativ Məlumat Mərkəzi': 'Operative Information Center',
+    'Azərtac': 'AZERTAC',
+    # Armenian
+    'Այսօր` թdelays լուրdelays Հdays': 'Aysor',
+    # Thai
+    'กระทรวงการต่างประเทศ': 'Thailand Foreign Ministry',
+    'วารสารการเงินธนาคาร': 'Banking & Finance Journal',
+    # Spanish
+    'Clarin.com - Home - Lo último': 'Clarin',
+    'Excélsior - RSS': 'Excelsior',
+    'Diálogo Americas': 'Dialogo Americas',
+    'Diario Las Américas': 'Diario Las Americas',
+    'Latinoamérica 21': 'Latinoamerica 21',
+    'Agenda Pública': 'Agenda Publica',
+    'Aviación al Día': 'Aviacion al Dia',
+    # Portuguese
+    'Diário Carioca': 'Diario Carioca',
+    'CPG Click Petróleo e Gás': 'CPG Click',
     # French
+    'Le Journal de Montréal': 'Le Journal de Montreal',
+    'LaPresse.ca - Actualités': 'La Presse',
     'Le Monde diplomatique': 'Le Monde Diplomatique',
-    # Domain-based fallbacks (when RSS returns URL as source name)
-    'ettelaat.com': 'Ettela\'at',
-    'entekhab.ir': 'Entekhab',
-    'farsnews.ir': 'Farsnews',
-    'irdiplomacy.ir': 'Iran Diplomacy',
-    'kayhan.ir': 'Kayhan',
-    'almasryalyoum.com': 'Al-Masry Al-Youm',
-    'shorouknews.com': 'Shorouk News',
-    'emaratalyoum.com': 'Emarat Al Youm',
-    'okaz.com.sa': 'Okaz',
-    'albayan.ae': 'Al Bayan',
-    'aletihad.ae': 'Al Etihad',
-    'kathimerini.gr': 'Kathimerini',
-    'tanea.gr': 'Ta Nea',
-    'tovima.gr': 'To Vima',
-    'protothema.gr': 'Protothema',
-    'efsyn.gr': 'Efimerida Syntakton',
-    'vnexpress.net': 'VnExpress',
-    'tuoitre.vn': 'Tuoi Tre',
-    'thanhnien.vn': 'Thanh Nien',
+    "Ministère de l'Europe et des Affaires étrangères": 'French Foreign Ministry',
+    'Naître et grandir': 'Naitre et Grandir',
+    'IRIS - Institut de relations internationales et stratégiques': 'IRIS',
+    'Fondation pour la Recherche Stratégique': 'FRS',
+    "Agence française de développement (AFD)": 'AFD',
+    # Finnish
+    'Ulkoministeriö': 'Finnish Foreign Ministry',
+    # Austrian/German
+    'Wiener Börse': 'Vienna Stock Exchange',
+    'The Market – Analysen und Hintergründe aus der Wirtschaft': 'The Market',
+    # Special: Al Jazeera (long English name → short)
+    'Al Jazeera – Breaking News, World News and Video from Al Jazeera': 'Al Jazeera',
+    # Informante (Namibia)
+    'Informanté': 'Informante',
+    # Maori
+    'Waatea News: Māori Radio Station': 'Waatea News',
+    # Hawaiian
+    'University of Hawaiʻi at Mānoa': 'University of Hawaii',
+    # Other long English names → cleaner versions
+    'news.com.au — Australia\'s leading news site for latest headlines | National News': 'news.com.au',
+    'Nigeria Breaking News Today | Latest News On Nigerian Politics Today – Pointblank News': 'Pointblank News',
+    'The Diplomat – Asia-Pacific Current Affairs Magazine': 'The Diplomat',
+    'NOTUS — News of the United States': 'NOTUS',
+    'Iran – Foreign Policy': 'Foreign Policy',
+    'Politics – Independent Newspaper Nigeria': 'Independent Nigeria',
+    'Politics – Iran Front Page': 'Iran Front Page',
+    'The Kākā by Bernard Hickey': 'The Kaka',
+    'Global Banking & Finance Review®': 'Global Banking & Finance Review',
+    'Global Banking And Finance Awards®': 'Global Banking & Finance Awards',
+    'TradingView — Track All Markets': 'TradingView',
+    'EL PAÍS English': 'El Pais',
+    'TechStock²': 'TechStock',
+    'BelTA – News': 'BelTA',
+    'Economics – The Tangled Woof': 'The Tangled Woof',
+    'Morning Star | The People\'s Daily': 'Morning Star',
 }
 
 def normalize_source_name(name):
     """Map non-English source names to their English equivalents."""
     if not name:
         return name
+    name = name.strip()
     # Exact match first
     if name in SOURCE_NAME_MAP:
         return SOURCE_NAME_MAP[name]
-    # Check if the name contains a mapped domain
-    name_lower = name.lower().strip()
-    for key, english_name in SOURCE_NAME_MAP.items():
-        if key.lower() in name_lower:
-            return english_name
+    # Strip © prefix from photo credits (e.g. "© Reuters" → "Reuters")
+    if name.startswith('© ') or name.startswith('©'):
+        cleaned = name.lstrip('© ').strip()
+        # If it's a photo credit (contains / which indicates photographer/agency), skip mapping
+        if '/' in cleaned:
+            return name
+        # Map known agencies
+        credit_map = {'Reuters': 'Reuters', 'REUTERS': 'Reuters', 'AP': 'AP', 'AFP': 'AFP', 'rfi': 'RFI', 'RFI': 'RFI'}
+        if cleaned in credit_map:
+            return credit_map[cleaned]
     return name
 
 # --- Load models ---
