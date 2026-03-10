@@ -432,11 +432,20 @@ def _build_newsletter_html(
         f'<div style="max-width:600px;margin:0 auto;padding:20px">'
     )
 
-    # --- Header (clean Techmeme-style: brand left, date right) ---
+    # --- Header (logo left, date right) ---
     parts.append(
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-bottom:2px solid #e8e8e8;padding-bottom:12px;margin-bottom:24px">'
         f'<tr><td style="vertical-align:bottom">'
-        f'<span style="font-family:{HEADLINE_FONT};font-size:28px;font-weight:800;color:#333;letter-spacing:-0.5px">GeoMemo</span>'
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 90" width="140" height="40">'
+        f'<rect x="120" y="5" width="190" height="80" rx="6" fill="transparent" stroke="#E2C26D" stroke-width="6"/>'
+        f'<line x1="120" y1="22" x2="310" y2="22" stroke="#E2C26D" stroke-width="3"/>'
+        f'<line x1="120" y1="68" x2="310" y2="68" stroke="#E2C26D" stroke-width="3"/>'
+        f'<text x="220" y="61" text-anchor="middle" font-family="Inter, sans-serif" font-weight="800" font-size="52" fill="#161625" letter-spacing="-2">memo</text>'
+        f'<rect x="5" y="5" width="130" height="80" rx="6" fill="#161625"/>'
+        f'<line x1="5" y1="22" x2="135" y2="22" stroke="#E2C26D" stroke-width="3"/>'
+        f'<line x1="5" y1="68" x2="135" y2="68" stroke="#E2C26D" stroke-width="3"/>'
+        f'<text x="70" y="61" text-anchor="middle" font-family="Inter, sans-serif" font-weight="800" font-size="52" fill="#FFFFFF" letter-spacing="-2">Geo</text>'
+        f'</svg>'
         f'</td><td style="text-align:right;vertical-align:bottom">'
         f'<span style="color:#1a5276;font-size:13px;font-weight:600">{date_formatted}</span>'
         f'</td></tr></table>'

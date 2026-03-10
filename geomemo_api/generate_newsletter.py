@@ -62,7 +62,16 @@ def generate_html():
         <div style="max-width: 600px; width: 100%; margin: 0 auto; padding: 20px;">
         
             <div style="border-bottom: 2px solid #eeeeee; padding-bottom: 15px; margin-bottom: 30px;">
-                <span style="font-size: 24px; font-weight: 800; color: #430297; letter-spacing: -0.5px; text-transform: uppercase;">GeoMemo</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 90" width="140" height="40">
+                <rect x="120" y="5" width="190" height="80" rx="6" fill="transparent" stroke="#E2C26D" stroke-width="6"/>
+                <line x1="120" y1="22" x2="310" y2="22" stroke="#E2C26D" stroke-width="3"/>
+                <line x1="120" y1="68" x2="310" y2="68" stroke="#E2C26D" stroke-width="3"/>
+                <text x="220" y="61" text-anchor="middle" font-family="Inter, sans-serif" font-weight="800" font-size="52" fill="#161625" letter-spacing="-2">memo</text>
+                <rect x="5" y="5" width="130" height="80" rx="6" fill="#161625"/>
+                <line x1="5" y1="22" x2="135" y2="22" stroke="#E2C26D" stroke-width="3"/>
+                <line x1="5" y1="68" x2="135" y2="68" stroke="#E2C26D" stroke-width="3"/>
+                <text x="70" y="61" text-anchor="middle" font-family="Inter, sans-serif" font-weight="800" font-size="52" fill="#FFFFFF" letter-spacing="-2">Geo</text>
+                </svg>
                 <br>
                 <span style="color: #666; font-size: 13px; font-weight: 400;">Daily Intelligence • {datetime.now().strftime("%B %d, %Y")}</span>
             </div>
