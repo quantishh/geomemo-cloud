@@ -430,6 +430,7 @@ a {
   border-radius: var(--radius);
   border: 1px solid var(--color-border);
   align-self: start;
+  max-width: 600px; /* match old 3-col span width so iframe fills edge-to-edge */
 }
 
 [data-theme="dark"] .worldmonitor-section {
