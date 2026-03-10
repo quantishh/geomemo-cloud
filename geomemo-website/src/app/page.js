@@ -173,10 +173,13 @@ export default async function Home() {
               <div className="worldmonitor-section">
                 <h3 className="sidebar-title" style={{ marginBottom: 'var(--space-3)' }}>
                   Monitor the World Live —{' '}
-                  <a href="https://monitor.geomemo.news" target="_blank" rel="noopener noreferrer"
-                     style={{ color: 'var(--color-accent)', textDecoration: 'none', fontWeight: 600 }}>
-                    powered by GeoMonitor
-                  </a>
+                  <span style={{ fontWeight: 600 }}>
+                    POWERED BY{' '}
+                    <a href="https://monitor.geomemo.news" target="_blank" rel="noopener noreferrer"
+                       style={{ color: 'var(--color-heading)', textDecoration: 'none', fontWeight: 700 }}>
+                      GeoMonitor
+                    </a>
+                  </span>
                 </h3>
                 <a href="https://monitor.geomemo.news" target="_blank" rel="noopener noreferrer"
                    style={{
