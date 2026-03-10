@@ -166,7 +166,10 @@ export default async function Home() {
                 )}
               </div>
 
-              {/* WORLDMONITOR — live map embed, spans cols 2-3, row 1 */}
+              {/* RIGHT SIDE WRAPPER — stacks WorldMonitor → sidebars → calendar */}
+              <div className="right-side-wrapper">
+
+              {/* WORLDMONITOR — live map embed */}
               <div className="worldmonitor-section">
                 <h3 className="sidebar-title" style={{ marginBottom: 'var(--space-3)' }}>
                   Monitor the World Live —{' '}
@@ -202,6 +205,9 @@ export default async function Home() {
                   />
                 </a>
               </div>
+
+              {/* MIDDLE + RIGHT ROW — sidebars side-by-side */}
+              <div className="middle-right-row">
 
               {/* MIDDLE COLUMN — Sponsors + Podcasts (with background) */}
               <div className="middle-column middle-column-bg">
@@ -401,7 +407,9 @@ export default async function Home() {
                 )}
               </div>
 
-              {/* EVENTS CALENDAR — spans columns 2-3, below middle + right columns */}
+              </div>{/* end middle-right-row */}
+
+              {/* EVENTS CALENDAR */}
               <div className="events-calendar-section">
                 <h2 className="section-title" style={{ marginBottom: 'var(--space-3)', fontSize: '0.95rem' }}>
                   Upcoming Geopolitical Events
@@ -541,6 +549,8 @@ export default async function Home() {
                   </Link>
                 </div>
               </div>
+
+              </div>{/* end right-side-wrapper */}
 
             </div>
           </div>

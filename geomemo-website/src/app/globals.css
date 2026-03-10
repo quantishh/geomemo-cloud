@@ -358,44 +358,30 @@ a {
 }
 
 @media (min-width: 900px) {
+  /* 2-column grid: main news on left, right-side wrapper on right */
   .homepage-grid {
     display: grid;
-    grid-template-columns: 2.5fr 1.2fr 1.2fr;
-    grid-template-rows: auto auto auto;
+    grid-template-columns: 2.5fr 2.4fr;
     column-gap: var(--space-6);
-    row-gap: 0;
+    /* align-items: stretch (default) — main column matches right-side height */
   }
 
-  /* Main news column spans all 3 rows on the left — height set by right-side content */
+  /* Main column clips to whatever height the right side determines */
   .main-column {
-    grid-column: 1;
-    grid-row: 1 / 4;
-    min-height: 0;
     overflow: hidden;
   }
 
-  /* WorldMonitor live map — spans cols 2-3, row 1 (top) */
-  .worldmonitor-section {
-    grid-column: 2 / 4;
-    grid-row: 1;
+  /* Right-side wrapper stacks WorldMonitor → middle+right row → calendar */
+  .right-side-wrapper {
+    display: flex;
+    flex-direction: column;
   }
 
-  /* Middle column (Think Tanks + Podcasts) — row 2 */
-  .middle-column {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  /* Right column (Latest News) — row 2 */
-  .right-column {
-    grid-column: 3;
-    grid-row: 2;
-  }
-
-  /* Events calendar spans columns 2-3, row 3 */
-  .events-calendar-section {
-    grid-column: 2 / 4;
-    grid-row: 3;
+  /* Middle + Right columns sit side-by-side within the right wrapper */
+  .middle-right-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: var(--space-6);
   }
 }
 
@@ -404,20 +390,13 @@ a {
 }
 
 .middle-column {
-  max-width: 300px;
-  max-height: 900px;
-  overflow: hidden;
   display: flex;
-  /* Background added via .middle-column-bg class */
   flex-direction: column;
   gap: var(--space-5);
   align-self: start;
 }
 
 .right-column {
-  max-width: 300px;
-  max-height: 900px;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
@@ -431,6 +410,12 @@ a {
   }
   .worldmonitor-section {
     max-width: 100%;
+  }
+  .right-side-wrapper {
+    display: contents; /* On mobile, children just flow in the flex column */
+  }
+  .middle-right-row {
+    display: contents;
   }
   .events-calendar-section {
     margin-top: var(--space-4);
