@@ -175,7 +175,7 @@ export default async function Home() {
                   Monitor the World Live —{' '}
                   <a href="https://monitor.geomemo.news" target="_blank" rel="noopener noreferrer"
                      style={{ color: 'var(--color-accent)', textDecoration: 'none', fontWeight: 600 }}>
-                    powered by WorldMonitor
+                    powered by GeoMonitor
                   </a>
                 </h3>
                 <a href="https://monitor.geomemo.news" target="_blank" rel="noopener noreferrer"
