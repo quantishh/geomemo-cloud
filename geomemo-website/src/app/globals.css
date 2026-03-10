@@ -366,10 +366,12 @@ a {
     row-gap: 0;
   }
 
-  /* Main news column spans all 3 rows on the left */
+  /* Main news column spans all 3 rows on the left — height set by right-side content */
   .main-column {
     grid-column: 1;
     grid-row: 1 / 4;
+    min-height: 0;
+    overflow: hidden;
   }
 
   /* WorldMonitor live map — spans cols 2-3, row 1 (top) */
@@ -403,22 +405,23 @@ a {
 
 .middle-column {
   max-width: 300px;
+  max-height: 900px;
+  overflow: hidden;
   display: flex;
   /* Background added via .middle-column-bg class */
   flex-direction: column;
   gap: var(--space-5);
-  align-self: flex-start;
+  align-self: start;
 }
 
 .right-column {
   max-width: 300px;
+  max-height: 900px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  align-self: flex-start;
-  /* Limit height to match middle column — content clips with scroll if needed */
-  max-height: 100%;
-  overflow-y: auto;
+  align-self: start;
 }
 
 @media (max-width: 899px) {

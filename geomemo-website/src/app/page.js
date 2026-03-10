@@ -44,7 +44,15 @@ export default async function Home() {
     fetchEvents(),
   ]);
 
-  const { top_stories = [], main_stories = [], more_news = [] } = feed;
+  const { top_stories = [], main_stories: rawMainStories = [], more_news: rawMoreNews = [] } = feed;
+
+  // Cap total articles in the main column; excess flows to "More News"
+  const MAIN_COLUMN_MAX = 20;
+  const mainBudget = Math.max(0, MAIN_COLUMN_MAX - top_stories.length);
+  const main_stories = rawMainStories.slice(0, mainBudget);
+  const overflowStories = rawMainStories.slice(mainBudget);
+  const more_news = [...overflowStories, ...rawMoreNews];
+
   const hasContent = top_stories.length > 0 || main_stories.length > 0;
 
   // Today's date
@@ -203,7 +211,7 @@ export default async function Home() {
                   <div>
                     <h3 className="sidebar-title">Featured Think Tanks</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                      {sponsors.slice(0, 6).map((sponsor) => (
+                      {sponsors.slice(0, 5).map((sponsor) => (
                         <a
                           key={sponsor.id}
                           href={sponsor.link_url}
@@ -250,7 +258,7 @@ export default async function Home() {
                   <div>
                     <h3 className="sidebar-title">Featured Podcasts</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {podcasts.slice(0, 8).map((podcast) => {
+                      {podcasts.slice(0, 5).map((podcast) => {
                         const youtubeId = podcast.video_url ? extractYouTubeId(podcast.video_url) : '';
                         return (
                           <div key={podcast.id} className="podcast-card">
