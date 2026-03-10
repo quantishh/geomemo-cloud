@@ -596,6 +596,50 @@ def get_map_articles(days: int = Query(7, ge=1, le=30)):
         conn.close()
 
 
+@router.get("/api/articles/regional-feed")
+def get_regional_feed(hours: int = Query(24, ge=1, le=72)):
+    """
+    Flat JSON array of recent articles for WorldMonitor regional panels.
+    Returns ALL articles (with or without country_codes) from the last N hours,
+    sorted newest-first.  Unlike /map, this is not GeoJSON — just a plain list.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("""
+            SELECT id, url, headline_en, summary, category,
+                   publication_name, scraped_at, confidence_score, country_codes
+            FROM articles
+            WHERE scraped_at >= NOW() - %s * INTERVAL '1 hour'
+            ORDER BY scraped_at DESC
+            LIMIT 500
+        """, (hours,))
+
+        articles = []
+        for row in cursor.fetchall():
+            article = dict(row)
+            articles.append({
+                "id": article["id"],
+                "headline": article.get("headline_en") or "",
+                "summary": article.get("summary") or "",
+                "category": article.get("category") or "Other",
+                "source": article.get("publication_name") or "",
+                "url": article.get("url") or "",
+                "scraped_at": article["scraped_at"].isoformat() if article.get("scraped_at") else "",
+                "confidence": article.get("confidence_score") or 0,
+                "country_codes": [c.upper().strip() for c in (article.get("country_codes") or [])],
+            })
+
+        return articles
+
+    except Exception as e:
+        logger.error(f"Regional feed error: {e}")
+        raise HTTPException(500, "Failed to fetch regional feed")
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # --- Article Actions ---
 
 @router.post("/articles/manual-submission", status_code=201)
