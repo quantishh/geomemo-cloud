@@ -429,8 +429,7 @@ a {
   padding: var(--space-3) var(--space-4) 4px;
   border-radius: var(--radius);
   border: 1px solid var(--color-border);
-  align-self: start;
-  /* no max-width — fills the full right-side column */
+  /* align-self defaults to stretch — fills full right-column width */
 }
 
 [data-theme="dark"] .worldmonitor-section {
