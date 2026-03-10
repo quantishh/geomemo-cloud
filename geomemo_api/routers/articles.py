@@ -307,20 +307,19 @@ def get_website_feed():
         last_newsletter_row = cursor.fetchone()
         last_newsletter_date = str(last_newsletter_row['date']) if last_newsletter_row else None
 
-        # 2. TOP STORIES: from last newsletter (is_top_story=true) + high scorers (>=90) from 24h
+        # 2. TOP STORIES: is_top_story=true from last 72h + high scorers (>=90) from 72h
         top_stories = []
 
-        # 2a. Newsletter top stories (persist until next newsletter is published)
-        if last_newsletter_date:
-            cursor.execute(f"""
-                SELECT {ARTICLE_COLUMNS}
-                FROM articles
-                WHERE status = 'approved'
-                  AND is_top_story = TRUE
-                  AND scraped_at::date = %s::date
-                ORDER BY scraped_at DESC
-            """, (last_newsletter_date,))
-            top_stories = [dict(row) for row in cursor.fetchall()]
+        # 2a. All top-story-marked articles from last 72 hours (immediate reflection)
+        cursor.execute(f"""
+            SELECT {ARTICLE_COLUMNS}
+            FROM articles
+            WHERE status = 'approved'
+              AND is_top_story = TRUE
+              AND scraped_at >= NOW() - INTERVAL '72 hours'
+            ORDER BY scraped_at DESC
+        """)
+        top_stories = [dict(row) for row in cursor.fetchall()]
 
         # 2b. Also include any score>=90 from last 24h that aren't already top stories
         top_story_ids = {a['id'] for a in top_stories}
