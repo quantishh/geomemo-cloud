@@ -361,7 +361,7 @@ a {
   /* 2-column grid: main news on left, right-side wrapper on right */
   .homepage-grid {
     display: grid;
-    grid-template-columns: 1.5fr 3.5fr;
+    grid-template-columns: 2.5fr 2.4fr;
     column-gap: var(--space-6);
     /* align-items: stretch (default) — main column matches right-side height */
   }
