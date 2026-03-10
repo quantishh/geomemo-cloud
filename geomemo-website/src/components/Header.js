@@ -45,32 +45,31 @@ export default function Header() {
         justifyContent: 'space-between',
         height: '100%',
       }}>
-        {/* Logo */}
-        <Link href="/" style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          textDecoration: 'none',
-        }}>
-          <div style={{
-            background: 'var(--color-primary)',
-            color: 'var(--color-accent)',
-            fontWeight: 800,
-            fontSize: '1.1rem',
-            letterSpacing: '-0.03em',
-            padding: '6px 12px',
-            borderRadius: 'var(--radius-sm)',
-          }}>
-            GM
-          </div>
-          <span style={{
-            fontWeight: 700,
-            fontSize: '1.25rem',
-            color: 'var(--color-text)',
-            letterSpacing: '-0.02em',
-          }}>
-            GeoMemo
-          </span>
+        {/* Logo — theme-aware SVG */}
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+          {theme === 'dark' ? (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 90" width="160" height="45">
+              <rect x="120" y="5" width="190" height="80" rx="6" fill="transparent" stroke="#E2C26D" strokeWidth="6"/>
+              <line x1="120" y1="22" x2="310" y2="22" stroke="#E2C26D" strokeWidth="3"/>
+              <line x1="120" y1="68" x2="310" y2="68" stroke="#E2C26D" strokeWidth="3"/>
+              <text x="220" y="61" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="800" fontSize="52" fill="#FFFFFF" letterSpacing="-2">memo</text>
+              <rect x="5" y="5" width="130" height="80" rx="6" fill="#E2C26D"/>
+              <line x1="5" y1="22" x2="135" y2="22" stroke="#161625" strokeWidth="3"/>
+              <line x1="5" y1="68" x2="135" y2="68" stroke="#161625" strokeWidth="3"/>
+              <text x="70" y="61" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="800" fontSize="52" fill="#161625" letterSpacing="-2">Geo</text>
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 90" width="160" height="45">
+              <rect x="120" y="5" width="190" height="80" rx="6" fill="#FFFFFF" stroke="#161625" strokeWidth="6"/>
+              <line x1="120" y1="22" x2="310" y2="22" stroke="#161625" strokeWidth="3"/>
+              <line x1="120" y1="68" x2="310" y2="68" stroke="#161625" strokeWidth="3"/>
+              <text x="220" y="61" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="800" fontSize="52" fill="#161625" letterSpacing="-2">memo</text>
+              <rect x="5" y="5" width="130" height="80" rx="6" fill="#161625"/>
+              <line x1="5" y1="22" x2="135" y2="22" stroke="#E2C26D" strokeWidth="3"/>
+              <line x1="5" y1="68" x2="135" y2="68" stroke="#E2C26D" strokeWidth="3"/>
+              <text x="70" y="61" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="800" fontSize="52" fill="#FFFFFF" letterSpacing="-2">Geo</text>
+            </svg>
+          )}
         </Link>
 
         {/* Desktop Nav */}
