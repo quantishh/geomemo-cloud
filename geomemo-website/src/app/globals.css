@@ -361,7 +361,7 @@ a {
   /* 2-column grid: main news on left, right-side wrapper on right */
   .homepage-grid {
     display: grid;
-    grid-template-columns: 2.5fr 2.4fr;
+    grid-template-columns: 2.5fr 3fr;
     column-gap: var(--space-6);
     /* align-items: stretch (default) — main column matches right-side height */
   }
@@ -375,6 +375,7 @@ a {
   .right-side-wrapper {
     display: flex;
     flex-direction: column;
+    gap: var(--space-4);  /* breathing room between sections */
   }
 
   /* Middle + Right columns sit side-by-side within the right wrapper */
