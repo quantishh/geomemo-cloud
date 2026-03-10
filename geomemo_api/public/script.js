@@ -675,9 +675,15 @@ document.addEventListener('DOMContentLoaded', () => {
             baseTotal = filtered.length;
         }
 
-        // Category Filter
+        // Category Filter — include children whose parent matches the category
         if (selectedCategory !== 'All') {
-            filtered = filtered.filter(a => a.category === selectedCategory);
+            const matchingIds = new Set(filtered.filter(a => a.category === selectedCategory).map(a => a.id));
+            filtered = filtered.filter(a => {
+                if (a.category === selectedCategory) return true;
+                // Keep child if its parent matches the selected category
+                if (a.parent_id && matchingIds.has(a.parent_id)) return true;
+                return false;
+            });
         }
 
         // Status Filter (Phase 3)
@@ -960,8 +966,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusIcon = article.status === 'approved' ? '✓' : (article.status === 'rejected' ? '✗' : '?');
         const starClass = article.is_top_story ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400';
         
-        const titleCellClass = isChild ? 'pl-8 border-l-4 border-gray-200 bg-gray-50' : '';
-        const childIcon = isChild ? '<span class="text-gray-400 mr-1">↳</span>' : '';
+        const titleCellClass = isChild ? 'pl-8 border-l-4 border-blue-300 bg-blue-50' : '';
+        const childIcon = isChild ? '<span class="text-blue-400 mr-1">↳</span>' : '';
+        const parentBadge = (!isChild && article.id && allArticlesCache.some(a => a.parent_id === article.id))
+            ? '<span style="background:#3b82f6;color:#fff;font-size:0.6rem;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle;">CLUSTER</span>'
+            : '';
 
         let categoryOptions = VALID_CATEGORIES.map(cat => 
             `<option value="${cat}" ${article.category === cat ? 'selected' : ''}>${cat}</option>`
@@ -996,9 +1005,13 @@ document.addEventListener('DOMContentLoaded', () => {
             </td>
             <td class="p-3 align-top w-3/12 break-words ${titleCellClass}">
                 ${childIcon}
-                <a href="${article.url}" target="_blank" class="font-semibold text-blue-600 hover:underline text-sm">${dashboardHeadline}</a>
+                <a href="${article.url}" target="_blank" class="font-semibold text-blue-600 hover:underline text-sm">${dashboardHeadline}</a>${parentBadge}
                 <div class="text-xs text-gray-500 mt-1">${article.publication_name || 'N/A'}</div>
                 ${countryHtml}
+                ${isChild ? `<div class="flex gap-1 mt-1">
+                    <button class="uncluster-btn text-xs" style="background:#fee2e2;color:#dc2626;padding:2px 6px;border:1px solid #fca5a5;border-radius:3px;cursor:pointer;" data-id="${article.id}">✕ Remove</button>
+                    <button class="promote-btn text-xs" style="background:#dbeafe;color:#2563eb;padding:2px 6px;border:1px solid #93c5fd;border-radius:3px;cursor:pointer;" data-id="${article.id}">⬆ Make Parent</button>
+                </div>` : ''}
             </td>
             <td class="p-3 align-top w-2/12">
                 <select class="category-dropdown w-full p-1 border rounded border-gray-300 text-xs bg-white" data-id="${article.id}">
@@ -1061,6 +1074,35 @@ document.addEventListener('DOMContentLoaded', () => {
             
             openEnhanceModal();
         });
+
+        // Cluster management buttons (child articles only)
+        const unclusterBtn = tr.querySelector('.uncluster-btn');
+        if (unclusterBtn) {
+            unclusterBtn.addEventListener('click', async () => {
+                if (!confirm('Remove this article from the cluster?')) return;
+                try {
+                    const res = await fetch(`${API_BASE_URL}/articles/${article.id}/uncluster`, { method: 'POST' });
+                    if (!res.ok) throw new Error('Failed');
+                    // Update cache: clear parent_id
+                    const cached = allArticlesCache.find(a => a.id === article.id);
+                    if (cached) cached.parent_id = null;
+                    renderArticles();
+                } catch(err) { alert('Failed to remove from cluster'); }
+            });
+        }
+        const promoteBtn = tr.querySelector('.promote-btn');
+        if (promoteBtn) {
+            promoteBtn.addEventListener('click', async () => {
+                if (!confirm('Promote this article to be the new parent of the cluster?')) return;
+                try {
+                    const res = await fetch(`${API_BASE_URL}/articles/${article.id}/promote-to-parent`, { method: 'POST' });
+                    if (!res.ok) throw new Error('Failed');
+                    const data = await res.json();
+                    // Refresh the full list to reflect the swap
+                    await fetchArticles();
+                } catch(err) { alert('Failed to promote to parent'); }
+            });
+        }
 
         const starBtn = tr.querySelector('.star-btn');
         if(starBtn) {

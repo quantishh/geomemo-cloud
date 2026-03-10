@@ -1102,7 +1102,7 @@ async def analyze_and_approve_cluster(request: ClusterAnalysisRequest):
         all_ids = [original_id] + cluster_ids
         q_placeholders = ','.join(['%s'] * len(all_ids))
         cursor.execute(
-            f"SELECT id, headline_en, summary, publication_name, url FROM articles WHERE id IN ({q_placeholders})",
+            f"SELECT id, headline_en, summary, publication_name, url, category FROM articles WHERE id IN ({q_placeholders})",
             tuple(all_ids),
         )
         articles = {row['id']: dict(row) for row in cursor.fetchall()}
@@ -1148,6 +1148,9 @@ Rewrite ONLY the MAIN article's summary as a professional news brief. Requiremen
             "UPDATE articles SET status = 'approved', summary = %s, is_top_story = %s WHERE id = %s",
             (new_sum, request.make_top_story, original_id),
         )
+        # Inherit parent's category for all children
+        parent_category = orig.get('category')
+
         if cluster_ids:
             # Milestone D: Generate differentiated summaries for each child
             for aid in cluster_ids:
@@ -1177,14 +1180,14 @@ Rewrite ONLY the MAIN article's summary as a professional news brief. Requiremen
                     )
                     child_summary = diff_chat.choices[0].message.content.strip()
                     cursor.execute(
-                        "UPDATE articles SET status = 'approved', parent_id = %s, summary = %s WHERE id = %s",
-                        (original_id, child_summary, aid),
+                        "UPDATE articles SET status = 'approved', parent_id = %s, summary = %s, category = %s WHERE id = %s",
+                        (original_id, child_summary, parent_category, aid),
                     )
                 except Exception as child_err:
                     logger.warning(f"Child summary generation failed for {aid}: {child_err}")
                     cursor.execute(
-                        "UPDATE articles SET status = 'approved', parent_id = %s WHERE id = %s",
-                        (original_id, aid),
+                        "UPDATE articles SET status = 'approved', parent_id = %s, category = %s WHERE id = %s",
+                        (original_id, parent_category, aid),
                     )
         conn.commit()
         return ClusterAnalysisResponse(
@@ -1194,6 +1197,77 @@ Rewrite ONLY the MAIN article's summary as a professional news brief. Requiremen
             child_ids=cluster_ids,
             is_top_story=request.make_top_story,
         )
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# --- Cluster Management: uncluster + promote ---
+
+@router.post("/articles/{article_id}/uncluster")
+def uncluster_article(article_id: int):
+    """Remove a child article from its cluster (set parent_id = NULL)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE articles SET parent_id = NULL WHERE id = %s", (article_id,))
+        conn.commit()
+        return {"message": "Article removed from cluster", "article_id": article_id}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/articles/{article_id}/promote-to-parent")
+def promote_to_parent(article_id: int):
+    """Promote a child article to be the new parent of its cluster.
+    - The old parent becomes a child
+    - All other children now point to the new parent
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        # Get the current child article and its parent
+        cursor.execute("SELECT id, parent_id, category FROM articles WHERE id = %s", (article_id,))
+        child = cursor.fetchone()
+        if not child or not child['parent_id']:
+            raise HTTPException(400, "Article is not a child of any cluster")
+
+        old_parent_id = child['parent_id']
+        new_parent_id = article_id
+
+        # 1. Move all children of old parent → new parent
+        cursor.execute(
+            "UPDATE articles SET parent_id = %s WHERE parent_id = %s AND id != %s",
+            (new_parent_id, old_parent_id, new_parent_id),
+        )
+
+        # 2. Old parent becomes child of new parent
+        cursor.execute(
+            "UPDATE articles SET parent_id = %s WHERE id = %s",
+            (new_parent_id, old_parent_id),
+        )
+
+        # 3. New parent is no longer a child
+        cursor.execute(
+            "UPDATE articles SET parent_id = NULL WHERE id = %s",
+            (new_parent_id,),
+        )
+
+        conn.commit()
+        return {
+            "message": "Promoted to parent",
+            "new_parent_id": new_parent_id,
+            "old_parent_id": old_parent_id,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
         raise HTTPException(500, str(e))
