@@ -633,13 +633,30 @@ def enhance_article_summary(article_id: int, request: EnhanceRequest):
     if not text_input:
         raise HTTPException(400, "No text provided")
     try:
+        # Use differentiated prompt for child articles (when parent context is provided)
+        if request.parent_summary:
+            system_msg = (
+                "You are a senior geopolitical analyst. A parent article already covers this story "
+                "with this summary:\n\n"
+                f'"{request.parent_summary}"\n\n'
+                "Rewrite the article below as a 50-word MAX summary highlighting what is NEW or DIFFERENT "
+                "from the parent — a unique angle, new facts, or contrarian view. Do NOT repeat the parent. "
+                "Professional analytical tone. Include specific names/figures/countries. English only."
+            )
+        else:
+            system_msg = (
+                "Rewrite this as a professional 50-word MAX news summary for investment bankers and policymakers. "
+                "Lead with the core development and why it matters. Authoritative analytical tone. "
+                "Include specific names/figures/countries. Use facts from the provided content. "
+                "English only. Do NOT exceed 50 words."
+            )
         chat = groq_client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "Rewrite this as a professional 50-word MAX news summary for investment bankers and policymakers. Authoritative analytical tone. Lead with the key development, include specific names/figures/countries. English only. Do NOT exceed 50 words."},
+                {"role": "system", "content": system_msg},
                 {"role": "user", "content": text_input},
             ],
             model="llama-3.3-70b-versatile",
-            temperature=0.1,
+            temperature=0.3,
         )
         new_summary = chat.choices[0].message.content.strip()
         conn = get_db_connection()
@@ -1104,13 +1121,12 @@ async def analyze_and_approve_cluster(request: ClusterAnalysisRequest):
         cluster_system_prompt = """You are a senior geopolitical analyst writing for an intelligence newsletter read by investment bankers and policymakers.
 
 Rewrite ONLY the MAIN article's summary as a professional news brief. Requirements:
-1. Lead with the core development from the MAIN article ONLY
-2. Do NOT mention or reference other sources, publications, or related articles
-3. Include specific numbers, names, and countries from the MAIN article
-4. Keep the tone professional and analytical — no editorializing
-5. 50 words MAX. Do NOT exceed 50 words.
-6. ONLY use facts from the MAIN article. NEVER invent details.
-7. English only. Do NOT include dates."""
+1. Lead with the core development — what happened and why it matters
+2. Include specific numbers, names, and countries
+3. Keep the tone professional and analytical — no editorializing
+4. 50 words MAX. Do NOT exceed 50 words.
+5. Use facts from the provided content. Do not speculate.
+6. English only. Do NOT include dates."""
 
         cluster_user_prompt = (
             f"--- MAIN ARTICLE (Source: {orig.get('publication_name') or 'Unknown'}) ---\n"
@@ -1124,7 +1140,7 @@ Rewrite ONLY the MAIN article's summary as a professional news brief. Requiremen
                 {"role": "user", "content": cluster_user_prompt},
             ],
             model="llama-3.3-70b-versatile",
-            temperature=0.2,
+            temperature=0.3,
         )
         new_sum = chat.choices[0].message.content
 
@@ -1133,18 +1149,23 @@ Rewrite ONLY the MAIN article's summary as a professional news brief. Requiremen
             (new_sum, request.make_top_story, original_id),
         )
         if cluster_ids:
-            # Milestone D: Generate clean independent summaries for each child
+            # Milestone D: Generate differentiated summaries for each child
             for aid in cluster_ids:
                 child_art = articles.get(aid, {})
                 try:
+                    child_system_prompt = (
+                        "You are a senior geopolitical analyst. A parent article already covers this story "
+                        "with this summary:\n\n"
+                        f'"{new_sum}"\n\n'
+                        "Now rewrite the CHILD article below as a 50-word MAX summary that highlights what is "
+                        "NEW, DIFFERENT, or UNIQUE compared to the parent — a different angle, new facts, "
+                        "additional detail, or a contrarian view. Do NOT repeat what the parent already says. "
+                        "Lead with the unique contribution. Professional analytical tone. "
+                        "Include specific names/figures/countries. English only."
+                    )
                     diff_chat = groq_client.chat.completions.create(
                         messages=[
-                            {"role": "system", "content": (
-                                "Rewrite this as a professional 50-word MAX news summary for investment bankers "
-                                "and policymakers. Authoritative analytical tone. Lead with the key development, "
-                                "include specific names/figures/countries. ONLY use facts from the provided content. "
-                                "NEVER invent details. English only. Do NOT exceed 50 words."
-                            )},
+                            {"role": "system", "content": child_system_prompt},
                             {"role": "user", "content": (
                                 f"Headline: {child_art.get('headline_en', 'N/A')}\n"
                                 f"Summary: {child_art.get('summary', 'N/A')}\n"
@@ -1152,7 +1173,7 @@ Rewrite ONLY the MAIN article's summary as a professional news brief. Requiremen
                             )},
                         ],
                         model="llama-3.3-70b-versatile",
-                        temperature=0.1,
+                        temperature=0.3,
                     )
                     child_summary = diff_chat.choices[0].message.content.strip()
                     cursor.execute(

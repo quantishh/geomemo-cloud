@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- STATE ---
     let allArticlesCache = [];
     let currentEnhanceId = null;
+    let currentEnhanceParentSummary = null;
     let currentBriefId = null;
     let currentSortBy = 'scraped_at';
     let currentSortOrder = 'desc';
@@ -1041,7 +1042,14 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.querySelector('.enhance-btn').addEventListener('click', (e) => {
             currentEnhanceId = article.id;
             const btn = e.currentTarget;
-            
+
+            // Capture parent summary for child article differentiation
+            currentEnhanceParentSummary = null;
+            if (article.parent_id) {
+                const parentArt = allArticlesCache.find(a => a.id === article.parent_id);
+                if (parentArt) currentEnhanceParentSummary = parentArt.summary;
+            }
+
             // Pre-fill Logic:
             const textToEdit = article.summary || article.headline || article.headline_original || "";
             
@@ -1081,7 +1089,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             summary: enhanceInput.value,
             publication_name: enhancePubInput.value,
-            author: enhanceAuthorInput.value
+            author: enhanceAuthorInput.value,
+            ...(currentEnhanceParentSummary ? { parent_summary: currentEnhanceParentSummary } : {})
         };
 
         const btn = document.getElementById('confirm-enhance-btn');

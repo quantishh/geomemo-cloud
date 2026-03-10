@@ -66,6 +66,7 @@ class EnhanceRequest(BaseModel):
     summary: str
     publication_name: Optional[str] = None
     author: Optional[str] = None
+    parent_summary: Optional[str] = None  # For child article differentiation
 
 
 # --- Cluster Models ---
