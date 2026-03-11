@@ -680,10 +680,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedCategory = categoryFilter ? categoryFilter.value : 'All';
 
         // Date Filter — must come first so all counts are scoped to selected day
+        // Also keep children whose parent matches the date (cluster awareness)
         let filtered = allArticlesCache;
         let baseTotal = allArticlesCache.length;
         if (currentDateFilter !== 'All') {
-            filtered = filtered.filter(a => getArticleLocalDate(a) === currentDateFilter);
+            const dateMatchIds = new Set(
+                filtered.filter(a => getArticleLocalDate(a) === currentDateFilter).map(a => a.id)
+            );
+            filtered = filtered.filter(a => {
+                if (getArticleLocalDate(a) === currentDateFilter) return true;
+                if (a.parent_id && dateMatchIds.has(a.parent_id)) return true;
+                return false;
+            });
             baseTotal = filtered.length;
         }
 
@@ -698,9 +706,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Status Filter (Phase 3)
+        // Status Filter (Phase 3) — keep children whose parent matches the status
         if (currentStatusFilter !== 'All') {
-            filtered = filtered.filter(a => a.status === currentStatusFilter);
+            const statusMatchIds = new Set(
+                filtered.filter(a => a.status === currentStatusFilter).map(a => a.id)
+            );
+            filtered = filtered.filter(a => {
+                if (a.status === currentStatusFilter) return true;
+                if (a.parent_id && statusMatchIds.has(a.parent_id)) return true;
+                return false;
+            });
         }
 
         // Score Range Filter (Phase 3)
@@ -726,10 +741,21 @@ document.addEventListener('DOMContentLoaded', () => {
             renderTopicGroupedArticles(filtered);
         } else {
             // Group by Date (default)
+            // Build parent→date lookup so children join their parent's date group
+            const parentDateMap = {};
+            filtered.forEach(a => {
+                if (!a.parent_id && a.scraped_at) {
+                    const d = new Date(a.scraped_at);
+                    parentDateMap[a.id] = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                }
+            });
+
             const grouped = filtered.reduce((groups, article) => {
                 let date = 'Unsorted';
-                if (article.scraped_at) {
-                    // Convert UTC timestamp to user's local date (YYYY-MM-DD)
+                if (article.parent_id && parentDateMap[article.parent_id]) {
+                    // Children join their parent's date group
+                    date = parentDateMap[article.parent_id];
+                } else if (article.scraped_at) {
                     const d = new Date(article.scraped_at);
                     date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                 }
