@@ -683,24 +683,32 @@ def enhance_article_summary(article_id: int, request: EnhanceRequest):
                 "You are a senior geopolitical analyst. A parent article already covers this story "
                 "with this summary:\n\n"
                 f'"{request.parent_summary}"\n\n'
-                "Rewrite the article below as a 50-word MAX summary highlighting what is NEW or DIFFERENT "
-                "from the parent — a unique angle, new facts, or contrarian view. Do NOT repeat the parent. "
-                "Professional analytical tone. Include specific names/figures/countries. English only."
+                "Summarize the article below in EXACTLY 2-3 sentences (40-60 words) highlighting what is NEW or DIFFERENT.\n\n"
+                "RULES:\n"
+                "1. First sentence: What new fact, angle, or development does THIS article add?\n"
+                "2. Second sentence: Quantify with specific numbers, names, or dates from the article\n"
+                "3. Do NOT repeat information from the parent summary\n"
+                "4. English only. Professional analytical tone."
             )
         else:
             system_msg = (
-                "Rewrite this as a professional 50-word MAX news summary for investment bankers and policymakers. "
-                "Lead with the core development and why it matters. Authoritative analytical tone. "
-                "Include specific names/figures/countries. Use facts from the provided content. "
-                "English only. Do NOT exceed 50 words."
+                "You are a senior geopolitical analyst writing for investment bankers and policymakers.\n\n"
+                "Summarize the article below in EXACTLY 2-3 sentences (40-60 words).\n\n"
+                "RULES:\n"
+                "1. First sentence: State the core development with specific actors (names, countries, organizations)\n"
+                "2. Second sentence: Quantify the impact — use specific numbers, dollar amounts, percentages, or dates from the article\n"
+                "3. Optional third sentence: Strategic implication or what to watch next\n"
+                "4. NEVER use vague phrases like 'threatening price hikes' — use the actual figures\n"
+                "5. English only. Professional analytical tone."
             )
         chat = groq_client.chat.completions.create(
             messages=[
                 {"role": "system", "content": system_msg},
-                {"role": "user", "content": text_input},
+                {"role": "user", "content": text_input[:4000]},
             ],
             model="llama-3.3-70b-versatile",
-            temperature=0.3,
+            temperature=0.4,
+            max_tokens=120,
         )
         new_summary = chat.choices[0].message.content.strip()
         conn = get_db_connection()

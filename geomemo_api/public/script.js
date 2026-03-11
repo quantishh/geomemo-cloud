@@ -114,6 +114,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (confirmEnhanceBtn) confirmEnhanceBtn.addEventListener('click', handleEnhanceSubmit);
 
+    // Clean paste for small input fields — prevent accidental full-article paste
+    [enhancePubInput, enhanceAuthorInput].forEach(input => {
+        if (!input) return;
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const text = (e.clipboardData || window.clipboardData).getData('text');
+            // Take only the first line, trimmed, capped at 200 chars
+            const cleaned = text.split('\n')[0].trim().substring(0, 200);
+            input.value = cleaned;
+        });
+    });
+
     // Manager Listeners
     if (tweetForm) tweetForm.addEventListener('submit', handleTweetSubmit);
     if (sponsorForm) sponsorForm.addEventListener('submit', handleSponsorSubmit);
@@ -1196,10 +1208,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function openEnhanceModal() { 
+    function openEnhanceModal() {
         if(!enhanceModal) return;
-        enhanceModal.classList.remove('hidden'); 
-        setTimeout(() => enhanceModal.classList.add('visible'), 10); 
+        enhanceModal.classList.remove('hidden');
+        setTimeout(() => {
+            enhanceModal.classList.add('visible');
+            if (enhanceInput) {
+                enhanceInput.focus();
+                enhanceInput.select();  // Select all so user can immediately paste over
+            }
+        }, 10);
     }
 
     function closeEnhanceModal() { 
