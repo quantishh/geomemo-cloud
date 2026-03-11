@@ -349,8 +349,8 @@ STEP 4: Output valid JSON:
     "is_relevant": "yes/no",
     "confidence_score": <integer 0-100>,
     "headline_en": "Formal English Headline",
-    "summary": "Professional 50-word MAX news summary. Write in authoritative analytical tone for investment bankers and policymakers. Lead with the key development, include specific names/figures/countries. ONLY use facts from the headline and content provided. NEVER invent names, figures, or details. Do NOT include dates. English only. Do NOT exceed 50 words.",
-    "summary_long": "100-word analytical summary for social media. Include key facts, figures, names, implications for markets and policy. Note which countries are affected and why this matters for global investors. ONLY use facts from the provided content. NEVER invent or hallucinate details. Do NOT include dates. English only.",
+    "summary": "2-3 sentence news summary (40-60 words). Authoritative analytical tone for investment bankers. Sentence 1: core development with specific actors. Sentence 2: quantify with numbers/figures from the article. ONLY add a 3rd sentence if the article contains a concrete forward-looking fact (a date, deadline, vote, named action). NEVER end with speculative 'this may impact...' or 'this could lead to...' statements. NEVER invent details. Every sentence must contain a verifiable fact. English only.",
+    "summary_long": "100-word analytical summary for social media. Sentence 1-2: what happened with specific actors and figures. Sentence 3-4: quantified impact with numbers, dollar amounts, percentages. Sentence 5: ONLY if a concrete next step exists (scheduled date, named action, deadline). NEVER end with vague 'this may impact...' or 'this could affect...' statements. ONLY use facts from the provided content. NEVER invent or hallucinate details. Do NOT include dates of publication. English only.",
     "category": "Category Name",
     "countries": ["Country1", "Country2"]
 }}

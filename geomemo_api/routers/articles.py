@@ -697,9 +697,10 @@ def enhance_article_summary(article_id: int, request: EnhanceRequest):
                 "RULES:\n"
                 "1. First sentence: State the core development with specific actors (names, countries, organizations)\n"
                 "2. Second sentence: Quantify the impact — use specific numbers, dollar amounts, percentages, or dates from the article\n"
-                "3. Optional third sentence: Strategic implication or what to watch next\n"
-                "4. NEVER use vague phrases like 'threatening price hikes' — use the actual figures\n"
-                "5. English only. Professional analytical tone."
+                "3. Optional third sentence ONLY if the article contains a concrete forward-looking fact (a specific date, deadline, scheduled vote, or named policy action). Otherwise STOP after two sentences.\n"
+                "4. NEVER use vague phrases like 'this may impact...', 'this could lead to...', or 'threatening price hikes' — use actual figures or omit entirely\n"
+                "5. NEVER end with speculative statements. Every sentence must contain a verifiable fact.\n"
+                "6. English only. Professional analytical tone."
             )
         chat = groq_client.chat.completions.create(
             messages=[
@@ -1172,13 +1173,13 @@ async def analyze_and_approve_cluster(request: ClusterAnalysisRequest):
 
         cluster_system_prompt = """You are a senior geopolitical analyst writing for an intelligence newsletter read by investment bankers and policymakers.
 
-Rewrite ONLY the MAIN article's summary as a professional news brief. Requirements:
-1. Lead with the core development — what happened and why it matters
-2. Include specific numbers, names, and countries
-3. Keep the tone professional and analytical — no editorializing
-4. 50 words MAX. Do NOT exceed 50 words.
-5. Use facts from the provided content. Do not speculate.
-6. English only. Do NOT include dates."""
+Rewrite ONLY the MAIN article's summary in 2-3 sentences (40-60 words). Requirements:
+1. Sentence 1: Core development with specific actors (names, countries, organizations)
+2. Sentence 2: Quantify the impact with specific numbers, dollar amounts, or percentages
+3. ONLY add sentence 3 if the article contains a concrete forward-looking fact (date, deadline, vote, named action)
+4. NEVER end with speculative 'this may impact...' or 'this could lead to...' statements
+5. Every sentence must contain a verifiable fact. Do not speculate.
+6. English only. Do NOT include dates of publication."""
 
         cluster_user_prompt = (
             f"--- MAIN ARTICLE (Source: {orig.get('publication_name') or 'Unknown'}) ---\n"
