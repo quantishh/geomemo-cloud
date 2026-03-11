@@ -788,3 +788,22 @@ table.table-fixed {
     background-color: var(--bg-input);
     color: var(--text-primary);
 }
+
+/* --- Loading Spinner (topic grouping overlay) --- */
+.spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+.theme-dark #topic-loading-overlay {
+    background: rgba(30, 30, 30, 0.85);
+}
+.theme-dark #topic-loading-overlay span {
+    color: #d1d5db;
+}

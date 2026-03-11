@@ -79,67 +79,78 @@ ARTICLE_COLUMNS = """
 
 def _group_by_topic(articles: list, threshold: float = 0.70) -> list:
     """
-    Greedy topic grouping: assign each article to an existing group if cosine
-    similarity >= threshold, otherwise create a new group.  Returns a flat list
-    with `topic_group` (int) and `topic_group_size` (int) fields added.
-    Groups are sorted by the highest score in each group (DESC).
-    Within a group, articles are sorted by auto_approval_score DESC.
+    Greedy topic grouping using batch matrix multiplication for speed.
+    Assigns each article to a group based on cosine similarity >= threshold.
+    Returns a flat list with `topic_group` (int) and `topic_group_size` (int).
+    Groups sorted by highest auto_approval_score DESC.
+    Within a group, articles sorted by auto_approval_score DESC.
     """
     if not articles:
         return []
 
-    # Build embedding matrix (skip articles without embeddings)
-    groups = []          # list of lists of article indices
-    group_centroids = [] # representative embedding for each group
-
-    for art in articles:
-        emb = art.get('embedding')
-        if emb is None:
-            # No embedding — put in its own singleton group
-            groups.append([art])
-            group_centroids.append(None)
-            continue
-
-        emb_arr = np.array(emb, dtype=np.float32)
-        norm = np.linalg.norm(emb_arr)
-        if norm > 0:
-            emb_arr = emb_arr / norm
-
-        best_group = -1
-        best_sim = threshold
-
-        for gi, centroid in enumerate(group_centroids):
-            if centroid is None:
-                continue
-            sim = float(np.dot(emb_arr, centroid))
-            if sim >= best_sim:
-                best_sim = sim
-                best_group = gi
-
-        if best_group >= 0:
-            groups[best_group].append(art)
-            # Update centroid as running average
-            n = len(groups[best_group])
-            group_centroids[best_group] = (
-                group_centroids[best_group] * (n - 1) + emb_arr
-            ) / n
-            c_norm = np.linalg.norm(group_centroids[best_group])
-            if c_norm > 0:
-                group_centroids[best_group] = group_centroids[best_group] / c_norm
+    # 1. Separate articles with/without embeddings
+    with_emb = []   # (index, article) pairs that have embeddings
+    without_emb = [] # articles without embeddings
+    for i, art in enumerate(articles):
+        if art.get('embedding'):
+            with_emb.append((i, art))
         else:
-            groups.append([art])
-            group_centroids.append(emb_arr)
+            without_emb.append(art)
 
-    # Sort groups by highest auto_approval_score in each group
-    def group_max_score(group):
-        return max((a.get('auto_approval_score') or 0) for a in group)
+    # 2. Build groups dict: group_id -> list of articles
+    groups = {}
+    next_group_id = 0
 
-    groups.sort(key=group_max_score, reverse=True)
+    if with_emb:
+        # 3. Build NxD matrix in one shot — single numpy call
+        emb_matrix = np.array(
+            [art['embedding'] for _, art in with_emb], dtype=np.float32
+        )
 
-    # Flatten with topic_group and topic_group_size fields
+        # 4. Normalize all vectors at once — single BLAS call
+        norms = np.linalg.norm(emb_matrix, axis=1, keepdims=True)
+        emb_matrix = emb_matrix / np.maximum(norms, 1e-10)
+
+        # 5. Compute full NxN similarity matrix — ONE matrix multiply in BLAS
+        #    Replaces ~100k individual np.dot() calls with one C/Fortran call
+        sim_matrix = emb_matrix @ emb_matrix.T
+
+        # 6. Greedy clustering on pre-computed similarities (just int ops, fast)
+        n = len(with_emb)
+        assigned = [-1] * n
+        for i in range(n):
+            if assigned[i] >= 0:
+                continue
+            assigned[i] = next_group_id
+            for j in range(i + 1, n):
+                if assigned[j] >= 0:
+                    continue
+                if sim_matrix[i, j] >= threshold:
+                    assigned[j] = next_group_id
+            next_group_id += 1
+
+        # Build groups from assignments
+        for idx, (_, art) in enumerate(with_emb):
+            gid = assigned[idx]
+            if gid not in groups:
+                groups[gid] = []
+            groups[gid].append(art)
+
+    # 7. Each no-embedding article gets its own singleton group
+    for art in without_emb:
+        groups[next_group_id] = [art]
+        next_group_id += 1
+
+    # 8. Sort groups by highest auto_approval_score in each group (DESC)
+    sorted_groups = sorted(
+        groups.values(),
+        key=lambda g: max((a.get('auto_approval_score') or 0) for a in g),
+        reverse=True,
+    )
+
+    # 9. Flatten with topic_group and topic_group_size fields
     result = []
-    for gi, group in enumerate(groups):
-        # Sort within group by score descending
+    for gi, group in enumerate(sorted_groups):
         group.sort(key=lambda a: (a.get('auto_approval_score') or 0), reverse=True)
         for art in group:
             art.pop('embedding', None)  # Don't send embeddings to frontend
@@ -243,6 +254,7 @@ def get_articles(
                     FROM articles
                     WHERE {where_sql}
                     ORDER BY auto_approval_score DESC NULLS LAST, scraped_at DESC
+                    LIMIT 1000
                 """
                 cursor.execute(query, tuple(params))
                 articles = [dict(row) for row in cursor.fetchall()]

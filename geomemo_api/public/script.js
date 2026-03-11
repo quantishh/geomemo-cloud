@@ -238,6 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isTopicGrouped = !isTopicGrouped;
             topicGroupBtn.classList.toggle('active', isTopicGrouped);
             topicGroupBtn.textContent = isTopicGrouped ? '🔗 Grouped by Topic' : '🔗 Group by Topic';
+            if (isTopicGrouped) showTopicLoadingOverlay(true);
             fetchArticles();
         });
     }
@@ -631,6 +632,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // Track which article to scroll to after re-render
     let _scrollToArticleId = null;
 
+    // --- TOPIC LOADING OVERLAY ---
+    function showTopicLoadingOverlay(show) {
+        let overlay = document.getElementById('topic-loading-overlay');
+        if (show) {
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'topic-loading-overlay';
+                overlay.innerHTML = `
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+                        <div class="spinner"></div>
+                        <span style="font-size:0.9rem;color:#4b5563;">Grouping articles by topic…</span>
+                    </div>`;
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(255,255,255,0.8);display:flex;align-items:center;justify-content:center;z-index:100;';
+                document.body.appendChild(overlay);
+            }
+            overlay.style.display = 'flex';
+        } else if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
+
     async function fetchArticles(preserveScroll = false, scrollToId = null) {
         const currentScrollY = window.scrollY;
         if (scrollToId) _scrollToArticleId = scrollToId;
@@ -639,6 +661,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams();
             if (isTopicGrouped) {
                 params.set('sort_by', 'topic_group');
+                // Send current date filter so backend only clusters that day's articles
+                if (currentDateFilter !== 'All') {
+                    params.set('target_date', currentDateFilter);
+                }
             } else if (currentSortBy !== 'scraped_at') {
                 params.set('sort_by', currentSortBy);
             }
@@ -672,6 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching articles:', error);
         } finally {
             if (articlesTbody) showLoading(false);
+            showTopicLoadingOverlay(false);
         }
     }
 
