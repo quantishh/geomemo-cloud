@@ -92,7 +92,7 @@ def _group_by_topic(articles: list, threshold: float = 0.70) -> list:
     with_emb = []   # (index, article) pairs that have embeddings
     without_emb = [] # articles without embeddings
     for i, art in enumerate(articles):
-        if art.get('embedding'):
+        if art.get('embedding') is not None:
             with_emb.append((i, art))
         else:
             without_emb.append(art)
