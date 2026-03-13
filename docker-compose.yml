@@ -41,7 +41,7 @@ services:
     container_name: geomemo-web
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       # --- CODE VOLUME MOUNTS (the fix for the recurring mismatch bug) ---
       # These bind-mount the host code into the container.
@@ -72,7 +72,7 @@ services:
       # Auto-load backup SQL on first init (only runs if DB is empty)
       - ./geomemo_full_backup.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
