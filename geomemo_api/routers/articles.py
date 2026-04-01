@@ -279,6 +279,103 @@ def get_articles(
         conn.close()
 
 
+@router.get("/articles/{article_id}/forums")
+def get_article_forums(article_id: int):
+    """Fetch forum discussions for an article from Google Discussions via SerpAPI."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        # Check cache first
+        cursor.execute("""
+            SELECT url, title, forum_name, content, platform, upvotes
+            FROM forum_discussions
+            WHERE article_id = %s AND status = 'approved'
+            ORDER BY upvotes DESC
+            LIMIT 10
+        """, (article_id,))
+        cached = [dict(row) for row in cursor.fetchall()]
+        if cached:
+            return {"article_id": article_id, "discussions": cached, "source": "cache"}
+
+        # Fetch fresh
+        from services.forum_search import search_forums_for_article
+        cursor.execute("""
+            SELECT headline_en, headline, country_codes FROM articles WHERE id = %s
+        """, (article_id,))
+        article = cursor.fetchone()
+        if not article:
+            raise HTTPException(404, "Article not found")
+
+        headline = article['headline_en'] or article['headline'] or ''
+        countries = article['country_codes'] or []
+        discussions = search_forums_for_article(headline, countries, max_results=5)
+
+        # Store in DB
+        for disc in discussions:
+            try:
+                cursor.execute("""
+                    INSERT INTO forum_discussions
+                        (url, title, forum_name, content, platform,
+                         upvotes, article_id, scraped_at, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), 'approved')
+                    ON CONFLICT (url) DO NOTHING
+                """, (disc['link'], disc['title'], disc['source'],
+                      disc['snippet'], disc['platform'],
+                      disc.get('comments', 0), article_id))
+            except Exception:
+                pass
+        conn.commit()
+
+        return {"article_id": article_id, "discussions": discussions, "source": "fresh"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Forum search error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/articles/fetch-forums")
+def batch_fetch_forums(
+    min_score: int = Query(80, ge=0),
+    hours: int = Query(24, ge=1),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Batch fetch forum discussions for top-scoring recent articles."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("""
+            SELECT id FROM articles
+            WHERE status = 'approved'
+              AND auto_approval_score >= %s
+              AND scraped_at >= NOW() - INTERVAL '%s hours'
+            ORDER BY auto_approval_score DESC
+            LIMIT %s
+        """, (min_score, hours, limit))
+        article_ids = [row['id'] for row in cursor.fetchall()]
+
+        if not article_ids:
+            return {"processed": 0, "discussions_found": 0}
+
+        from services.forum_search import fetch_forums_for_top_articles
+        forum_map = fetch_forums_for_top_articles(cursor, article_ids, max_per_article=3)
+
+        return {
+            "processed": len(article_ids),
+            "articles_with_discussions": len(forum_map),
+            "total_discussions": sum(len(v) for v in forum_map.values()),
+        }
+    except Exception as e:
+        logger.error(f"Batch forum fetch error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.get("/articles/country/{country_code}")
 def get_country_articles(
     country_code: str,
