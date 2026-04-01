@@ -284,3 +284,30 @@ class BreakingNewsCheckResponse(BaseModel):
     articles_found: int
     articles_posted: int
     posts: List[dict] = []
+
+
+# --- Phase 2: Newsletter Orchestration Models ---
+
+class NewsletterOrchestrateRequest(BaseModel):
+    target_date: Optional[str] = None
+    regenerate: bool = False
+    send_preview: bool = True
+
+
+class NewsletterPreviewResponse(BaseModel):
+    brief_id: int
+    date: str
+    subject_line: str
+    article_count: int
+    top_5_ids: List[int]
+    clusters_created: int
+    tweets_fetched: int
+    preview_sent: bool
+
+
+class PostmarkInboundPayload(BaseModel):
+    FromFull: Optional[dict] = None
+    Subject: Optional[str] = None
+    TextBody: Optional[str] = None
+    HtmlBody: Optional[str] = None
+    Headers: Optional[list] = None

@@ -273,6 +273,9 @@ def init_db():
             "ALTER TABLE sources ADD COLUMN IF NOT EXISTS source_type TEXT",
             # Cluster index
             "CREATE INDEX IF NOT EXISTS idx_articles_cluster_id ON articles (cluster_id)",
+            # Phase 2: Newsletter approval flow
+            "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS approval_token TEXT",
+            "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS preview_sent_at TIMESTAMPTZ",
         ]
         for sql in migrations:
             try:

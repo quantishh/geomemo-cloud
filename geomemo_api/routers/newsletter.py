@@ -15,8 +15,10 @@ from fastapi import APIRouter, HTTPException, Query
 from groq import Groq
 
 from database import get_db_connection
-from config import BEEHIIV_API_KEY, BEEHIIV_PUB_ID, VALID_CATEGORIES, SOCIAL_AUTO_POST_NEWSLETTER
-from models import DailyBrief, NewsletterGenerateRequest, NewsletterPublishResponse
+from config import (BEEHIIV_API_KEY, BEEHIIV_PUB_ID, VALID_CATEGORIES,
+                    SOCIAL_AUTO_POST_NEWSLETTER, OWNER_EMAIL)
+from models import (DailyBrief, NewsletterGenerateRequest, NewsletterPublishResponse,
+                    PostmarkInboundPayload)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/newsletter", tags=["newsletter"])
@@ -176,6 +178,141 @@ def generate_newsletter(request: NewsletterGenerateRequest = NewsletterGenerateR
     except Exception as e:
         conn.rollback()
         logger.error(f"Newsletter generation error: {e}")
+        raise HTTPException(500, f"Generation failed: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/generate-auto")
+def generate_newsletter_auto(request: NewsletterGenerateRequest = NewsletterGenerateRequest()):
+    """
+    Phase 2: Fully autonomous newsletter generation.
+    Selects top 40 → clusters → top 5 with tweets → assembles HTML → sends preview email.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        from services.newsletter_orchestrator import (
+            orchestrate_newsletter, send_preview_email
+        )
+
+        target = request.target_date
+        if not target:
+            target = datetime.now(ZoneInfo("America/New_York")).strftime('%Y-%m-%d')
+
+        # Check existing brief (unless regenerate)
+        if not request.regenerate:
+            cursor.execute("SELECT * FROM daily_briefs WHERE date = %s", (target,))
+            existing = cursor.fetchone()
+            if existing:
+                return dict(existing)
+
+        # Run orchestrator
+        orch_result = orchestrate_newsletter(cursor, target_date=target, regenerate=request.regenerate)
+
+        if orch_result.get("error"):
+            raise HTTPException(404, orch_result["error"])
+
+        top_5 = orch_result["top_5"]
+        category_articles = orch_result["category_articles"]
+        child_map = orch_result["child_map"]
+        tweet_map = orch_result["tweet_map"]
+        approval_token = orch_result["approval_token"]
+
+        # Generate AI brief from top 40
+        top_40 = orch_result["top_40"]
+        brief_text, brief_html = _generate_ai_brief(top_40, top_5)
+        word_count = len(brief_text.split()) if brief_text else 0
+
+        # Fetch sponsors
+        cursor.execute("""
+            SELECT id, company_name, headline, summary, link_url, logo_url
+            FROM sponsors ORDER BY created_at DESC
+        """)
+        sponsors = [dict(row) for row in cursor.fetchall()]
+
+        # Flatten category_articles for other_parents
+        other_parents = []
+        for cat_articles in category_articles.values():
+            other_parents.extend(cat_articles)
+
+        # Build subject line and newsletter HTML
+        subject_line = _build_subject_line(top_5, top_40)
+        newsletter_html = _build_newsletter_html(
+            brief_html, top_5, other_parents, child_map, target,
+            sponsors=sponsors, tweet_map=tweet_map
+        )
+
+        # Upsert to daily_briefs
+        cursor.execute("""
+            INSERT INTO daily_briefs (date, summary_text, summary_html, newsletter_html,
+                                      subject_line, word_count, generated_at, published,
+                                      approval_token)
+            VALUES (%s, %s, %s, %s, %s, %s, NOW(), FALSE, %s)
+            ON CONFLICT (date) DO UPDATE SET
+                summary_text = EXCLUDED.summary_text,
+                summary_html = EXCLUDED.summary_html,
+                newsletter_html = EXCLUDED.newsletter_html,
+                subject_line = EXCLUDED.subject_line,
+                word_count = EXCLUDED.word_count,
+                generated_at = NOW(),
+                approval_token = EXCLUDED.approval_token,
+                published = FALSE
+            RETURNING *
+        """, (target, brief_text, brief_html, newsletter_html,
+              subject_line, word_count, approval_token))
+
+        result = dict(cursor.fetchone())
+        conn.commit()
+
+        # Auto-post to Telegram
+        if SOCIAL_AUTO_POST_NEWSLETTER:
+            try:
+                from services.social import telegram
+                from services.social.content_generator import generate_newsletter_telegram
+                if telegram.is_configured():
+                    tg_text = generate_newsletter_telegram(dict(result), top_40)
+                    tg_result = telegram.send_message(tg_text, disable_web_page_preview=True)
+                    cursor.execute("""
+                        SELECT id FROM social_posts WHERE platform = 'telegram' AND brief_id = %s
+                    """, (result['id'],))
+                    if not cursor.fetchone():
+                        cursor.execute("""
+                            INSERT INTO social_posts
+                                (platform, post_type, platform_post_id, brief_id,
+                                 content_text, status, posted_at)
+                            VALUES ('telegram', 'newsletter_digest', %s, %s, %s, 'sent', NOW())
+                        """, (str(tg_result['message_id']), result['id'], tg_text))
+                        conn.commit()
+            except Exception as tg_err:
+                logger.error(f"Telegram auto-post failed: {tg_err}")
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+        # Send preview email
+        preview_sent = send_preview_email(
+            result['id'], newsletter_html, subject_line, approval_token
+        )
+
+        result['preview_sent'] = preview_sent
+        result['article_count'] = orch_result['article_count']
+        result['top_5_ids'] = orch_result['top_5_ids']
+        result['clusters_created'] = orch_result['clusters_created']
+        result['tweets_fetched'] = orch_result['tweets_fetched']
+
+        logger.info(f"Auto newsletter generated: {result['article_count']} articles, "
+                     f"{result['clusters_created']} clusters, preview_sent={preview_sent}")
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Auto newsletter generation error: {e}")
         raise HTTPException(500, f"Generation failed: {e}")
     finally:
         cursor.close()
@@ -413,6 +550,7 @@ def _build_newsletter_html(
     child_map: dict,
     target_date: str,
     sponsors: list = None,
+    tweet_map: dict = None,
 ) -> str:
     """Build the complete newsletter HTML with AI brief and all article sections.
     Techmeme-style layout: charcoal headlines, (Author / Source) attribution,
@@ -467,7 +605,11 @@ def _build_newsletter_html(
             f'border-bottom:3px solid #1a5276;padding-bottom:4px;margin-bottom:18px;'
             f'text-transform:uppercase;letter-spacing:1.5px">Top News</div>'
         )
+        _tweet_map = tweet_map or {}
         for a in top_stories:
+            # Inject tweets from tweet_map into article for rendering
+            if a['id'] in _tweet_map and not a.get('embedded_tweets'):
+                a['embedded_tweets'] = _tweet_map[a['id']]
             parts.append(_format_article_item(a, child_map.get(a['id'], []), is_top=True))
 
     # --- Sponsor block insertion logic ---
@@ -594,23 +736,43 @@ def _format_article_item(article: dict, children: list, is_top: bool = False) ->
     if children:
         html += '<div style="margin-top:10px;padding-left:4px">'
         for child in children:
-            child_text = child.get('summary') or child.get('headline_en') or child.get('headline') or ''
-            child_text = re.sub(r'<[^>]*>', '', child_text)
-            child_author = child.get('author') or ''
+            # Use child_summary (20-word angle) if available, otherwise full summary
+            child_angle = child.get('child_summary') or ''
             child_pub = child.get('publication_name') or ''
-            if child_author and child_pub:
-                child_attr = f' <span style="color:#999;font-size:13px;font-weight:400">({child_author} / {child_pub})</span>'
-            elif child_pub:
-                child_attr = f' <span style="color:#999;font-size:13px;font-weight:400">({child_pub})</span>'
+            child_label = child.get('cluster_label') or child.get('relationship') or ''
+
+            if child_angle and child_pub:
+                # Phase 2 format: "Publication: 20-word angle summary" with link
+                label_badge = ''
+                if child_label in ('CONTRARIAN', 'DIFFERENT_ANGLE'):
+                    label_color = '#c0392b' if child_label == 'CONTRARIAN' else '#2471a3'
+                    label_text = 'contrarian' if child_label == 'CONTRARIAN' else 'different angle'
+                    label_badge = f' <span style="font-size:11px;color:{label_color};font-weight:600;text-transform:uppercase">[{label_text}]</span>'
+                html += (
+                    f'<div style="margin-top:8px;font-size:14px;line-height:1.4">'
+                    f'&bull; <a href="{child["url"]}" style="color:#333;text-decoration:none">'
+                    f'<strong>{child_pub}</strong>: {child_angle}</a>'
+                    f'{label_badge}'
+                    f'</div>'
+                )
             else:
-                child_attr = ''
-            html += (
-                f'<div style="margin-top:8px;font-size:16px;line-height:1.4">'
-                f'&bull; <a href="{child["url"]}" style="font-family:{HEADLINE_FONT};color:#333;'
-                f'text-decoration:none;font-weight:700">{child_text}</a>'
-                f'{child_attr}'
-                f'</div>'
-            )
+                # Legacy format: full summary with attribution
+                child_text = child.get('summary') or child.get('headline_en') or child.get('headline') or ''
+                child_text = re.sub(r'<[^>]*>', '', child_text)
+                child_author = child.get('author') or ''
+                if child_author and child_pub:
+                    child_attr = f' <span style="color:#999;font-size:13px;font-weight:400">({child_author} / {child_pub})</span>'
+                elif child_pub:
+                    child_attr = f' <span style="color:#999;font-size:13px;font-weight:400">({child_pub})</span>'
+                else:
+                    child_attr = ''
+                html += (
+                    f'<div style="margin-top:8px;font-size:16px;line-height:1.4">'
+                    f'&bull; <a href="{child["url"]}" style="font-family:{HEADLINE_FONT};color:#333;'
+                    f'text-decoration:none;font-weight:700">{child_text}</a>'
+                    f'{child_attr}'
+                    f'</div>'
+                )
         html += '</div>'
 
     html += '</div>'
@@ -658,3 +820,57 @@ def _format_sponsor_block(sponsor: dict) -> str:
         f'</tr></table>'
         f'</div>'
     )
+
+
+# =========================================
+# PHASE 2: EMAIL APPROVAL WEBHOOK
+# =========================================
+
+@router.post("/inbound-webhook")
+def handle_approval_webhook(payload: PostmarkInboundPayload):
+    """
+    Postmark inbound webhook. Owner replies 'approved' to publish newsletter.
+    Verifies sender email matches OWNER_EMAIL.
+    """
+    # 1. Verify sender
+    sender_email = ""
+    if payload.FromFull and isinstance(payload.FromFull, dict):
+        sender_email = payload.FromFull.get('Email', '').lower()
+
+    if not OWNER_EMAIL or sender_email != OWNER_EMAIL.lower():
+        logger.warning(f"Webhook rejected: sender {sender_email} != {OWNER_EMAIL}")
+        return {"status": "rejected", "reason": "unauthorized sender"}
+
+    # 2. Check for "approved" in body
+    body = (payload.TextBody or '').lower()
+    if 'approved' not in body:
+        logger.info(f"Webhook received but no 'approved' keyword found")
+        return {"status": "ignored", "reason": "no approval keyword"}
+
+    # 3. Find the latest unpublished brief
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("""
+            SELECT id FROM daily_briefs
+            WHERE published = FALSE
+            ORDER BY generated_at DESC NULLS LAST, date DESC
+            LIMIT 1
+        """)
+        brief = cursor.fetchone()
+        if not brief:
+            return {"status": "ignored", "reason": "no unpublished brief found"}
+
+        brief_id = brief['id']
+        logger.info(f"Approval received for brief {brief_id}, publishing to Beehiiv...")
+
+        # 4. Publish
+        result = publish_to_beehiiv(brief_id)
+        return {"status": "published", "brief_id": brief_id, "beehiiv_post_id": result.beehiiv_post_id}
+
+    except Exception as e:
+        logger.error(f"Approval webhook error: {e}")
+        return {"status": "error", "reason": str(e)}
+    finally:
+        cursor.close()
+        conn.close()

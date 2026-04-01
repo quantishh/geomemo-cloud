@@ -279,6 +279,52 @@ def get_articles(
         conn.close()
 
 
+@router.get("/articles/country/{country_code}")
+def get_country_articles(
+    country_code: str,
+    days: int = Query(7, ge=1, le=30),
+    limit: int = Query(15, ge=1, le=50),
+):
+    """Country-specific news feed. Returns approved articles grouped by category."""
+    country_code = country_code.upper()
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute(f"""
+            SELECT {ARTICLE_COLUMNS}
+            FROM articles
+            WHERE status = 'approved'
+              AND %s = ANY(country_codes)
+              AND scraped_at >= NOW() - INTERVAL '{int(days)} days'
+            ORDER BY auto_approval_score DESC NULLS LAST, scraped_at DESC
+            LIMIT %s
+        """, (country_code, limit * 7))  # Fetch more, then cap per category
+
+        articles = [dict(row) for row in cursor.fetchall()]
+
+        # Group by category with per-category cap
+        categories = {}
+        for art in articles:
+            cat = art.get('category', 'Other')
+            if cat not in categories:
+                categories[cat] = []
+            if len(categories[cat]) < limit:
+                categories[cat].append(art)
+
+        return {
+            "country_code": country_code,
+            "days": days,
+            "total": sum(len(v) for v in categories.values()),
+            "categories": categories,
+        }
+    except Exception as e:
+        logger.error(f"Country feed error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.get("/articles/archive", response_model=List[Article])
 def get_archived_articles():
     conn = get_db_connection()

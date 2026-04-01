@@ -195,3 +195,24 @@ THINK_TANK_DOMAINS = [
 
 # Tier 3 rejection score
 KEYWORD_REJECT_SCORE = 35
+
+# --- Phase 2: Newsletter Orchestration ---
+
+# Postmark (email approval flow)
+POSTMARK_SERVER_TOKEN = os.getenv("POSTMARK_SERVER_TOKEN", "")
+POSTMARK_FROM_EMAIL = os.getenv("POSTMARK_FROM_EMAIL", "newsletter@geomemo.news")
+OWNER_EMAIL = os.getenv("OWNER_EMAIL", "")
+
+# Newsletter category caps (max articles per category in top 40)
+NEWSLETTER_CATEGORY_CAPS = {
+    "Geopolitical Conflict": 8,
+    "Geopolitical Economics": 8,
+    "Global Markets": 6,
+    "International Relations": 6,
+    "Geopolitical Politics": 5,
+    "GeoNatDisaster": 4,
+    "GeoLocal": 3,
+}
+NEWSLETTER_TOTAL = 40
+TOP_NEWS_COUNT = 5
+TOP_TWEETS_PER_ARTICLE = 4
