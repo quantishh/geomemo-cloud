@@ -10,6 +10,28 @@ from groq import Groq
 from sentence_transformers import SentenceTransformer
 from pgvector.psycopg2 import register_vector
 from psycopg2 import InternalError
+import requests as http_requests
+from urllib.parse import urlparse
+
+# Full content extraction
+try:
+    import trafilatura
+except ImportError:
+    trafilatura = None
+    logging.warning("trafilatura not installed. Full content extraction will be skipped.")
+
+# Anthropic (Haiku summaries)
+try:
+    import anthropic as anthropic_sdk
+    _anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    anthropic_client = anthropic_sdk.Anthropic(api_key=_anthropic_key) if _anthropic_key else None
+    if anthropic_client:
+        logging.info("Anthropic client initialized for Haiku summaries.")
+    else:
+        logging.warning("ANTHROPIC_API_KEY not set. Haiku summaries disabled.")
+except ImportError:
+    anthropic_client = None
+    logging.warning("anthropic package not installed. Haiku summaries disabled.")
 
 # Optional: pycountry for ISO country code resolution
 try:
@@ -264,7 +286,8 @@ class GeomemoDatabasePipeline:
 
         self.categories_list = [
             'Geopolitical Conflict', 'Geopolitical Economics', 'Global Markets',
-            'Geopolitical Politics', 'GeoNatDisaster', 'GeoLocal', 'Other'
+            'Geopolitical Politics', 'International Relations', 'GeoNatDisaster',
+            'GeoLocal', 'Other'
         ]
         self.valid_categories_set = set(self.categories_list)
         self.embedding_model = embedding_model
@@ -312,65 +335,285 @@ class GeomemoDatabasePipeline:
         self.logger.info("Database connection closed")
 
     # =========================================
-    # GROQ CLASSIFICATION (M2: + country extraction)
+    # PHASE 1: FULL CONTENT EXTRACTION
     # =========================================
 
-    def _get_groq_completion(self, headline: str, content_snippet: str) -> dict:
+    def _fetch_full_content(self, url: str, publication_name: str = None) -> tuple:
         """
-        Sends the article to Groq (Llama 3) for classification.
-        M2: Now also extracts country names from the article.
+        Fetch full article content. Returns (content_text, content_source).
+        content_source: 'direct', 'webunlocker', or 'rss_only'
         """
-        system_prompt = f"""
-You are a top-tier geopolitical analyst for 'GeoMemo'.
-Your goal is to curate high-value geopolitical news.
+        if not trafilatura:
+            return None, 'rss_only'
 
-INSTRUCTION:
-Judge this article STRICTLY based on the definitions below.
-Do not use previous rejections as a guide. If it fits a category, approve it.
+        # Check if think tank domain (always use WebUnlocker)
+        is_think_tank = False
+        try:
+            domain = urlparse(url).netloc.lower()
+            think_tank_domains = [
+                "chathamhouse.org", "rusi.org", "csis.org", "brookings.edu",
+                "cfr.org", "rand.org", "carnegieendowment.org", "atlanticcouncil.org",
+                "iiss.org", "piie.com", "foreignaffairs.com", "crisisgroup.org",
+                "sipri.org", "wilsoncenter.org", "stimson.org",
+            ]
+            is_think_tank = any(td in domain for td in think_tank_domains)
+        except Exception:
+            pass
 
-STEP 1: Analyze relevance based on these rules:
-- `Geopolitical Conflict`: War, civil war, terrorism, defense pacts.
-- `Geopolitical Politics`: NATIONAL elections/outcomes, diplomatic tensions.
-- `GeoNatDisaster`: MAJOR climate disasters with international aid/impact.
-- `Geopolitical Economics`: Trade wars, sanctions, economic pacts (EU, BRICS, etc).
-- `Global Markets`: Major stock/commodity/currency moves driven by policy.
-- `GeoLocal`: Local event with INTERNATIONAL implications.
+        # Step 1: Try direct HTTP fetch (unless think tank)
+        if not is_think_tank:
+            try:
+                resp = http_requests.get(url, timeout=10, headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; GeoMemoBot/2.0)"
+                })
+                if resp.status_code == 200:
+                    extracted = trafilatura.extract(resp.text, include_comments=False)
+                    if extracted and len(extracted) >= 500:
+                        return extracted[:15000], 'direct'
+            except Exception as e:
+                self.logger.debug(f"Direct fetch failed for {url[:60]}: {e}")
 
-STEP 2: Assign a CONFIDENCE SCORE (0-100).
-- High Score (80-100): Fits the rules clearly.
-- Low Score (0-30): Sports, Celebrity Gossip, Local Crime, or minor local news.
+        # Step 2: Fallback to BrightData WebUnlocker
+        try:
+            api_key = os.getenv("BRIGHTDATA_WEBUNLOCKER_API_KEY", "")
+            api_password = os.getenv("BRIGHTDATA_WEBUNLOCKER_PASSWORD", "")
+            if not api_key:
+                return None, 'rss_only'
 
-STEP 3: Extract ALL countries mentioned or implied in the headline and content.
-Return their common English names (e.g., "United States", "China", "Russia").
-If no specific country is mentioned, return an empty list.
+            resp = http_requests.post(
+                "https://brd.superproxy.io/api/v1/web_unlocker",
+                json={"url": url, "format": "raw"},
+                auth=(api_key, api_password),
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                extracted = trafilatura.extract(resp.text, include_comments=False)
+                if extracted and len(extracted) >= 200:
+                    return extracted[:15000], 'webunlocker'
+        except Exception as e:
+            self.logger.debug(f"WebUnlocker failed for {url[:60]}: {e}")
 
-STEP 4: Output valid JSON:
-{{
-    "is_relevant": "yes/no",
-    "confidence_score": <integer 0-100>,
-    "headline_en": "Formal English Headline",
-    "summary": "2-3 sentence news summary (40-60 words). Authoritative analytical tone for investment bankers. Sentence 1: core development with specific actors. Sentence 2: quantify with numbers/figures from the article. ONLY add a 3rd sentence if the article contains a concrete forward-looking fact (a date, deadline, vote, named action). NEVER end with speculative 'this may impact...' or 'this could lead to...' statements. NEVER invent details. Every sentence must contain a verifiable fact. English only.",
-    "summary_long": "100-word analytical summary for social media. Sentence 1-2: what happened with specific actors and figures. Sentence 3-4: quantified impact with numbers, dollar amounts, percentages. Sentence 5: ONLY if a concrete next step exists (scheduled date, named action, deadline). NEVER end with vague 'this may impact...' or 'this could affect...' statements. ONLY use facts from the provided content. NEVER invent or hallucinate details. Do NOT include dates of publication. English only.",
-    "category": "Category Name",
-    "countries": ["Country1", "Country2"]
-}}
-"""
-        user_prompt = f"""
---- NEW ARTICLE ---
-Headline: "{headline}"
-Content: "{content_snippet}"
-"""
+        return None, 'rss_only'
+
+    # =========================================
+    # PHASE 1: THREE-TIER PRE-FILTERING
+    # =========================================
+
+    def _keyword_check(self, headline: str, full_content: str) -> bool:
+        """Tier 3: Returns True if at least one geopolitical keyword matches."""
+        text = (headline + " " + (full_content or "")).lower()
+        geo_keywords = {
+            "conflict": ["war", "military", "troops", "missile", "bombing", "ceasefire",
+                         "invasion", "insurgency", "coup", "airstrike", "drone strike",
+                         "artillery", "combat", "siege", "occupation"],
+            "diplomacy": ["sanctions", "embargo", "treaty", "summit", "diplomatic",
+                          "ambassador", "bilateral", "multilateral", "peace talks",
+                          "foreign minister"],
+            "economics": ["tariff", "trade war", "gdp", "inflation", "central bank",
+                          "currency", "debt crisis", "recession", "fiscal policy",
+                          "monetary policy", "interest rate", "deficit"],
+            "markets": ["stock market", "commodity", "oil price", "forex", "bond",
+                        "equity", "market crash", "rally", "crude oil", "gold price",
+                        "dow jones", "nasdaq"],
+            "politics": ["election", "parliament", "legislation", "referendum",
+                         "coalition", "opposition", "regime", "constitutional",
+                         "impeachment", "political crisis"],
+            "security": ["nuclear", "cybersecurity", "espionage", "intelligence",
+                         "defense pact", "arms deal", "weapons", "ballistic",
+                         "hypersonic", "submarine", "aircraft carrier"],
+            "energy": ["opec", "oil price", "pipeline", "lng", "energy security",
+                       "renewable", "natural gas", "petroleum", "refinery",
+                       "strait of hormuz", "energy crisis"],
+            "disaster": ["earthquake", "hurricane", "tsunami", "flood", "wildfire",
+                         "drought", "famine", "climate change", "crop failure",
+                         "climate migration", "displacement"],
+            "institutions": ["nato", "united nations", "european union", "african union",
+                             "brics", "asean", "g7", "g20", "imf", "world bank",
+                             "wto", "iaea", "who", "icc", "icj"],
+        }
+        for kw_list in geo_keywords.values():
+            for kw in kw_list:
+                if kw in text:
+                    return True
+        return False
+
+    def _entity_check(self, headline: str) -> bool:
+        """Tier 1: Returns True if headline contains a high-value entity."""
+        headline_lower = headline.lower()
+        entities = [
+            "un security council", "nato", "g7", "g20", "brics", "european union", "asean",
+            "imf", "world bank", "federal reserve", "ecb", "opec",
+            "biden", "trump", "xi jinping", "putin", "modi", "macron", "scholz",
+            "zelenskyy", "zelensky", "kim jong un", "erdogan", "netanyahu",
+            "pentagon", "kremlin", "white house", "state department",
+            "icc", "icj", "who", "wto", "iaea",
+            "strait of hormuz", "south china sea", "taiwan strait",
+            "nuclear weapons", "ballistic missile",
+        ]
+        return any(entity in headline_lower for entity in entities)
+
+    # =========================================
+    # PHASE 1: Q1-Q5 MULTI-CRITERIA CLASSIFICATION
+    # =========================================
+
+    def _get_groq_classification(self, headline: str, content_snippet: str) -> dict:
+        """
+        Q1-Q5 multi-criteria classification via Groq.
+        Returns dict with q1-q5 answers, category, countries, headline_en.
+        NO summary generation — that is handled by Haiku separately.
+        """
+        system_prompt = """You are a geopolitical intelligence analyst for GeoMemo.
+Evaluate this article on 5 independent criteria. Answer YES or NO for each.
+
+Q1 - GEOPOLITICAL SIGNIFICANCE: Does this describe a significant geopolitical development?
+  Significant = new policy, military escalation/de-escalation, treaty, regime change,
+  sanctions, territorial dispute, alliance shift, election outcome with policy implications,
+  major natural disaster at national scale.
+  NOT significant = routine daily casualties in ongoing conflict, courtesy diplomatic calls
+  with no outcome, incremental updates, local crime, celebrity, sports, entertainment.
+
+Q2 - GLOBAL ECONOMIC IMPACT: Does this directly affect international trade, commodity markets,
+  supply chains, currency markets, central bank policy, or macroeconomic conditions?
+
+Q3 - NOVELTY: Does this contain genuinely NEW information?
+  New = first report of an event, escalation, new actor entering, quantified impact,
+  policy reversal, breakthrough in negotiations.
+  NOT new = rehash of yesterday's news, "conflict continues" updates, opinion/editorial
+  about known events, routine status reports.
+
+Q4 - DECISION-MAKER RELEVANCE: Would a US/European/Asian government official, institutional
+  investor, or multinational business leader need to know this for decisions?
+
+Q5 - ANALYTICAL DEPTH: Does the article provide data, named sources, expert analysis,
+  historical context, or quantified impact (not just bare facts from a wire report)?
+
+Also extract:
+- category: one of [Geopolitical Conflict, Geopolitical Economics, Global Markets, International Relations, Geopolitical Politics, GeoNatDisaster, GeoLocal, Other]
+- countries: list of country names mentioned or implied
+- headline_en: formal English translation of headline (keep original if already English)
+
+Return valid JSON:
+{"q1": "YES or NO", "q2": "YES or NO", "q3": "YES or NO", "q4": "YES or NO", "q5": "YES or NO", "category": "...", "countries": [...], "headline_en": "..."}"""
+
+        user_prompt = f'Headline: "{headline}"\nContent: "{content_snippet[:3000]}"'
+
         try:
             chat_completion = groq_client.chat.completions.create(
-                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
                 model="llama-3.3-70b-versatile",
                 temperature=0.0,
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
             )
             return json.loads(chat_completion.choices[0].message.content)
         except Exception as e:
-            self.logger.error(f"Groq API error: {e}")
+            self.logger.error(f"Groq Q1-Q5 API error: {e}")
             raise DropItem(f"Groq API failed: {e}")
+
+    def _derive_score_from_qs(self, q_data: dict) -> tuple:
+        """
+        Derive individual Q scores and composite from Q1-Q5 answers.
+        Returns (significance, impact, novelty_v2, relevance_v2, depth, q_composite).
+        """
+        def yn(key):
+            return 1 if str(q_data.get(key, "NO")).upper().startswith("YES") else 0
+
+        significance = yn("q1")
+        impact = yn("q2")
+        novelty = yn("q3")
+        relevance = yn("q4")
+        depth = yn("q5")
+
+        q_composite = (
+            significance * 30 +
+            impact * 25 +
+            novelty * 20 +
+            relevance * 20 +
+            depth * 5
+        )
+
+        return significance, impact, novelty, relevance, depth, q_composite
+
+    # =========================================
+    # PHASE 1: HAIKU SUMMARY GENERATION
+    # =========================================
+
+    def _generate_haiku_summary(self, headline: str, full_content: str) -> str:
+        """Generate a context-free 50-word summary using Claude Haiku."""
+        if not anthropic_client:
+            return None
+
+        try:
+            message = anthropic_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=120,
+                messages=[{
+                    "role": "user",
+                    "content": f"""Summarize this news article in 50 words or fewer.
+Authoritative analytical tone for investment professionals.
+Sentence 1: Core development with specific actors and facts.
+Sentence 2: Key implication or quantified impact.
+Do NOT speculate. Do NOT add information not in the source. English only.
+
+Headline: {headline}
+Article: {(full_content or '')[:4000]}"""
+                }]
+            )
+            return message.content[0].text.strip()
+        except Exception as e:
+            self.logger.warning(f"Haiku summary failed: {e}")
+            return None
+
+    def _validate_summary_consistency(self, summary: str, article_text: str) -> bool:
+        """Validate summary via embedding cosine similarity (threshold 0.5)."""
+        try:
+            import numpy as np
+            summary_emb = self.embedding_model.encode(summary)
+            article_emb = self.embedding_model.encode(article_text[:1000])
+            sim = float(np.dot(summary_emb, article_emb) / (
+                np.linalg.norm(summary_emb) * np.linalg.norm(article_emb)
+            ))
+            if sim < 0.5:
+                self.logger.warning(f"Summary consistency low: {sim:.3f}")
+                return False
+            return True
+        except Exception:
+            return True  # Fail open
+
+    # =========================================
+    # PHASE 1: REJECTED ARTICLE INSERT (analytics)
+    # =========================================
+
+    def _insert_rejected_article(self, adapter, score, content_source, full_content):
+        """Insert a keyword-rejected article with minimal data for analytics."""
+        try:
+            pub_name = adapter.get('publication_name')
+            source_id = adapter.get('source_id') or self._lookup_or_create_source(pub_name)
+            self.cursor.execute(
+                """INSERT INTO articles
+                   (url, headline, publication_name, author, status, scraped_at,
+                    auto_approval_score, confidence_score, source_id,
+                    content_source, full_content)
+                   VALUES (%s, %s, %s, %s, 'rejected', NOW(), %s, %s, %s, %s, %s)
+                   ON CONFLICT (url) DO NOTHING""",
+                (adapter['url'], adapter['headline'], pub_name,
+                 adapter.get('author'), score, score, source_id,
+                 content_source, full_content)
+            )
+            self.connection.commit()
+        except Exception as e:
+            self.connection.rollback()
+            self.logger.debug(f"Rejected article insert failed: {e}")
+
+    # =========================================
+    # LEGACY: Original Groq completion (kept for backward compat)
+    # =========================================
+
+    def _get_groq_completion(self, headline: str, content_snippet: str) -> dict:
+        """Legacy method — redirects to new Q1-Q5 classification."""
+        return self._get_groq_classification(headline, content_snippet)
 
     # =========================================
     # M2: SCORING HELPER METHODS
@@ -603,7 +846,7 @@ Content: "{content_snippet}"
         self.seen_urls.add(adapter['url'])
 
         headline = adapter['headline']
-        content_snippet = adapter.get('description', '') or ""
+        rss_description = adapter.get('description', '') or ""
         publication_name = adapter.get('publication_name')
 
         # Normalize non-English source names to English
@@ -614,81 +857,109 @@ Content: "{content_snippet}"
         self.logger.info(f"Processing: '{headline}'")
 
         try:
-            # 1. Ask Groq FIRST (M2: includes country extraction)
-            processed_data = self._get_groq_completion(headline, content_snippet)
+            # === STEP 1: Full Content Extraction ===
+            full_content, content_source = self._fetch_full_content(
+                adapter['url'], publication_name
+            )
+            content_for_analysis = full_content or rss_description
 
-            # 2. Check Relevance
-            if processed_data.get("is_relevant") == "no":
-                self.logger.info(f"DROPPED (Irrelevant): '{headline}' (Score: {processed_data.get('confidence_score', 0)})")
-                raise DropItem(f"Irrelevant: {headline}")
+            # === STEP 2: Tier 3 — Keyword Pre-Filter ===
+            if not self._keyword_check(headline, content_for_analysis):
+                self.logger.info(f"DROPPED (Tier 3 keyword reject): '{headline[:60]}'")
+                self._insert_rejected_article(adapter, 35, content_source, full_content)
+                raise DropItem(f"Keyword reject: {headline}")
 
-            # 3. Assign Data from Groq
-            adapter['headline_en'] = processed_data.get('headline_en', headline)
-            adapter['summary'] = processed_data.get('summary', 'No summary.')
-            adapter['summary_long'] = processed_data.get('summary_long', adapter['summary'])
+            # === STEP 3: Tier 1 — Entity Auto-Include Check ===
+            entity_auto_include = self._entity_check(headline)
 
-            # 4. Generate Embedding AFTER Groq — use English headline + AI summary
-            #    for accurate cross-language similarity matching
-            text_to_embed = f"Headline: {adapter['headline_en']}\nSummary: {adapter['summary']}"
-            embedding = self.embedding_model.encode(text_to_embed).tolist()
-            adapter['embedding'] = embedding
-            adapter['category'] = processed_data.get('category', 'Other')
-            adapter['confidence_score'] = processed_data.get('confidence_score', 50)
+            # === STEP 4: Q1-Q5 Classification via Groq ===
+            q_data = self._get_groq_classification(headline, content_for_analysis)
 
+            adapter['headline_en'] = q_data.get('headline_en', headline)
+            adapter['category'] = q_data.get('category', 'Other')
             if adapter['category'] not in self.valid_categories_set:
                 adapter['category'] = 'Other'
 
-            # 5. M2: Resolve country codes from Groq response
-            country_names = processed_data.get('countries', [])
+            # Derive Q scores
+            sig, impact, novelty_v2, rel_v2, depth, q_composite = self._derive_score_from_qs(q_data)
+
+            # Override for entity auto-includes
+            if entity_auto_include:
+                q_composite = max(q_composite, 75)
+
+            # === STEP 5: Generate Embedding ===
+            text_to_embed = f"Headline: {adapter['headline_en']}\nContent: {(content_for_analysis or '')[:500]}"
+            embedding = self.embedding_model.encode(text_to_embed).tolist()
+            adapter['embedding'] = embedding
+
+            # Map Q-composite to confidence_score for backward compatibility
+            adapter['confidence_score'] = q_composite
+
+            # === STEP 6: Repetition, Credibility, Novelty (existing M2) ===
+            repetition_score = self._compute_repetition_score(embedding)
+            source_credibility = self._get_source_credibility(publication_name)
+            novelty_score = self._compute_novelty_score(embedding)
+
+            # === STEP 7: Composite Auto-Approval Score ===
+            auto_approval_score = round(
+                q_composite * 0.70 +
+                source_credibility * 0.20 +
+                novelty_score * 0.10,
+                2
+            )
+
+            # === STEP 8: Haiku Summary (only for high-scoring articles) ===
+            summary = None
+            if auto_approval_score >= 75:
+                summary = self._generate_haiku_summary(
+                    adapter['headline_en'], content_for_analysis
+                )
+                if summary and not self._validate_summary_consistency(summary, content_for_analysis):
+                    # Retry once on consistency failure
+                    summary = self._generate_haiku_summary(
+                        adapter['headline_en'], content_for_analysis
+                    )
+
+            if not summary:
+                # Fallback: use RSS description or a placeholder
+                summary = rss_description[:200] if rss_description else "Pending review."
+
+            adapter['summary'] = summary
+            adapter['summary_long'] = summary
+
+            # === STEP 9: Countries, Source, OG Image (unchanged) ===
+            country_names = q_data.get('countries', [])
             if not isinstance(country_names, list):
                 country_names = []
             country_codes, region = self._resolve_country_codes(country_names)
 
-            # 6. M2: Compute repetition score (against ALL articles in 48h)
-            repetition_score = self._compute_repetition_score(embedding)
-
-            # 7. M2: Look up source credibility
-            source_credibility = self._get_source_credibility(publication_name)
-
-            # 8. M2: Compute novelty (against APPROVED articles in 48h)
-            novelty_score = self._compute_novelty_score(embedding)
-
-            # 9. M2: Compute composite auto-approval score
-            auto_approval_score = self._compute_auto_approval_score(
-                adapter['confidence_score'],
-                source_credibility,
-                novelty_score,
-                adapter['category']
-            )
-
-            # 10. M2: Look up or auto-create source_id
-            # Use pre-resolved source_id from DB-loaded feeds if available
             source_id = adapter.get('source_id') or self._lookup_or_create_source(publication_name)
 
-            # 11. OG Image: use RSS-extracted image, or fetch from article URL
             og_image = adapter.get('og_image')
             if not og_image:
                 og_image = self._fetch_og_image(adapter['url'])
-            if og_image:
-                self.logger.info(f"OG Image: {og_image[:80]}")
 
             self.logger.info(
-                f"Scored: '{headline}' | Confidence: {adapter['confidence_score']} | "
-                f"Credibility: {source_credibility} | Novelty: {novelty_score:.1f} | "
-                f"Repetition: {repetition_score:.3f} | Auto: {auto_approval_score} | "
-                f"Countries: {country_codes}"
+                f"Scored: '{headline[:60]}' | Q:{q_composite} Auto:{auto_approval_score} | "
+                f"Src:{content_source} | Q1:{sig} Q2:{impact} Q3:{novelty_v2} "
+                f"Q4:{rel_v2} Q5:{depth} | Entity:{entity_auto_include} | "
+                f"Countries:{country_codes}"
             )
 
-            # 12. Save to DB (expanded INSERT with og_image)
+            # === STEP 10: INSERT with expanded columns ===
             self.cursor.execute(
                 """
                 INSERT INTO articles
                 (url, headline, publication_name, author, headline_en, summary,
                  summary_long, category, status, scraped_at, embedding, confidence_score,
                  source_id, repetition_score, auto_approval_score,
-                 country_codes, region, og_image)
+                 country_codes, region, og_image,
+                 full_content, content_source,
+                 significance_score, impact_score, novelty_score_v2,
+                 relevance_score_v2, depth_score)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', NOW(), %s, %s,
-                        %s, %s, %s, %s, %s, %s)
+                        %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (url) DO NOTHING
                 """,
                 (
@@ -699,7 +970,9 @@ Content: "{content_snippet}"
                     adapter['embedding'], adapter['confidence_score'],
                     source_id, repetition_score, auto_approval_score,
                     country_codes if country_codes else None,
-                    region, og_image
+                    region, og_image,
+                    full_content, content_source,
+                    sig, impact, novelty_v2, rel_v2, depth,
                 )
             )
             self.connection.commit()
@@ -707,7 +980,6 @@ Content: "{content_snippet}"
         except DropItem as e:
             raise e
         except Exception as e:
-            # Rollback on any other error to keep connection alive
             self.connection.rollback()
             self.logger.error(f"Error processing '{headline}': {e}")
             raise DropItem(f"Processing failed: {item['url']}")

@@ -42,7 +42,8 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
 # --- Article Categories ---
 VALID_CATEGORIES = [
     'Geopolitical Conflict', 'Geopolitical Economics', 'Global Markets',
-    'Geopolitical Politics', 'GeoNatDisaster', 'GeoLocal', 'Other'
+    'Geopolitical Politics', 'International Relations', 'GeoNatDisaster',
+    'GeoLocal', 'Other'
 ]
 VALID_CATEGORIES_SET = set(VALID_CATEGORIES)
 
@@ -70,14 +71,24 @@ CATEGORY_RELEVANCE_BONUS = {
 REPETITION_THRESHOLD = 0.85
 
 # Auto-approve/reject score thresholds (defaults, overridable via API)
-AUTO_APPROVE_THRESHOLD = 80
-AUTO_REJECT_THRESHOLD = 30
+AUTO_APPROVE_THRESHOLD = 75
+AUTO_REJECT_THRESHOLD = 40
 
 # Default source credibility for unknown sources
 DEFAULT_SOURCE_CREDIBILITY = 50
 
 # --- BrightData Proxy (for Scrapy scraping) ---
 BRIGHTDATA_PROXY_URL = os.getenv("BRIGHTDATA_PROXY_URL", "")
+
+# --- BrightData WebUnlocker (full content extraction) ---
+BRIGHTDATA_WEBUNLOCKER_API_KEY = os.getenv("BRIGHTDATA_WEBUNLOCKER_API_KEY", "")
+BRIGHTDATA_WEBUNLOCKER_PASSWORD = os.getenv("BRIGHTDATA_WEBUNLOCKER_PASSWORD", "")
+
+# --- SERP API (Google News search) ---
+SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
+
+# --- Anthropic API (Haiku summaries) ---
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 # --- Google Custom Search API (for event discovery) ---
 GOOGLE_CSE_API_KEY = os.getenv("GOOGLE_CSE_API_KEY", "")
@@ -114,3 +125,73 @@ DRIP_LOOKBACK_HOURS = int(os.getenv("DRIP_LOOKBACK_HOURS", "24"))
 
 # Auto-post newsletter digest to Telegram after generation
 SOCIAL_AUTO_POST_NEWSLETTER = os.getenv("SOCIAL_AUTO_POST_NEWSLETTER", "true").lower() == "true"
+
+# --- Phase 1: Pipeline Overhaul ---
+
+# Q1-Q5 score points (max composite = 100)
+Q_SCORE_POINTS = {
+    "Q1_significance": 30,
+    "Q2_impact": 25,
+    "Q3_novelty": 20,
+    "Q4_relevance": 20,
+    "Q5_depth_bonus": 5,
+}
+
+# Composite blending weights
+Q_COMPOSITE_WEIGHT = 0.70
+CREDIBILITY_WEIGHT = 0.20
+NOVELTY_WEIGHT = 0.10
+
+# Tier 3: Keyword pre-filtering (zero overlap = auto-reject)
+GEOPOLITICAL_KEYWORDS = {
+    "conflict": ["war", "military", "troops", "missile", "bombing", "ceasefire",
+                 "invasion", "insurgency", "coup", "airstrike", "drone strike",
+                 "artillery", "combat", "siege", "occupation", "guerrilla"],
+    "diplomacy": ["sanctions", "embargo", "treaty", "summit", "diplomatic",
+                  "ambassador", "bilateral", "multilateral", "peace talks",
+                  "ceasefire agreement", "diplomatic relations", "foreign minister"],
+    "economics": ["tariff", "trade war", "gdp", "inflation", "central bank",
+                  "currency", "debt crisis", "recession", "fiscal policy",
+                  "monetary policy", "interest rate", "bond yield", "deficit"],
+    "markets": ["stock market", "commodity", "oil price", "forex", "bond",
+                "equity", "index fund", "market crash", "rally", "volatility",
+                "crude oil", "gold price", "dow jones", "s&p 500", "nasdaq"],
+    "politics": ["election", "parliament", "legislation", "referendum",
+                 "coalition", "opposition", "regime", "constitutional",
+                 "impeachment", "political crisis", "government formation"],
+    "security": ["nuclear", "cybersecurity", "espionage", "intelligence",
+                 "defense pact", "arms deal", "weapons", "ballistic",
+                 "hypersonic", "submarine", "aircraft carrier", "deterrence"],
+    "energy": ["opec", "oil price", "pipeline", "lng", "energy security",
+               "renewable", "natural gas", "petroleum", "refinery",
+               "strait of hormuz", "energy crisis", "power grid"],
+    "disaster": ["earthquake", "hurricane", "tsunami", "flood", "wildfire",
+                 "drought", "famine", "climate change", "sea level",
+                 "crop failure", "climate migration", "displacement"],
+    "institutions": ["nato", "united nations", "european union", "african union",
+                     "brics", "asean", "g7", "g20", "imf", "world bank",
+                     "wto", "iaea", "who", "icc", "icj"],
+}
+
+# Tier 1: High-value entities (headline match = auto-include)
+HIGH_VALUE_ENTITIES = [
+    "un security council", "nato", "g7", "g20", "brics", "european union", "asean",
+    "imf", "world bank", "federal reserve", "ecb", "opec",
+    "biden", "trump", "xi jinping", "putin", "modi", "macron", "scholz",
+    "zelenskyy", "zelensky", "kim jong un", "erdogan", "netanyahu",
+    "pentagon", "kremlin", "white house", "state department",
+    "icc", "icj", "who", "wto", "iaea",
+    "strait of hormuz", "south china sea", "taiwan strait",
+    "nuclear weapons", "ballistic missile",
+]
+
+# Think tank domains that require WebUnlocker (JS-rendered)
+THINK_TANK_DOMAINS = [
+    "chathamhouse.org", "rusi.org", "csis.org", "brookings.edu",
+    "cfr.org", "rand.org", "carnegieendowment.org", "atlanticcouncil.org",
+    "iiss.org", "piie.com", "foreignaffairs.com", "crisisgroup.org",
+    "sipri.org", "isdglobal.org", "wilsoncenter.org", "stimson.org",
+]
+
+# Tier 3 rejection score
+KEYWORD_REJECT_SCORE = 35

@@ -176,6 +176,28 @@ def init_db():
             );
         """)
 
+        # --- Forum discussions table (Phase 1: Pipeline Overhaul) ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS forum_discussions (
+                id SERIAL PRIMARY KEY,
+                url TEXT UNIQUE,
+                title TEXT,
+                forum_name TEXT,
+                author TEXT,
+                content TEXT,
+                full_content TEXT,
+                category TEXT,
+                significance_score INTEGER DEFAULT 0,
+                embedding vector(384),
+                scraped_at TIMESTAMPTZ DEFAULT NOW(),
+                status TEXT DEFAULT 'pending',
+                article_id INTEGER REFERENCES articles(id),
+                platform TEXT,
+                upvotes INTEGER DEFAULT 0,
+                subreddit TEXT
+            );
+        """)
+
         # --- Migrations (safe ADD COLUMN IF NOT EXISTS) ---
         migrations = [
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS parent_id INTEGER",
@@ -232,6 +254,25 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_articles_events_extracted ON articles (events_extracted)",
             # Google Search event discovery
             "ALTER TABLE events ADD COLUMN IF NOT EXISTS source_query TEXT",
+            # --- Phase 1: Pipeline Overhaul (April 2026) ---
+            # Full content extraction
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS full_content TEXT",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_source TEXT",
+            # Clustering
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS cluster_id INTEGER",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS cluster_role TEXT",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS cluster_label TEXT",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS child_summary TEXT",
+            # Q1-Q5 multi-criteria scores
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS significance_score INTEGER DEFAULT 0",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS impact_score INTEGER DEFAULT 0",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS novelty_score_v2 INTEGER DEFAULT 0",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS relevance_score_v2 INTEGER DEFAULT 0",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS depth_score INTEGER DEFAULT 0",
+            # Source type classification
+            "ALTER TABLE sources ADD COLUMN IF NOT EXISTS source_type TEXT",
+            # Cluster index
+            "CREATE INDEX IF NOT EXISTS idx_articles_cluster_id ON articles (cluster_id)",
         ]
         for sql in migrations:
             try:

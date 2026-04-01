@@ -73,7 +73,9 @@ ARTICLE_COLUMNS = """
     summary, category, status, publication_name, author, scraped_at,
     is_top_story, confidence_score, parent_id,
     source_id, relevance_score, repetition_score, auto_approval_score,
-    country_codes, region, og_image, embedded_tweets, website_tweets
+    country_codes, region, og_image, embedded_tweets, website_tweets,
+    content_source, cluster_id, cluster_role, cluster_label, child_summary,
+    significance_score, impact_score, novelty_score_v2, relevance_score_v2, depth_score
 """
 
 

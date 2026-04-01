@@ -30,6 +30,18 @@ class Article(BaseModel):
     region: Optional[str] = None
     og_image: Optional[str] = None
     embedded_tweets: Optional[list] = None
+    website_tweets: Optional[list] = None
+    full_content: Optional[str] = None
+    content_source: Optional[str] = None
+    cluster_id: Optional[int] = None
+    cluster_role: Optional[str] = None
+    cluster_label: Optional[str] = None
+    child_summary: Optional[str] = None
+    significance_score: Optional[int] = 0
+    impact_score: Optional[int] = 0
+    novelty_score_v2: Optional[int] = 0
+    relevance_score_v2: Optional[int] = 0
+    depth_score: Optional[int] = 0
 
 
 class StatusUpdate(BaseModel):
@@ -42,11 +54,11 @@ class BatchStatusUpdate(BaseModel):
 
 
 class AutoApproveRequest(BaseModel):
-    threshold: float = 80.0
+    threshold: float = 75.0
 
 
 class AutoRejectRequest(BaseModel):
-    threshold: float = 30.0
+    threshold: float = 40.0
 
 
 class CategoryUpdate(BaseModel):
