@@ -106,6 +106,50 @@ export async function fetchPodcasts() {
   }
 }
 
+export async function fetchCountryArticles(countryCode, days = 7, limit = 15) {
+  try {
+    const res = await fetch(
+      `${API_URL}/articles/country/${countryCode}?days=${days}&limit=${limit}`,
+      { cache: 'no-store' }
+    );
+    if (!res.ok) return { country_code: countryCode, total: 0, categories: {} };
+    return res.json();
+  } catch (error) {
+    console.error(`Failed to fetch country articles for ${countryCode}:`, error);
+    return { country_code: countryCode, total: 0, categories: {} };
+  }
+}
+
+export async function fetchCountryList() {
+  try {
+    const res = await fetch(
+      `${API_URL}/articles?status=approved&days=7&sort_by=auto_approval_score&order=desc&limit=500`,
+      { cache: 'no-store' }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    const articles = data.articles || data;
+
+    // Build country map from country_codes
+    const countryMap = {};
+    for (const art of articles) {
+      const codes = art.country_codes || [];
+      for (const code of codes) {
+        if (!countryMap[code]) countryMap[code] = { code, count: 0 };
+        countryMap[code].count++;
+      }
+    }
+
+    // Return sorted by article count
+    return Object.values(countryMap)
+      .filter(c => c.count >= 2)
+      .sort((a, b) => b.count - a.count);
+  } catch (error) {
+    console.error('Failed to fetch country list:', error);
+    return [];
+  }
+}
+
 export async function fetchNewsletterArchive() {
   try {
     const res = await fetch(`${API_URL}/newsletter/archive`, {
