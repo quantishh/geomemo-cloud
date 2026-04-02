@@ -279,6 +279,29 @@ def get_articles(
         conn.close()
 
 
+@router.post("/articles/run-scoring")
+def run_scoring_pipeline(
+    limit: int = Query(500, ge=1, le=5000),
+):
+    """
+    Pass 2: Score all unscored articles.
+    Runs Q1-Q5 classification, Haiku summaries, embeddings, composite scoring.
+    Call this AFTER the scraper finishes.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        from services.scoring_pipeline import score_unscored_articles
+        result = score_unscored_articles(cursor, limit=limit)
+        return result
+    except Exception as e:
+        logger.error(f"Scoring pipeline error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.get("/articles/{article_id}/forums")
 def get_article_forums(article_id: int):
     """Fetch forum discussions for an article from Google Discussions via SerpAPI."""

@@ -864,6 +864,12 @@ Use ONLY what is provided. English only.
     # =========================================
 
     def process_item(self, item, spider):
+        """
+        PASS 1: Scrape-only ingestion.
+        Stores headline, URL, description, full_content, OG image, source.
+        NO Groq, NO Haiku, NO scoring, NO embeddings.
+        Scoring runs as a separate Pass 2 via the API.
+        """
         adapter = ItemAdapter(item)
 
         if adapter.get('url') in self.seen_urls:
@@ -879,135 +885,56 @@ Use ONLY what is provided. English only.
             publication_name = normalize_source_name(publication_name)
             adapter['publication_name'] = publication_name
 
-        self.logger.info(f"Processing: '{headline}'")
-
         try:
             # === STEP 1: Full Content Extraction ===
             full_content, content_source = self._fetch_full_content(
                 adapter['url'], publication_name
             )
-            content_for_analysis = full_content or rss_description
 
-            # === STEP 2: Tier 3 — Keyword Pre-Filter ===
-            if not self._keyword_check(headline, content_for_analysis):
-                self.logger.info(f"DROPPED (Tier 3 keyword reject): '{headline[:60]}'")
-                self._insert_rejected_article(adapter, 35, content_source, full_content)
-                raise DropItem(f"Keyword reject: {headline}")
-
-            # === STEP 3: Tier 1 — Entity Auto-Include Check ===
-            entity_auto_include = self._entity_check(headline)
-
-            # === STEP 4: Q1-Q5 Classification via Groq ===
-            q_data = self._get_groq_classification(headline, content_for_analysis)
-
-            adapter['headline_en'] = q_data.get('headline_en', headline)
-            adapter['category'] = q_data.get('category', 'Other')
-            if adapter['category'] not in self.valid_categories_set:
-                adapter['category'] = 'Other'
-
-            # Derive Q scores
-            sig, impact, novelty_v2, rel_v2, depth, q_composite = self._derive_score_from_qs(q_data)
-
-            # Override for entity auto-includes
-            if entity_auto_include:
-                q_composite = max(q_composite, 75)
-
-            # === STEP 5: Generate Embedding ===
-            text_to_embed = f"Headline: {adapter['headline_en']}\nContent: {(content_for_analysis or '')[:500]}"
-            embedding = self.embedding_model.encode(text_to_embed).tolist()
-            adapter['embedding'] = embedding
-
-            # Map Q-composite to confidence_score for backward compatibility
-            adapter['confidence_score'] = q_composite
-
-            # === STEP 6: Repetition, Credibility, Novelty (existing M2) ===
-            repetition_score = self._compute_repetition_score(embedding)
-            source_credibility = self._get_source_credibility(publication_name)
-            novelty_score = self._compute_novelty_score(embedding)
-
-            # === STEP 7: Composite Auto-Approval Score ===
-            auto_approval_score = round(
-                q_composite * 0.70 +
-                source_credibility * 0.20 +
-                novelty_score * 0.10,
-                2
-            )
-
-            # === STEP 8: Haiku Summary ===
-            # Generate summary for all articles that passed Groq classification
-            summary = self._generate_haiku_summary(
-                adapter['headline_en'], content_for_analysis
-            )
-
-            # Validate if we have content to check against
-            if summary and content_for_analysis and len(content_for_analysis) > 200:
-                if not self._validate_summary_consistency(summary, content_for_analysis):
-                    summary = self._generate_haiku_summary(
-                        adapter['headline_en'], content_for_analysis
-                    )
-
-            if not summary:
-                # Fallback: use RSS description, cleaned
-                summary = rss_description[:200].strip() if rss_description else adapter.get('headline_en', adapter['headline'])
-
-            adapter['summary'] = summary
-            adapter['summary_long'] = summary
-
-            # === STEP 9: Countries, Source, OG Image (unchanged) ===
-            country_names = q_data.get('countries', [])
-            if not isinstance(country_names, list):
-                country_names = []
-            country_codes, region = self._resolve_country_codes(country_names)
-
+            # === STEP 2: Source lookup/create ===
             source_id = adapter.get('source_id') or self._lookup_or_create_source(publication_name)
 
+            # === STEP 3: OG Image ===
             og_image = adapter.get('og_image')
             if not og_image:
                 og_image = self._fetch_og_image(adapter['url'])
 
-            self.logger.info(
-                f"Scored: '{headline[:60]}' | Q:{q_composite} Auto:{auto_approval_score} | "
-                f"Src:{content_source} | Q1:{sig} Q2:{impact} Q3:{novelty_v2} "
-                f"Q4:{rel_v2} Q5:{depth} | Entity:{entity_auto_include} | "
-                f"Countries:{country_codes}"
-            )
-
-            # === STEP 10: INSERT with expanded columns ===
+            # === STEP 4: INSERT raw article (no scoring) ===
             self.cursor.execute(
                 """
                 INSERT INTO articles
-                (url, headline, publication_name, author, headline_en, summary,
-                 summary_long, category, status, scraped_at, embedding, confidence_score,
-                 source_id, repetition_score, auto_approval_score,
-                 country_codes, region, og_image,
-                 full_content, content_source,
-                 significance_score, impact_score, novelty_score_v2,
-                 relevance_score_v2, depth_score)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', NOW(), %s, %s,
-                        %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s)
+                (url, headline, publication_name, author,
+                 summary, category, status, scraped_at,
+                 source_id, og_image,
+                 full_content, content_source)
+                VALUES (%s, %s, %s, %s,
+                        %s, %s, 'unscored', NOW(),
+                        %s, %s,
+                        %s, %s)
                 ON CONFLICT (url) DO NOTHING
                 """,
                 (
-                    adapter['url'], adapter['headline'], publication_name,
+                    adapter['url'], headline, publication_name,
                     adapter.get('author'),
-                    adapter['headline_en'], adapter['summary'],
-                    adapter['summary_long'], adapter['category'],
-                    adapter['embedding'], adapter['confidence_score'],
-                    source_id, repetition_score, auto_approval_score,
-                    country_codes if country_codes else None,
-                    region, og_image,
+                    rss_description[:500] if rss_description else None,
+                    'Other',
+                    source_id, og_image,
                     full_content, content_source,
-                    sig, impact, novelty_v2, rel_v2, depth,
                 )
             )
             self.connection.commit()
+
+            content_len = len(full_content) if full_content else 0
+            self.logger.info(
+                f"Ingested: '{headline[:60]}' | Source: {publication_name} | "
+                f"Content: {content_source} ({content_len} chars)"
+            )
 
         except DropItem as e:
             raise e
         except Exception as e:
             self.connection.rollback()
-            self.logger.error(f"Error processing '{headline}': {e}")
-            raise DropItem(f"Processing failed: {item['url']}")
+            self.logger.error(f"Error ingesting '{headline[:60]}': {e}")
+            raise DropItem(f"Ingestion failed: {item['url']}")
 
         return item
