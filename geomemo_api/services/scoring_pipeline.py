@@ -131,26 +131,36 @@ def _entity_check(headline):
 # GROQ Q1-Q5 CLASSIFICATION
 # =========================================
 
+VALID_CATEGORIES = {
+    'Geopolitical Conflict', 'Geopolitical Economics', 'Global Markets',
+    'International Relations', 'Geopolitical Politics', 'GeoNatDisaster',
+    'GeoLocal', 'Other'
+}
+
+
 def _classify_article(headline, content):
-    """Q1-Q5 classification via Groq. Returns dict."""
+    """Q1-Q5 classification via Groq. Returns dict with validated category."""
     groq = _get_groq()
     system_prompt = """You are a geopolitical intelligence analyst for GeoMemo.
 Evaluate this article on 5 independent criteria. Answer YES or NO for each.
 
-Q1 - GEOPOLITICAL SIGNIFICANCE: Does this describe a significant geopolitical development?
-  Significant = new policy, military escalation/de-escalation, treaty, regime change,
-  sanctions, territorial dispute, alliance shift, election outcome with policy implications,
-  major natural disaster at national scale.
-  NOT significant = routine daily casualties in ongoing conflict, courtesy diplomatic calls
-  with no outcome, incremental updates, local crime, celebrity, sports, entertainment.
+Q1 - GEOPOLITICAL SIGNIFICANCE: Does this describe a development with INTERNATIONAL implications?
+  YES = cross-border military action, international sanctions, treaties between nations,
+  alliance shifts (NATO, EU, BRICS decisions), territorial disputes between countries,
+  international trade agreements, conflicts affecting multiple nations, major elections
+  that change a country's foreign policy direction.
+  NO = purely domestic policy (minimum wage, healthcare, education) without international
+  spillover, routine diplomatic meetings with no outcome, courtesy calls between leaders,
+  local crime, sports, entertainment, celebrity, tourism, lifestyle, opinion/editorial.
 
-Q2 - GLOBAL ECONOMIC IMPACT: Does this directly affect international trade, commodity markets,
-  supply chains, currency markets, central bank policy, or macroeconomic conditions?
+Q2 - GLOBAL ECONOMIC IMPACT: Does this directly affect INTERNATIONAL trade, commodity markets,
+  supply chains, currency markets, or central bank policy across borders?
+  NO = purely domestic economic policy affecting only one country's internal market.
 
 Q3 - NOVELTY: Does this contain genuinely NEW information?
-  New = first report of an event, escalation, new actor entering, quantified impact,
+  YES = first report of an event, escalation, new actor entering, quantified impact,
   policy reversal, breakthrough in negotiations.
-  NOT new = rehash of yesterday's news, "conflict continues" updates, opinion/editorial
+  NO = rehash of yesterday's news, "conflict continues" updates, opinion/editorial
   about known events, routine status reports.
 
 Q4 - DECISION-MAKER RELEVANCE: Would a US/European/Asian government official, institutional
@@ -160,7 +170,7 @@ Q5 - ANALYTICAL DEPTH: Does the article provide data, named sources, expert anal
   historical context, or quantified impact (not just bare facts from a wire report)?
 
 Also extract:
-- category: one of [Geopolitical Conflict, Geopolitical Economics, Global Markets, International Relations, Geopolitical Politics, GeoNatDisaster, GeoLocal, Other]
+- category: MUST be exactly one of: Geopolitical Conflict, Geopolitical Economics, Global Markets, International Relations, Geopolitical Politics, GeoNatDisaster, GeoLocal, Other. No other category names allowed.
 - countries: list of country names mentioned or implied
 - headline_en: formal English translation of headline (keep original if already English)
 
@@ -178,7 +188,13 @@ Return valid JSON:
         temperature=0.0,
         response_format={"type": "json_object"},
     )
-    return json.loads(chat.choices[0].message.content)
+    result = json.loads(chat.choices[0].message.content)
+
+    # Force category validation
+    if result.get('category') not in VALID_CATEGORIES:
+        result['category'] = 'Other'
+
+    return result
 
 
 def _derive_scores(q_data):
@@ -195,41 +211,75 @@ def _derive_scores(q_data):
 # =========================================
 
 def _generate_summary(headline, content):
-    """Generate 40-60 word summary via Haiku. Always produces output."""
+    """Generate 30-50 word summary via Haiku with post-processing."""
     client = _get_anthropic()
     if not client:
         return None
 
-    # Build the best possible context
+    # Build context
     parts = [f"Headline: {headline}"]
     if content and len(content.strip()) > 50:
         parts.append(f"Content: {content[:4000]}")
-
     article_text = "\n".join(parts)
 
     try:
         msg = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=150,
+            max_tokens=100,
             messages=[{
                 "role": "user",
-                "content": f"""Write a 2-3 sentence news summary (40-60 words) in English.
-Authoritative analytical tone for investment bankers and geopolitical analysts.
-Sentence 1: Core development with specific actors (names, countries, organizations).
-Sentence 2: Quantify with numbers, figures, or dollar amounts from the article if available.
-ONLY add a 3rd sentence if the article contains a concrete forward-looking fact (a date, deadline, vote, named action).
-NEVER end with speculative 'this may impact...' or 'this could lead to...' statements.
-NEVER invent or hallucinate details not in the source.
-If the headline is in a non-English language, translate it and summarize in English.
-You MUST always produce a summary — never refuse or ask for more information.
+                "content": f"""Summarize this article in 2 sentences (30-50 words max).
+Write in English, in your own words, in a reporter and analyst tone.
+Match the tense to the event — ongoing uses present, completed uses past, scheduled uses future.
+Just summarize what the article says. Never refuse. Never comment on the article's quality.
+No hashtags, no markdown, no labels, no prefixes.
 
 {article_text}"""
             }]
         )
-        return msg.content[0].text.strip()
+        raw = msg.content[0].text.strip()
+        return _clean_summary(raw, headline)
     except Exception as e:
         logger.warning(f"Haiku summary failed: {e}")
         return None
+
+
+def _clean_summary(summary: str, headline: str) -> str:
+    """Post-process summary: strip hashtags, detect refusals, enforce length."""
+    if not summary:
+        return None
+
+    # Strip markdown headers and hashtags
+    lines = summary.split('\n')
+    cleaned_lines = [l for l in lines if not l.strip().startswith('#')]
+    summary = ' '.join(cleaned_lines).strip()
+
+    # Remove leading labels like "Summary:", "News Summary:", etc.
+    import re
+    summary = re.sub(r'^(summary|news summary|article summary)\s*[:\-]\s*', '', summary, flags=re.IGNORECASE).strip()
+
+    # Detect refusals
+    refusal_phrases = [
+        "i appreciate", "i cannot", "could you please", "i notice",
+        "i would need", "to produce an accurate", "please provide",
+        "i'm unable", "as requested", "source material"
+    ]
+    lower = summary.lower()
+    if any(phrase in lower for phrase in refusal_phrases):
+        return None  # Will trigger fallback
+
+    # Truncate to ~50 words
+    words = summary.split()
+    if len(words) > 55:
+        summary = ' '.join(words[:50])
+        # End at last complete sentence if possible
+        for end in ['. ', '! ', '? ']:
+            last_period = summary.rfind(end)
+            if last_period > len(summary) * 0.5:
+                summary = summary[:last_period + 1]
+                break
+
+    return summary.strip()
 
 
 # =========================================
@@ -432,3 +482,23 @@ def score_unscored_articles(cursor, limit=500, batch_name="manual"):
 
     logger.info(f"Scoring complete: {stats}")
     return stats
+
+
+def reset_articles_for_rescoring(cursor, since_date='2026-04-01'):
+    """Reset all scored/rejected articles back to 'unscored' for re-scoring."""
+    cursor.execute("""
+        UPDATE articles SET
+            status = 'unscored',
+            headline_en = NULL, summary = NULL, summary_long = NULL,
+            category = 'Other', embedding = NULL,
+            confidence_score = 0, auto_approval_score = 0,
+            significance_score = 0, impact_score = 0,
+            novelty_score_v2 = 0, relevance_score_v2 = 0, depth_score = 0,
+            country_codes = NULL, region = NULL
+        WHERE scraped_at > %s::date
+        RETURNING id
+    """, (since_date,))
+    count = len(cursor.fetchall())
+    cursor.connection.commit()
+    logger.info(f"Reset {count} articles to 'unscored' for re-scoring")
+    return count

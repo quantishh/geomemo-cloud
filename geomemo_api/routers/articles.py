@@ -279,6 +279,23 @@ def get_articles(
         conn.close()
 
 
+@router.post("/articles/reset-scoring")
+def reset_scoring(since_date: str = Query("2026-04-01")):
+    """Reset all articles back to 'unscored' for re-scoring with updated prompts."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        from services.scoring_pipeline import reset_articles_for_rescoring
+        count = reset_articles_for_rescoring(cursor, since_date=since_date)
+        return {"message": f"Reset {count} articles to unscored", "count": count}
+    except Exception as e:
+        logger.error(f"Reset error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.post("/articles/run-scoring")
 def run_scoring_pipeline(
     limit: int = Query(500, ge=1, le=5000),
