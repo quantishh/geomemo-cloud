@@ -560,20 +560,30 @@ Return valid JSON:
         if not anthropic_client:
             return None
 
+        # Need at least a headline to work with
+        if not headline:
+            return None
+
+        # Build content block — use full_content if available, otherwise just headline
+        if full_content and len(full_content.strip()) > 100:
+            article_text = f"Headline: {headline}\nArticle: {full_content[:4000]}"
+        else:
+            article_text = f"Headline: {headline}"
+
         try:
             message = anthropic_client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=120,
                 messages=[{
                     "role": "user",
-                    "content": f"""Summarize this news article in 50 words or fewer.
+                    "content": f"""Write a 50-word news summary based on the information below.
 Authoritative analytical tone for investment professionals.
 Sentence 1: Core development with specific actors and facts.
 Sentence 2: Key implication or quantified impact.
-Do NOT speculate. Do NOT add information not in the source. English only.
+Do NOT speculate. Do NOT refuse. Do NOT ask for more information.
+Use ONLY what is provided. English only.
 
-Headline: {headline}
-Article: {(full_content or '')[:4000]}"""
+{article_text}"""
                 }]
             )
             return message.content[0].text.strip()
@@ -923,21 +933,22 @@ Article: {(full_content or '')[:4000]}"""
                 2
             )
 
-            # === STEP 8: Haiku Summary (only for high-scoring articles) ===
-            summary = None
-            if auto_approval_score >= 75:
-                summary = self._generate_haiku_summary(
-                    adapter['headline_en'], content_for_analysis
-                )
-                if summary and not self._validate_summary_consistency(summary, content_for_analysis):
-                    # Retry once on consistency failure
+            # === STEP 8: Haiku Summary ===
+            # Generate summary for all articles that passed Groq classification
+            summary = self._generate_haiku_summary(
+                adapter['headline_en'], content_for_analysis
+            )
+
+            # Validate if we have content to check against
+            if summary and content_for_analysis and len(content_for_analysis) > 200:
+                if not self._validate_summary_consistency(summary, content_for_analysis):
                     summary = self._generate_haiku_summary(
                         adapter['headline_en'], content_for_analysis
                     )
 
             if not summary:
-                # Fallback: use RSS description or a placeholder
-                summary = rss_description[:200] if rss_description else "Pending review."
+                # Fallback: use RSS description, cleaned
+                summary = rss_description[:200].strip() if rss_description else adapter.get('headline_en', adapter['headline'])
 
             adapter['summary'] = summary
             adapter['summary_long'] = summary
