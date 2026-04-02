@@ -373,17 +373,20 @@ class GeomemoDatabasePipeline:
             except Exception as e:
                 self.logger.debug(f"Direct fetch failed for {url[:60]}: {e}")
 
-        # Step 2: Fallback to BrightData WebUnlocker
+        # Step 2: Fallback to BrightData WebUnlocker API
         try:
             api_key = os.getenv("BRIGHTDATA_WEBUNLOCKER_API_KEY", "")
-            api_password = os.getenv("BRIGHTDATA_WEBUNLOCKER_PASSWORD", "")
             if not api_key:
                 return None, 'rss_only'
 
+            zone = os.getenv("BRIGHTDATA_WEBUNLOCKER_ZONE", "web_unlocker1")
             resp = http_requests.post(
-                "https://brd.superproxy.io/api/v1/web_unlocker",
-                json={"url": url, "format": "raw"},
-                auth=(api_key, api_password),
+                "https://api.brightdata.com/request",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                },
+                json={"zone": zone, "url": url, "format": "raw"},
                 timeout=30,
             )
             if resp.status_code == 200:
