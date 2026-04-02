@@ -211,7 +211,7 @@ def _derive_scores(q_data):
 # =========================================
 
 def _generate_summary(headline, content):
-    """Generate 30-50 word summary via Haiku with post-processing."""
+    """Generate 30-35 word one-sentence summary via Haiku with post-processing."""
     client = _get_anthropic()
     if not client:
         return None
@@ -228,11 +228,10 @@ def _generate_summary(headline, content):
             max_tokens=100,
             messages=[{
                 "role": "user",
-                "content": f"""Summarize this article in 2 sentences (30-50 words max).
-Write in English, in your own words, in a reporter and analyst tone.
-Match the tense to the event — ongoing uses present, completed uses past, scheduled uses future.
-Just summarize what the article says. Never refuse. Never comment on the article's quality.
-No hashtags, no markdown, no labels, no prefixes.
+                "content": f"""Summarize this article in one comprehensive sentence of 30-35 words.
+Include: who did what, the specific impact or number, and the broader context.
+Write in English, in your own words, reporter and analyst tone.
+Match tense to event. No hashtags, no markdown. Never refuse.
 
 {article_text}"""
             }]
