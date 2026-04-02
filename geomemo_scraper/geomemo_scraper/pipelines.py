@@ -556,32 +556,33 @@ Return valid JSON:
     # =========================================
 
     def _generate_haiku_summary(self, headline: str, full_content: str) -> str:
-        """Generate a context-free 50-word summary using Claude Haiku."""
+        """Generate a 40-60 word summary using Claude Haiku."""
         if not anthropic_client:
             return None
 
-        # Need at least a headline to work with
         if not headline:
             return None
 
-        # Build content block — use full_content if available, otherwise just headline
-        if full_content and len(full_content.strip()) > 100:
-            article_text = f"Headline: {headline}\nArticle: {full_content[:4000]}"
-        else:
-            article_text = f"Headline: {headline}"
+        parts = [f"Headline: {headline}"]
+        if full_content and len(full_content.strip()) > 50:
+            parts.append(f"Content: {full_content[:4000]}")
+        article_text = "\n".join(parts)
 
         try:
             message = anthropic_client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=120,
+                max_tokens=150,
                 messages=[{
                     "role": "user",
-                    "content": f"""Write a 50-word news summary based on the information below.
-Authoritative analytical tone for investment professionals.
-Sentence 1: Core development with specific actors and facts.
-Sentence 2: Key implication or quantified impact.
-Do NOT speculate. Do NOT refuse. Do NOT ask for more information.
-Use ONLY what is provided. English only.
+                    "content": f"""Write a 2-3 sentence news summary (40-60 words) in English.
+Authoritative analytical tone for investment bankers and geopolitical analysts.
+Sentence 1: Core development with specific actors (names, countries, organizations).
+Sentence 2: Quantify with numbers, figures, or dollar amounts from the article if available.
+ONLY add a 3rd sentence if the article contains a concrete forward-looking fact (a date, deadline, vote, named action).
+NEVER end with speculative 'this may impact...' or 'this could lead to...' statements.
+NEVER invent or hallucinate details not in the source.
+If the headline is in a non-English language, translate it and summarize in English.
+You MUST always produce a summary — never refuse or ask for more information.
 
 {article_text}"""
                 }]

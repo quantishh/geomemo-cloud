@@ -195,28 +195,33 @@ def _derive_scores(q_data):
 # =========================================
 
 def _generate_summary(headline, content):
-    """Generate 50-word summary via Haiku. Falls back to headline if unavailable."""
+    """Generate 40-60 word summary via Haiku. Always produces output."""
     client = _get_anthropic()
     if not client:
         return None
 
-    if content and len(content.strip()) > 100:
-        article_text = f"Headline: {headline}\nArticle: {content[:4000]}"
-    else:
-        article_text = f"Headline: {headline}"
+    # Build the best possible context
+    parts = [f"Headline: {headline}"]
+    if content and len(content.strip()) > 50:
+        parts.append(f"Content: {content[:4000]}")
+
+    article_text = "\n".join(parts)
 
     try:
         msg = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=120,
+            max_tokens=150,
             messages=[{
                 "role": "user",
-                "content": f"""Write a 50-word news summary based on the information below.
-Authoritative analytical tone for investment professionals.
-Sentence 1: Core development with specific actors and facts.
-Sentence 2: Key implication or quantified impact.
-Do NOT speculate. Do NOT refuse. Do NOT ask for more information.
-Use ONLY what is provided. English only.
+                "content": f"""Write a 2-3 sentence news summary (40-60 words) in English.
+Authoritative analytical tone for investment bankers and geopolitical analysts.
+Sentence 1: Core development with specific actors (names, countries, organizations).
+Sentence 2: Quantify with numbers, figures, or dollar amounts from the article if available.
+ONLY add a 3rd sentence if the article contains a concrete forward-looking fact (a date, deadline, vote, named action).
+NEVER end with speculative 'this may impact...' or 'this could lead to...' statements.
+NEVER invent or hallucinate details not in the source.
+If the headline is in a non-English language, translate it and summarize in English.
+You MUST always produce a summary — never refuse or ask for more information.
 
 {article_text}"""
             }]
