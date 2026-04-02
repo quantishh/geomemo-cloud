@@ -244,7 +244,7 @@ Match tense to event. No hashtags, no markdown. Never refuse.
 
 
 def _clean_summary(summary: str, headline: str) -> str:
-    """Post-process summary: strip hashtags, detect refusals, enforce length."""
+    """Post-process summary: strip hashtags, detect refusals."""
     if not summary:
         return None
 
@@ -261,22 +261,13 @@ def _clean_summary(summary: str, headline: str) -> str:
     refusal_phrases = [
         "i appreciate", "i cannot", "could you please", "i notice",
         "i would need", "to produce an accurate", "please provide",
-        "i'm unable", "as requested", "source material"
+        "i'm unable", "as requested", "source material",
+        "i don't have", "i don't see", "please share",
+        "you've provided only", "without the article",
     ]
     lower = summary.lower()
     if any(phrase in lower for phrase in refusal_phrases):
         return None  # Will trigger fallback
-
-    # Truncate to ~50 words
-    words = summary.split()
-    if len(words) > 55:
-        summary = ' '.join(words[:50])
-        # End at last complete sentence if possible
-        for end in ['. ', '! ', '? ']:
-            last_period = summary.rfind(end)
-            if last_period > len(summary) * 0.5:
-                summary = summary[:last_period + 1]
-                break
 
     return summary.strip()
 
@@ -439,11 +430,16 @@ def score_unscored_articles(cursor, limit=500, batch_name="manual"):
             # Composite score
             auto_score = round(q_composite * 0.70 + credibility * 0.20 + novelty * 0.10, 2)
 
-            # Haiku summary
-            summary = _generate_summary(headline_en, content)
-            if not summary:
-                summary = content[:200].strip() if content else headline_en
-            stats["haiku_summarized"] += 1
+            # Haiku summary — only if we have content to work with
+            if content and len(content.strip()) > 50:
+                summary = _generate_summary(headline_en, content)
+                if not summary:
+                    summary = headline_en  # Refusal caught by post-processing
+                else:
+                    stats["haiku_summarized"] += 1
+            else:
+                # Headline-only: use headline as-is, no Haiku call
+                summary = headline_en
 
             # Update article
             cursor.execute("""
