@@ -586,10 +586,11 @@ def get_website_feed():
         last_newsletter_row = cursor.fetchone()
         last_newsletter_date = str(last_newsletter_row['date']) if last_newsletter_row else None
 
-        # 2. TOP STORIES: is_top_story=true from last 72h + high scorers (>=90) from 72h
+        # 2. TOP STORIES: recency-first — today's highest-scoring, then backfill from older
         top_stories = []
+        top_story_ids = set()
 
-        # 2a. All top-story-marked articles from last 72 hours (immediate reflection)
+        # 2a. Manually marked top stories (always first)
         cursor.execute(f"""
             SELECT {ARTICLE_COLUMNS}
             FROM articles
@@ -598,24 +599,44 @@ def get_website_feed():
               AND scraped_at >= NOW() - INTERVAL '72 hours'
             ORDER BY scraped_at DESC
         """)
-        top_stories = [dict(row) for row in cursor.fetchall()]
-
-        # 2b. Also include any score>=90 from last 24h that aren't already top stories
-        top_story_ids = {a['id'] for a in top_stories}
-        cursor.execute(f"""
-            SELECT {ARTICLE_COLUMNS}
-            FROM articles
-            WHERE status = 'approved'
-              AND auto_approval_score >= 90
-              AND scraped_at >= NOW() - INTERVAL '72 hours'
-            ORDER BY auto_approval_score DESC, scraped_at DESC
-            LIMIT 5
-        """)
         for row in cursor.fetchall():
             art = dict(row)
-            if art['id'] not in top_story_ids:
-                top_stories.append(art)
-                top_story_ids.add(art['id'])
+            top_stories.append(art)
+            top_story_ids.add(art['id'])
+
+        # 2b. Today's highest-scoring (score >= 85, prioritize recency)
+        if len(top_stories) < 5:
+            cursor.execute(f"""
+                SELECT {ARTICLE_COLUMNS}
+                FROM articles
+                WHERE status = 'approved'
+                  AND auto_approval_score >= 85
+                  AND scraped_at >= NOW() - INTERVAL '24 hours'
+                ORDER BY auto_approval_score DESC, scraped_at DESC
+                LIMIT 10
+            """)
+            for row in cursor.fetchall():
+                art = dict(row)
+                if art['id'] not in top_story_ids and len(top_stories) < 5:
+                    top_stories.append(art)
+                    top_story_ids.add(art['id'])
+
+        # 2c. Backfill from older high-scorers if today doesn't have enough
+        if len(top_stories) < 5:
+            cursor.execute(f"""
+                SELECT {ARTICLE_COLUMNS}
+                FROM articles
+                WHERE status = 'approved'
+                  AND auto_approval_score >= 90
+                  AND scraped_at >= NOW() - INTERVAL '72 hours'
+                ORDER BY scraped_at DESC, auto_approval_score DESC
+                LIMIT 5
+            """)
+            for row in cursor.fetchall():
+                art = dict(row)
+                if art['id'] not in top_story_ids and len(top_stories) < 5:
+                    top_stories.append(art)
+                    top_story_ids.add(art['id'])
 
         # 3. MAIN STORIES: score 70+ from 72h, topic-deduplicated
         cursor.execute(f"""
