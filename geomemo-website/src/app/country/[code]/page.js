@@ -151,19 +151,6 @@ export default async function CountryPage({ params }) {
                 <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
                   {/* Text content */}
                   <div style={{ flex: 1 }}>
-                    {/* Source + time */}
-                    <div style={{
-                      fontSize: '0.78rem',
-                      color: 'var(--color-text-muted)',
-                      marginBottom: '2px',
-                    }}>
-                      <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                        {article.publication_name}
-                      </span>
-                      {' · '}
-                      {timeAgo(article.scraped_at)}
-                    </div>
-
                     {/* Headline */}
                     <a
                       href={article.url}
@@ -181,21 +168,28 @@ export default async function CountryPage({ params }) {
                       {article.headline || article.headline_original}
                     </a>
 
-                    {/* Summary */}
-                    {article.summary && article.summary !== 'Pending review.' && (
-                      <p style={{
-                        fontSize: '0.85rem',
-                        color: 'var(--color-text-secondary)',
-                        lineHeight: 1.5,
-                        marginTop: 'var(--space-1)',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
+                    {/* Summary + inline attribution + timestamp */}
+                    <div style={{
+                      fontSize: '0.85rem',
+                      color: 'var(--color-text-secondary)',
+                      lineHeight: 1.5,
+                      marginTop: 'var(--space-1)',
+                    }}>
+                      {article.summary && article.summary !== 'Pending review.' && (
+                        <span>{article.summary} </span>
+                      )}
+                      <span style={{
+                        fontSize: '0.78rem',
+                        color: 'var(--color-text-muted)',
                       }}>
-                        {article.summary}
-                      </p>
-                    )}
+                        {article.author
+                          ? `(${article.author} / ${article.publication_name})`
+                          : `(${article.publication_name})`
+                        }
+                        {' · '}
+                        {timeAgo(article.scraped_at)}
+                      </span>
+                    </div>
                   </div>
 
                   {/* OG Image */}
