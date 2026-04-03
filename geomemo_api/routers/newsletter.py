@@ -811,8 +811,8 @@ def _format_article_item(article: dict, children: list, is_top: bool = False) ->
     html = (
         f'<div style="border-bottom:1px solid #e8e8e8;padding:0 0 16px;margin-bottom:16px">'
         f'<a href="{article["url"]}" style="font-family:{HEADLINE_FONT};color:#333;text-decoration:none;'
-        f'font-weight:700;font-size:{headline_size};line-height:1.35">{text_clean}</a>'
-        f'<div style="margin-top:4px">{attribution}</div>'
+        f'font-weight:700;font-size:{headline_size};line-height:1.45">{text_clean}</a>'
+        f' {attribution}'
     )
 
     # Embedded X posts (if any)
