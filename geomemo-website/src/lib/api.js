@@ -43,9 +43,9 @@ export async function fetchWebsiteFeed() {
 
 export async function fetchNewestUpdates() {
   try {
-    // Use the general /articles endpoint with score filter (works on production)
+    // Latest news — recency first, minimum score 70
     const res = await fetch(
-      `${API_URL}/articles?status=approved&min_score=70&days=3&sort_by=auto_approval_score&order=desc&limit=20`,
+      `${API_URL}/articles?status=approved&min_score=70&days=3&sort_by=scraped_at&order=desc&limit=20`,
       { cache: 'no-store' }
     );
     if (!res.ok) return [];
@@ -55,7 +55,7 @@ export async function fetchNewestUpdates() {
 
     // Fallback: widen window to 7 days with lower score threshold
     const fallback = await fetch(
-      `${API_URL}/articles?status=approved&min_score=60&days=7&sort_by=auto_approval_score&order=desc&limit=20`,
+      `${API_URL}/articles?status=approved&min_score=60&days=7&sort_by=scraped_at&order=desc&limit=20`,
       { cache: 'no-store' }
     );
     if (!fallback.ok) return [];
