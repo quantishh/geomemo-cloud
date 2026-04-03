@@ -742,16 +742,16 @@ def _format_article_item(article: dict, children: list, is_top: bool = False) ->
             child_label = child.get('cluster_label') or child.get('relationship') or ''
 
             if child_angle and child_pub:
-                # Phase 2 format: "Publication: 20-word angle summary" with link
+                # Phase 2 format: "Publication reports that..." with link
                 label_badge = ''
                 if child_label in ('CONTRARIAN', 'DIFFERENT_ANGLE'):
                     label_color = '#c0392b' if child_label == 'CONTRARIAN' else '#2471a3'
                     label_text = 'contrarian' if child_label == 'CONTRARIAN' else 'different angle'
                     label_badge = f' <span style="font-size:11px;color:{label_color};font-weight:600;text-transform:uppercase">[{label_text}]</span>'
                 html += (
-                    f'<div style="margin-top:8px;font-size:14px;line-height:1.4">'
+                    f'<div style="margin-top:8px;font-size:14px;line-height:1.4;padding-left:14px;text-indent:-14px">'
                     f'&bull; <a href="{child["url"]}" style="color:#333;text-decoration:none">'
-                    f'<strong>{child_pub}</strong>: {child_angle}</a>'
+                    f'{child_angle}</a>'
                     f'{label_badge}'
                     f'</div>'
                 )

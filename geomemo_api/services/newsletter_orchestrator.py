@@ -259,7 +259,28 @@ Be strict: most similar articles are DUPLICATE."""
             child_summary = None
             if relationship in ('ADDS_DETAIL', 'DIFFERENT_ANGLE', 'CONTRARIAN') and anthropic_client:
                 try:
+                    # Fix generic section names (RSS feeds sometimes use these)
+                    GENERIC_NAMES = {'politics', 'world', 'news', 'business', 'sport',
+                                     'entertainment', 'technology', 'science', 'health',
+                                     'opinion', 'editorial', 'breaking', 'latest',
+                                     'discovery alert', 'unknown'}
                     pub_name = child.get('publication_name', 'Unknown')
+                    if pub_name.lower() in GENERIC_NAMES:
+                        # Try to get the actual source name from the sources table
+                        try:
+                            cursor.execute("SELECT s.name FROM sources s WHERE s.id = %s",
+                                         (child.get('source_id'),))
+                            src_row = cursor.fetchone()
+                            if src_row and src_row[0].lower() not in GENERIC_NAMES:
+                                pub_name = src_row[0]
+                            else:
+                                # Extract domain from URL as fallback
+                                from urllib.parse import urlparse
+                                domain = urlparse(child.get('url', '')).netloc
+                                if domain:
+                                    pub_name = domain.replace('www.', '').split('.')[0].title()
+                        except Exception:
+                            pass
                     child_headline = child.get('headline_en') or child.get('headline') or ''
                     parent_headline = parent.get('headline_en') or parent.get('headline') or ''
                     msg = anthropic_client.messages.create(
