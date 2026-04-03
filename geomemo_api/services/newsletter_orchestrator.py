@@ -266,19 +266,20 @@ Be strict: most similar articles are DUPLICATE."""
                                      'discovery alert', 'unknown'}
                     pub_name = child.get('publication_name', 'Unknown')
                     if pub_name.lower() in GENERIC_NAMES:
-                        # Try to get the actual source name from the sources table
+                        # Extract from URL domain — most reliable
                         try:
-                            cursor.execute("SELECT s.name FROM sources s WHERE s.id = %s",
-                                         (child.get('source_id'),))
-                            src_row = cursor.fetchone()
-                            if src_row and src_row[0].lower() not in GENERIC_NAMES:
-                                pub_name = src_row[0]
+                            from urllib.parse import urlparse
+                            domain = urlparse(child.get('url', '')).netloc.lower()
+                            domain = domain.replace('www.', '')
+                            # Remove common TLDs and capitalize
+                            name_part = domain.split('.')[0]
+                            if name_part and name_part not in ('news', 'com', 'org'):
+                                pub_name = name_part.title()
                             else:
-                                # Extract domain from URL as fallback
-                                from urllib.parse import urlparse
-                                domain = urlparse(child.get('url', '')).netloc
-                                if domain:
-                                    pub_name = domain.replace('www.', '').split('.')[0].title()
+                                # Use second part: news.cgtn.com → cgtn
+                                parts = domain.split('.')
+                                if len(parts) >= 2:
+                                    pub_name = parts[-2].upper() if len(parts[-2]) <= 4 else parts[-2].title()
                         except Exception:
                             pass
                     child_headline = child.get('headline_en') or child.get('headline') or ''
