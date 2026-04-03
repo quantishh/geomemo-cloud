@@ -128,21 +128,21 @@ SEED_QUERIES = [
     {"query": "gold price commodity metals safe haven", "category": "topic", "target_country": None},
 
     # --- LAYER 3: Publication-specific ---
-    {"query": "site:reuters.com geopolitics conflict sanctions trade", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:ft.com geopolitics economy markets trade", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:economist.com geopolitics economy", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:washingtonpost.com foreign policy defense", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:bloomberg.com geopolitics markets economy", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:wsj.com geopolitics trade economy", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:nytimes.com foreign policy conflict diplomacy", "category": "publication", "target_country": None, "frequency": "12h"},
+    {"query": "site:reuters.com geopolitics conflict sanctions trade", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:ft.com geopolitics economy markets trade", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:economist.com geopolitics economy", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:washingtonpost.com foreign policy defense", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:bloomberg.com geopolitics markets economy", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:wsj.com geopolitics trade economy", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:nytimes.com foreign policy conflict diplomacy", "category": "publication", "target_country": None, "frequency": "4h"},
 
     # Think tanks
-    {"query": "site:brookings.edu geopolitics analysis", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:cfr.org foreign policy analysis", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:carnegieendowment.org geopolitics", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:csis.org defense security analysis", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:chathamhouse.org international affairs", "category": "publication", "target_country": None, "frequency": "12h"},
-    {"query": "site:rand.org defense security policy", "category": "publication", "target_country": None, "frequency": "12h"},
+    {"query": "site:brookings.edu geopolitics analysis", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:cfr.org foreign policy analysis", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:carnegieendowment.org geopolitics", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:csis.org defense security analysis", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:chathamhouse.org international affairs", "category": "publication", "target_country": None, "frequency": "4h"},
+    {"query": "site:rand.org defense security policy", "category": "publication", "target_country": None, "frequency": "4h"},
 ]
 
 
@@ -194,14 +194,43 @@ def _fetch_google_news(query: str, max_results: int = 20) -> list:
 
 def _parse_news_item(item: dict) -> dict:
     """Parse a single Google News result into article dict."""
+    url = item.get("link", "")
+    # Resolve Google News redirect URLs to actual article URLs
+    if url and 'news.google.com' in url:
+        url = _resolve_google_redirect(url) or url
     return {
         "headline": item.get("title", ""),
-        "url": item.get("link", ""),
+        "url": url,
         "publication_name": item.get("source", {}).get("name", "") if isinstance(item.get("source"), dict) else item.get("source", ""),
         "description": item.get("snippet", ""),
         "og_image": item.get("thumbnail", ""),
         "scraped_at": item.get("date", ""),
     }
+
+
+def _resolve_google_redirect(google_url: str) -> str:
+    """Follow Google News redirect to get the actual article URL."""
+    try:
+        resp = requests.head(google_url, allow_redirects=True, timeout=10, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; GeoMemoBot/2.0)"
+        })
+        final_url = resp.url
+        if final_url and 'news.google.com' not in final_url:
+            return final_url
+    except Exception:
+        pass
+    # Fallback: try GET with redirect follow
+    try:
+        resp = requests.get(google_url, allow_redirects=True, timeout=10, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; GeoMemoBot/2.0)"
+        }, stream=True)
+        final_url = resp.url
+        resp.close()
+        if final_url and 'news.google.com' not in final_url:
+            return final_url
+    except Exception:
+        pass
+    return None
 
 
 # =========================================
