@@ -29,6 +29,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 _PUBLIC_EXACT = frozenset({
     "/api/health",
     "/api/subscribe",
+    "/subscribe",
     "/docs",
     "/openapi.json",
     "/redoc",
