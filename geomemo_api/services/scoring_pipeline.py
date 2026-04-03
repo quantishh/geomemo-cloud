@@ -362,6 +362,7 @@ def score_unscored_articles(cursor, limit=500, batch_name="manual"):
         "groq_classified": 0,
         "haiku_summarized": 0,
         "errors": 0,
+        "_scored_ids": [],  # Track IDs for scoped auto-approve
     }
 
     model = _get_embedding_model()
@@ -462,6 +463,7 @@ def score_unscored_articles(cursor, limit=500, batch_name="manual"):
             ))
             cursor.connection.commit()
             stats["processed"] += 1
+            stats["_scored_ids"].append(article_id)
 
             logger.info(
                 f"Scored #{article_id}: '{headline_en[:50]}' | "
@@ -475,18 +477,34 @@ def score_unscored_articles(cursor, limit=500, batch_name="manual"):
             stats["errors"] += 1
             stats["processed"] += 1
 
-    # Auto-approve and auto-reject after scoring
+    # Auto-approve and auto-reject — only articles scored in THIS run
     try:
-        cursor.execute("""
-            UPDATE articles SET status = 'approved'
-            WHERE status = 'pending' AND auto_approval_score >= 75
-        """)
-        approved = cursor.rowcount
-        cursor.execute("""
-            UPDATE articles SET status = 'rejected'
-            WHERE status = 'pending' AND auto_approval_score < 40
-        """)
-        rejected_extra = cursor.rowcount
+        scored_ids = [aid for aid in stats.get("_scored_ids", [])]
+        if scored_ids:
+            cursor.execute("""
+                UPDATE articles SET status = 'approved'
+                WHERE id = ANY(%s) AND status = 'pending' AND auto_approval_score >= 75
+            """, (scored_ids,))
+            approved = cursor.rowcount
+            cursor.execute("""
+                UPDATE articles SET status = 'rejected'
+                WHERE id = ANY(%s) AND status = 'pending' AND auto_approval_score < 40
+            """, (scored_ids,))
+            rejected_extra = cursor.rowcount
+        else:
+            # Fallback: approve/reject from last 6 hours only
+            cursor.execute("""
+                UPDATE articles SET status = 'approved'
+                WHERE status = 'pending' AND auto_approval_score >= 75
+                AND scraped_at >= NOW() - INTERVAL '6 hours'
+            """)
+            approved = cursor.rowcount
+            cursor.execute("""
+                UPDATE articles SET status = 'rejected'
+                WHERE status = 'pending' AND auto_approval_score < 40
+                AND scraped_at >= NOW() - INTERVAL '6 hours'
+            """)
+            rejected_extra = cursor.rowcount
         cursor.connection.commit()
         stats["auto_approved"] = approved
         stats["auto_rejected_extra"] = rejected_extra
@@ -494,6 +512,10 @@ def score_unscored_articles(cursor, limit=500, batch_name="manual"):
     except Exception as e:
         cursor.connection.rollback()
         logger.error(f"Auto-approve failed: {e}")
+
+    # Clean internal tracking before returning
+    scored_count = len(stats.get("_scored_ids", []))
+    stats.pop("_scored_ids", None)
 
     logger.info(f"Scoring complete: {stats}")
 
