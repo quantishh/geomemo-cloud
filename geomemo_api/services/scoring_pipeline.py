@@ -496,7 +496,73 @@ def score_unscored_articles(cursor, limit=500, batch_name="manual"):
         logger.error(f"Auto-approve failed: {e}")
 
     logger.info(f"Scoring complete: {stats}")
+
+    # Send Telegram report to owner
+    _send_pipeline_report(stats)
+
     return stats
+
+
+def _send_pipeline_report(stats: dict):
+    """Send pipeline completion report to owner via Telegram DM."""
+    try:
+        import requests as http_req
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+        owner_id = os.getenv("OWNER_TELEGRAM_ID", "5378505717")
+        if not bot_token or not owner_id:
+            return
+
+        now = datetime.now(ZoneInfo("America/New_York")).strftime("%I:%M %p EDT")
+        date = datetime.now(ZoneInfo("America/New_York")).strftime("%B %d, %Y")
+
+        processed = stats.get("processed", 0)
+        classified = stats.get("groq_classified", 0)
+        summarized = stats.get("haiku_summarized", 0)
+        rejected = stats.get("keyword_rejected", 0)
+        approved = stats.get("auto_approved", 0)
+        rejected_extra = stats.get("auto_rejected_extra", 0)
+        errors = stats.get("errors", 0)
+
+        pending = processed - rejected - approved - rejected_extra - errors
+        if pending < 0:
+            pending = 0
+
+        report = (
+            f"📊 *GeoMemo Pipeline Report*\n"
+            f"📅 {date} — {now}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📥 Processed: {processed}\n"
+            f"🤖 Classified (Groq): {classified}\n"
+            f"✍️ Summarized (Haiku): {summarized}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✅ Approved (75+): {approved}\n"
+            f"⏳ Pending (40-74): {pending}\n"
+            f"❌ Rejected (<40): {rejected + rejected_extra}\n"
+            f"🚫 Keyword filtered: {rejected}\n"
+        )
+
+        if errors > 0:
+            report += f"⚠️ Errors: {errors}\n"
+
+        report += (
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🌐 Website updated | Ready for newsletter"
+        )
+
+        http_req.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            data={
+                "chat_id": owner_id,
+                "text": report,
+                "parse_mode": "Markdown",
+            },
+            timeout=10,
+        )
+    except Exception as e:
+        logger.warning(f"Telegram report failed: {e}")
 
 
 def reset_articles_for_rescoring(cursor, since_date='2026-04-01'):
