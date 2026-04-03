@@ -259,16 +259,16 @@ Be strict: most similar articles are DUPLICATE."""
             child_summary = None
             if relationship in ('ADDS_DETAIL', 'DIFFERENT_ANGLE', 'CONTRARIAN') and anthropic_client:
                 try:
+                    pub_name = child.get('publication_name', 'Unknown')
                     msg = anthropic_client.messages.create(
                         model="claude-haiku-4-5-20251001",
                         max_tokens=50,
                         messages=[{
                             "role": "user",
-                            "content": f"""In 20 words, describe what NEW or DIFFERENT perspective this article adds.
+                            "content": f"""Write one sentence (20 words max) starting with "{pub_name} reports that..." summarizing what this article says differently from the parent story.
 Parent story: {parent.get('headline_en') or parent.get('headline')}
-Child headline: {child.get('headline_en') or child.get('headline')}
-Child source: {child.get('publication_name', 'Unknown')}
-Relationship: {relationship}"""
+This article: {child.get('headline_en') or child.get('headline')}
+Never say "the child article". Never use meta-language. Just state the fact."""
                         }]
                     )
                     child_summary = msg.content[0].text.strip()
