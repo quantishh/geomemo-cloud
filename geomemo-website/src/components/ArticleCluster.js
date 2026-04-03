@@ -32,37 +32,6 @@ export default function ArticleCluster({ parent, relatedArticles, relatedSources
       paddingBottom: 'var(--space-5)',
       borderBottom: '1px solid var(--color-border)',
     }}>
-      {/* Source / Author line — bold weight, secondary color + inline category */}
-      <div style={{
-        fontSize: '0.82rem',
-        marginBottom: '2px',
-        lineHeight: 1.5,
-      }}>
-        <span style={{ fontWeight: 700, color: 'var(--color-text-secondary)' }}>
-          {parent.author ? (
-            <>
-              <span>{parent.author}</span>
-              {' / '}
-              <span>{parent.publication_name}</span>:
-            </>
-          ) : (
-            <span>{parent.publication_name}:</span>
-          )}
-        </span>
-        {category && (
-          <>
-            {' '}
-            <span style={{
-              fontWeight: 300,
-              fontSize: '0.78rem',
-              color: 'var(--color-accent)',
-            }}>
-              {category}
-            </span>
-          </>
-        )}
-      </div>
-
       {/* Summary displayed as headline + optional floating image */}
       <div style={{ overflow: 'hidden' }}>
         {ogImage && (
@@ -96,6 +65,34 @@ export default function ArticleCluster({ parent, relatedArticles, relatedSources
             {stripHtml(parent.summary) || parent.headline_en || parent.headline}
           </a>
         </h3>
+      </div>
+
+      {/* Attribution line — after summary, newsletter style: (Author / Publication) | Category */}
+      <div style={{
+        fontSize: '0.82rem',
+        marginTop: '4px',
+        lineHeight: 1.5,
+        color: 'var(--color-text-muted)',
+      }}>
+        <span style={{ fontWeight: 400 }}>
+          {parent.author ? (
+            <span>({parent.author} / {parent.publication_name})</span>
+          ) : (
+            <span>({parent.publication_name})</span>
+          )}
+        </span>
+        {category && (
+          <>
+            {' | '}
+            <span style={{
+              fontWeight: 300,
+              fontSize: '0.78rem',
+              color: 'var(--color-accent)',
+            }}>
+              {category}
+            </span>
+          </>
+        )}
       </div>
 
       {/* Related: "More:" with publication name links + summary hover popups */}
