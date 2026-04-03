@@ -58,8 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- FILTER STATE (Phase 3) ---
     let currentStatusFilter = 'All';
     let currentScoreFilter = 'All';
-    let currentAutoApproveThreshold = 80;
-    let currentAutoRejectThreshold = 30;
+    let currentAutoApproveThreshold = 75;
+    let currentAutoRejectThreshold = 40;
     let currentDateFilter = 'All'; // 'All' or 'YYYY-MM-DD'
 
     // --- VIEW MODE STATE (Phase 4) ---
@@ -1489,10 +1489,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const res = await fetch(`${API_BASE_URL}/newsletter/generate`, {
+            // Use autonomous newsletter endpoint with optional date filter
+            const payload = { regenerate: regenerate };
+            if (currentDateFilter && currentDateFilter !== 'All') {
+                payload.target_date = currentDateFilter;
+            }
+            const res = await fetch(`${API_BASE_URL}/newsletter/generate-auto`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ regenerate: regenerate })
+                body: JSON.stringify(payload)
             });
             // Read body ONCE as text, then parse — prevents "Body already consumed" errors
             const rawText = await res.text();
