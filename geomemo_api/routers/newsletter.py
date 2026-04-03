@@ -541,17 +541,24 @@ Articles:
             max_tokens=100,
             messages=[{
                 "role": "user",
-                "content": f"""Write a 50-word "WHAT TO WATCH" outlook based on today's top stories.
-Only mention concrete scheduled events, deadlines, or inflection points in the next 24-48 hours.
-No speculation. No "could" or "might". Only facts with dates.
-If no concrete events are known, state what key actors are expected to do next.
+                "content": f"""Based on today's stories, list any concrete scheduled events, deadlines, or meetings in the next 24-48 hours. 50 words max.
+Only include events with specific dates, times, or confirmed schedules.
+If none exist, write nothing — return an empty response.
+Do NOT say "no events scheduled" or "nothing confirmed". Just return empty.
+Do NOT repeat the heading "What to Watch". Just write the content directly.
+No hashtags, no markdown, no bold.
 
 Top stories:
 {all_headlines}"""
             }]
         )
         outlook = msg.content[0].text.strip()
+        # Strip hashtags, markdown bold, and repeated headers
         outlook = '\n'.join(l for l in outlook.split('\n') if not l.strip().startswith('#')).strip()
+        outlook = outlook.replace('**WHAT TO WATCH**', '').replace('**What to Watch**', '').strip()
+        # Strip if it's just saying "no events"
+        if any(phrase in outlook.lower() for phrase in ['no concrete', 'no scheduled', 'no confirmed', 'no specific', 'nothing confirmed']):
+            outlook = ""
     except Exception as e:
         logger.warning(f"Outlook generation failed: {e}")
         outlook = ""
