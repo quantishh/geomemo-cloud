@@ -556,8 +556,14 @@ Top stories:
         # Strip hashtags, markdown bold, and repeated headers
         outlook = '\n'.join(l for l in outlook.split('\n') if not l.strip().startswith('#')).strip()
         outlook = outlook.replace('**WHAT TO WATCH**', '').replace('**What to Watch**', '').strip()
-        # Strip if it's just saying "no events"
-        if any(phrase in outlook.lower() for phrase in ['no concrete', 'no scheduled', 'no confirmed', 'no specific', 'nothing confirmed']):
+        # Strip if it's saying "no events" in any form
+        lower = outlook.lower()
+        if any(phrase in lower for phrase in [
+            'no concrete', 'no scheduled', 'no confirmed', 'no specific',
+            'nothing confirmed', 'i found no', 'no stories', 'i did not find',
+            'i cannot identify', 'none identified', 'no events',
+            'unable to identify', 'i don\'t see',
+        ]):
             outlook = ""
     except Exception as e:
         logger.warning(f"Outlook generation failed: {e}")
