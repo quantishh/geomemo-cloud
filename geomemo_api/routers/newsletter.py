@@ -541,12 +541,10 @@ Articles:
             max_tokens=100,
             messages=[{
                 "role": "user",
-                "content": f"""Based on today's stories, list any concrete scheduled events, deadlines, or meetings in the next 24-48 hours. 50 words max.
-Only include events with specific dates, times, or confirmed schedules.
-If none exist, write nothing — return an empty response.
-Do NOT say "no events scheduled" or "nothing confirmed". Just return empty.
-Do NOT repeat the heading "What to Watch". Just write the content directly.
-No hashtags, no markdown, no bold.
+                "content": f"""Based on today's top stories, write 2-3 sentences (50 words) about what is likely to develop next.
+What are the key actors expected to do? What situations are evolving? What decisions are pending?
+Write in reporter tone, present tense. No hashtags, no markdown, no bold.
+Do not start with "What to Watch" or any heading. Just write the content.
 
 Top stories:
 {all_headlines}"""
@@ -556,13 +554,14 @@ Top stories:
         # Strip hashtags, markdown bold, and repeated headers
         outlook = '\n'.join(l for l in outlook.split('\n') if not l.strip().startswith('#')).strip()
         outlook = outlook.replace('**WHAT TO WATCH**', '').replace('**What to Watch**', '').strip()
-        # Strip if it's saying "no events" in any form
+        # Strip any refusal/meta-commentary
         lower = outlook.lower()
         if any(phrase in lower for phrase in [
             'no concrete', 'no scheduled', 'no confirmed', 'no specific',
             'nothing confirmed', 'i found no', 'no stories', 'i did not find',
-            'i cannot identify', 'none identified', 'no events',
-            'unable to identify', 'i don\'t see',
+            'i cannot', 'none identified', 'no events', 'i can\'t find',
+            'unable to', 'i don\'t see', 'i don\'t have', 'provided stories',
+            'i notice', 'i appreciate', 'return an empty',
         ]):
             outlook = ""
     except Exception as e:

@@ -243,7 +243,7 @@ SOURCE_NAME_MAP = {
 }
 
 def normalize_source_name(name):
-    """Map non-English source names to their English equivalents."""
+    """Map non-English source names to their English equivalents and clean RSS feed titles."""
     if not name:
         return name
     name = name.strip()
@@ -253,13 +253,33 @@ def normalize_source_name(name):
     # Strip © prefix from photo credits (e.g. "© Reuters" → "Reuters")
     if name.startswith('© ') or name.startswith('©'):
         cleaned = name.lstrip('© ').strip()
-        # If it's a photo credit (contains / which indicates photographer/agency), skip mapping
         if '/' in cleaned:
             return name
-        # Map known agencies
         credit_map = {'Reuters': 'Reuters', 'REUTERS': 'Reuters', 'AP': 'AP', 'AFP': 'AFP', 'rfi': 'RFI', 'RFI': 'RFI'}
         if cleaned in credit_map:
             return credit_map[cleaned]
+    # Clean long RSS feed titles: "News Headlines | The Hindu" → "The Hindu"
+    # Common patterns: "Description | Publication", "Description - Publication"
+    if len(name) > 40:
+        # Try splitting by | and taking the last meaningful part
+        if ' | ' in name:
+            parts = [p.strip() for p in name.split(' | ')]
+            # Take the shortest part that looks like a publication name
+            candidates = [p for p in parts if len(p) < 40 and len(p) > 2]
+            if candidates:
+                name = min(candidates, key=len)
+        # Try splitting by " - " for "Description - Publication" pattern
+        elif ' - ' in name:
+            parts = [p.strip() for p in name.split(' - ')]
+            candidates = [p for p in parts if len(p) < 40 and len(p) > 2]
+            if candidates:
+                name = candidates[-1]  # Usually publication is last
+        # Try splitting by ":" for "Publication: Description" pattern
+        elif ':' in name and name.index(':') < 30:
+            name = name[:name.index(':')].strip()
+    # Strip "RSS" suffix
+    if name.endswith(' RSS'):
+        name = name[:-4].strip()
     return name
 
 # --- Load models ---
