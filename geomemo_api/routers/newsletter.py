@@ -306,6 +306,9 @@ def generate_newsletter_auto(request: NewsletterGenerateRequest = NewsletterGene
         logger.info(f"Auto newsletter generated: {result['article_count']} articles, "
                      f"{result['clusters_created']} clusters, preview_sent={preview_sent}")
 
+        # DM newsletter preview to owner on Telegram
+        _send_newsletter_telegram_dm(result, top_5, brief_text)
+
         return result
 
     except HTTPException:
@@ -969,3 +972,63 @@ def handle_approval_webhook(payload: PostmarkInboundPayload):
     finally:
         cursor.close()
         conn.close()
+
+
+def _send_newsletter_telegram_dm(result: dict, top_5: list, brief_text: str):
+    """Send newsletter preview to owner's personal Telegram."""
+    try:
+        import requests as http_req
+        import os
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+        owner_id = os.getenv("OWNER_TELEGRAM_ID", "5378505717")
+        if not bot_token or not owner_id:
+            return
+
+        date = datetime.now(ZoneInfo("America/New_York")).strftime("%B %d, %Y")
+        now = datetime.now(ZoneInfo("America/New_York")).strftime("%I:%M %p EDT")
+
+        # Build message: brief + top 5
+        msg = f"📰 *GeoMemo Newsletter Preview*\n📅 {date} — {now}\n"
+        msg += f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        # Intelligence brief (truncate for Telegram 4096 char limit)
+        if brief_text:
+            brief_truncated = brief_text[:2000]
+            msg += f"{brief_truncated}\n\n"
+
+        msg += f"━━━━━━━━━━━━━━━━━━━━━\n"
+        msg += f"*TOP 5 STORIES*\n\n"
+
+        for i, art in enumerate(top_5[:5], 1):
+            headline = art.get('headline_en') or art.get('headline') or ''
+            source = art.get('publication_name') or ''
+            score = art.get('auto_approval_score', 0)
+            msg += f"{i}. {headline[:80]}\n"
+            msg += f"   _{source}_ | Score: {score}\n\n"
+
+        msg += f"━━━━━━━━━━━━━━━━━━━━━\n"
+        msg += f"📊 {result.get('article_count', 0)} articles | "
+        msg += f"{result.get('clusters_created', 0)} clusters | "
+        msg += f"{result.get('tweets_fetched', 0)} tweets\n"
+        msg += f"✅ Review and publish via dashboard"
+
+        # Telegram has 4096 char limit
+        if len(msg) > 4090:
+            msg = msg[:4087] + "..."
+
+        http_req.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            data={
+                "chat_id": owner_id,
+                "text": msg,
+                "parse_mode": "Markdown",
+                "disable_web_page_preview": True,
+            },
+            timeout=10,
+        )
+        logger.info("Newsletter preview sent to owner Telegram")
+    except Exception as e:
+        logger.warning(f"Newsletter Telegram DM failed: {e}")
