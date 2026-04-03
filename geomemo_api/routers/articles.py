@@ -296,6 +296,23 @@ def reset_scoring(since_date: str = Query("2026-04-01")):
         conn.close()
 
 
+@router.post("/articles/fetch-serp-content")
+def fetch_serp_content(limit: int = Query(500, ge=1, le=2000)):
+    """Fetch full article content for SERP articles that don't have it yet."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        from services.serp_fetcher import fetch_content_for_serp_articles
+        result = fetch_content_for_serp_articles(cursor, limit=limit)
+        return result
+    except Exception as e:
+        logger.error(f"SERP content fetch error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.post("/articles/run-serp-fetch")
 def run_serp_fetch(
     frequency: str = Query("4h"),
