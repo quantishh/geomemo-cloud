@@ -260,18 +260,30 @@ Be strict: most similar articles are DUPLICATE."""
             if relationship in ('ADDS_DETAIL', 'DIFFERENT_ANGLE', 'CONTRARIAN') and anthropic_client:
                 try:
                     pub_name = child.get('publication_name', 'Unknown')
+                    child_headline = child.get('headline_en') or child.get('headline') or ''
+                    parent_headline = parent.get('headline_en') or parent.get('headline') or ''
                     msg = anthropic_client.messages.create(
                         model="claude-haiku-4-5-20251001",
-                        max_tokens=50,
+                        max_tokens=40,
                         messages=[{
                             "role": "user",
-                            "content": f"""Write one sentence (20 words max) starting with "{pub_name} reports that..." summarizing what this article says differently from the parent story.
-Parent story: {parent.get('headline_en') or parent.get('headline')}
-This article: {child.get('headline_en') or child.get('headline')}
-Never say "the child article". Never use meta-language. Just state the fact."""
+                            "content": f"""Complete this sentence in 15 words or fewer:
+"{pub_name} reports that..."
+
+Based on this headline: {child_headline}
+Which is related to: {parent_headline}
+
+Just complete the sentence. No hashtags. No markdown. No preamble."""
                         }]
                     )
-                    child_summary = msg.content[0].text.strip()
+                    raw = msg.content[0].text.strip()
+                    # Strip hashtags and markdown
+                    raw = '\n'.join(l for l in raw.split('\n') if not l.strip().startswith('#')).strip()
+                    # Ensure it starts with publication name
+                    if not raw.lower().startswith(pub_name.lower()):
+                        child_summary = f"{pub_name} reports that {raw}"
+                    else:
+                        child_summary = raw
                 except Exception as e:
                     logger.warning(f"Haiku child summary failed: {e}")
                     child_summary = cls_info.get('reason', '')
