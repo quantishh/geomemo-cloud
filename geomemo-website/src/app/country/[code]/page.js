@@ -1,29 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from 'next/link';
 import { fetchCountryArticles } from '@/lib/api';
+import { getCountryName } from '@/lib/countries';
 
 export const dynamic = 'force-dynamic';
-
-// ISO country code to name mapping (common geopolitical countries)
-const COUNTRY_NAMES = {
-  US: 'United States', CN: 'China', RU: 'Russia', IR: 'Iran', IL: 'Israel',
-  UA: 'Ukraine', GB: 'United Kingdom', FR: 'France', DE: 'Germany', JP: 'Japan',
-  KR: 'South Korea', KP: 'North Korea', IN: 'India', PK: 'Pakistan', SA: 'Saudi Arabia',
-  AE: 'United Arab Emirates', TR: 'Turkey', EG: 'Egypt', NG: 'Nigeria', ZA: 'South Africa',
-  BR: 'Brazil', MX: 'Mexico', AR: 'Argentina', AU: 'Australia', CA: 'Canada',
-  TW: 'Taiwan', SY: 'Syria', IQ: 'Iraq', AF: 'Afghanistan', YE: 'Yemen',
-  LB: 'Lebanon', PS: 'Palestine', QA: 'Qatar', KW: 'Kuwait', OM: 'Oman',
-  BH: 'Bahrain', JO: 'Jordan', LY: 'Libya', SD: 'Sudan', ET: 'Ethiopia',
-  KE: 'Kenya', TZ: 'Tanzania', MZ: 'Mozambique', CD: 'DR Congo', ML: 'Mali',
-  PL: 'Poland', RO: 'Romania', HU: 'Hungary', CZ: 'Czech Republic', SK: 'Slovakia',
-  BG: 'Bulgaria', GR: 'Greece', IT: 'Italy', ES: 'Spain', PT: 'Portugal',
-  NL: 'Netherlands', BE: 'Belgium', SE: 'Sweden', NO: 'Norway', FI: 'Finland',
-  DK: 'Denmark', AT: 'Austria', CH: 'Switzerland', IE: 'Ireland',
-  TH: 'Thailand', VN: 'Vietnam', PH: 'Philippines', MY: 'Malaysia', SG: 'Singapore',
-  ID: 'Indonesia', MM: 'Myanmar', BD: 'Bangladesh', LK: 'Sri Lanka', NP: 'Nepal',
-  CL: 'Chile', CO: 'Colombia', PE: 'Peru', VE: 'Venezuela', CU: 'Cuba',
-  NZ: 'New Zealand',
-};
 
 const CATEGORY_COLORS = {
   'Geopolitical Conflict': '#DC2626',
@@ -48,7 +28,7 @@ function timeAgo(dateStr) {
 
 export async function generateMetadata({ params }) {
   const { code } = await params;
-  const name = COUNTRY_NAMES[code.toUpperCase()] || code.toUpperCase();
+  const name = getCountryName(code);
   return {
     title: `${name} — GeoMemo`,
     description: `Latest geopolitical news and intelligence about ${name} from GeoMemo.`,
@@ -58,7 +38,7 @@ export async function generateMetadata({ params }) {
 export default async function CountryPage({ params }) {
   const { code } = await params;
   const upperCode = code.toUpperCase();
-  const countryName = COUNTRY_NAMES[upperCode] || upperCode;
+  const countryName = getCountryName(upperCode);
   const data = await fetchCountryArticles(upperCode, 14, 15);
   const categories = data.categories || {};
   const totalArticles = data.total || 0;

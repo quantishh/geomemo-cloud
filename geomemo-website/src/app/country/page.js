@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { fetchCountryList } from '@/lib/api';
+import { getCountryName, getFlag } from '@/lib/countries';
 
 export const metadata = {
   title: 'Countries — GeoMemo',
@@ -7,41 +8,6 @@ export const metadata = {
 };
 
 export const dynamic = 'force-dynamic';
-
-// ISO country code to name + flag emoji
-const COUNTRY_INFO = {
-  US: { name: 'United States', flag: '🇺🇸' }, CN: { name: 'China', flag: '🇨🇳' },
-  RU: { name: 'Russia', flag: '🇷🇺' }, IR: { name: 'Iran', flag: '🇮🇷' },
-  IL: { name: 'Israel', flag: '🇮🇱' }, UA: { name: 'Ukraine', flag: '🇺🇦' },
-  GB: { name: 'United Kingdom', flag: '🇬🇧' }, FR: { name: 'France', flag: '🇫🇷' },
-  DE: { name: 'Germany', flag: '🇩🇪' }, JP: { name: 'Japan', flag: '🇯🇵' },
-  KR: { name: 'South Korea', flag: '🇰🇷' }, KP: { name: 'North Korea', flag: '🇰🇵' },
-  IN: { name: 'India', flag: '🇮🇳' }, PK: { name: 'Pakistan', flag: '🇵🇰' },
-  SA: { name: 'Saudi Arabia', flag: '🇸🇦' }, AE: { name: 'UAE', flag: '🇦🇪' },
-  TR: { name: 'Turkey', flag: '🇹🇷' }, EG: { name: 'Egypt', flag: '🇪🇬' },
-  NG: { name: 'Nigeria', flag: '🇳🇬' }, ZA: { name: 'South Africa', flag: '🇿🇦' },
-  BR: { name: 'Brazil', flag: '🇧🇷' }, MX: { name: 'Mexico', flag: '🇲🇽' },
-  AU: { name: 'Australia', flag: '🇦🇺' }, CA: { name: 'Canada', flag: '🇨🇦' },
-  TW: { name: 'Taiwan', flag: '🇹🇼' }, SY: { name: 'Syria', flag: '🇸🇾' },
-  IQ: { name: 'Iraq', flag: '🇮🇶' }, AF: { name: 'Afghanistan', flag: '🇦🇫' },
-  YE: { name: 'Yemen', flag: '🇾🇪' }, LB: { name: 'Lebanon', flag: '🇱🇧' },
-  PS: { name: 'Palestine', flag: '🇵🇸' }, QA: { name: 'Qatar', flag: '🇶🇦' },
-  JO: { name: 'Jordan', flag: '🇯🇴' }, LY: { name: 'Libya', flag: '🇱🇾' },
-  SD: { name: 'Sudan', flag: '🇸🇩' }, ET: { name: 'Ethiopia', flag: '🇪🇹' },
-  PL: { name: 'Poland', flag: '🇵🇱' }, GR: { name: 'Greece', flag: '🇬🇷' },
-  IT: { name: 'Italy', flag: '🇮🇹' }, ES: { name: 'Spain', flag: '🇪🇸' },
-  NL: { name: 'Netherlands', flag: '🇳🇱' }, SE: { name: 'Sweden', flag: '🇸🇪' },
-  NO: { name: 'Norway', flag: '🇳🇴' }, FI: { name: 'Finland', flag: '🇫🇮' },
-  CH: { name: 'Switzerland', flag: '🇨🇭' }, AT: { name: 'Austria', flag: '🇦🇹' },
-  TH: { name: 'Thailand', flag: '🇹🇭' }, VN: { name: 'Vietnam', flag: '🇻🇳' },
-  PH: { name: 'Philippines', flag: '🇵🇭' }, MY: { name: 'Malaysia', flag: '🇲🇾' },
-  SG: { name: 'Singapore', flag: '🇸🇬' }, ID: { name: 'Indonesia', flag: '🇮🇩' },
-  BD: { name: 'Bangladesh', flag: '🇧🇩' }, MM: { name: 'Myanmar', flag: '🇲🇲' },
-  CO: { name: 'Colombia', flag: '🇨🇴' }, AR: { name: 'Argentina', flag: '🇦🇷' },
-  VE: { name: 'Venezuela', flag: '🇻🇪' }, CL: { name: 'Chile', flag: '🇨🇱' },
-  PE: { name: 'Peru', flag: '🇵🇪' }, CU: { name: 'Cuba', flag: '🇨🇺' },
-  NZ: { name: 'New Zealand', flag: '🇳🇿' },
-};
 
 export default async function CountryIndexPage() {
   const countries = await fetchCountryList();
@@ -81,7 +47,8 @@ export default async function CountryIndexPage() {
         marginBottom: 'var(--space-16)',
       }}>
         {countries.map((country) => {
-          const info = COUNTRY_INFO[country.code] || { name: country.code, flag: '🌐' };
+          const name = getCountryName(country.code);
+          const flag = getFlag(country.code);
           return (
             <Link
               key={country.code}
@@ -97,14 +64,14 @@ export default async function CountryIndexPage() {
                 transition: 'border-color 0.15s, box-shadow 0.15s',
               }}
             >
-              <span style={{ fontSize: '1.5rem' }}>{info.flag}</span>
+              <span style={{ fontSize: '1.5rem' }}>{flag}</span>
               <div>
                 <div style={{
                   fontWeight: 700,
                   fontSize: '0.95rem',
                   color: 'var(--color-text-primary)',
                 }}>
-                  {info.name}
+                  {name}
                 </div>
                 <div style={{
                   fontSize: '0.78rem',
