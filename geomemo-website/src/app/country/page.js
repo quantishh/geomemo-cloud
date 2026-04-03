@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { getCountryName, getFlag } from '@/lib/countries';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Client-side: use relative URL so Next.js rewrites proxy to backend
+const API_URL = '';
 
 // Continent groupings
 const CONTINENTS = {
