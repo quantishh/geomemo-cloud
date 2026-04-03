@@ -296,6 +296,71 @@ def reset_scoring(since_date: str = Query("2026-04-01")):
         conn.close()
 
 
+@router.post("/articles/run-serp-fetch")
+def run_serp_fetch(
+    frequency: str = Query("4h"),
+    max_results: int = Query(15, ge=5, le=50),
+):
+    """Fetch articles from Google News via SERP API for all active queries."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        from services.serp_fetcher import run_serp_fetch
+        result = run_serp_fetch(cursor, frequency_filter=frequency, max_results_per_query=max_results)
+        return result
+    except Exception as e:
+        logger.error(f"SERP fetch error: {e}")
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/articles/serp-queries")
+def list_serp_queries():
+    """List all SERP API queries with stats."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("""
+            SELECT id, query, category, target_country, frequency,
+                   is_active, last_run_at, results_found
+            FROM serp_queries ORDER BY category, query
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/articles/serp-queries")
+def add_serp_query(
+    query: str = Query(...),
+    category: str = Query("topic"),
+    target_country: str = Query(None),
+    frequency: str = Query("4h"),
+):
+    """Add a new SERP API search query."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("""
+            INSERT INTO serp_queries (query, category, target_country, frequency, is_active)
+            VALUES (%s, %s, %s, %s, TRUE) RETURNING id
+        """, (query, category, target_country, frequency))
+        new_id = cursor.fetchone()['id']
+        conn.commit()
+        return {"id": new_id, "query": query, "category": category}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(500, str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.post("/articles/run-scoring")
 def run_scoring_pipeline(
     limit: int = Query(500, ge=1, le=5000),

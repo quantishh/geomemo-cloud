@@ -198,6 +198,21 @@ def init_db():
             );
         """)
 
+        # --- SERP API queries table ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS serp_queries (
+                id SERIAL PRIMARY KEY,
+                query TEXT NOT NULL,
+                category TEXT DEFAULT 'country',
+                target_country TEXT,
+                frequency TEXT DEFAULT '4h',
+                is_active BOOLEAN DEFAULT TRUE,
+                last_run_at TIMESTAMPTZ,
+                results_found INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+
         # --- Migrations (safe ADD COLUMN IF NOT EXISTS) ---
         migrations = [
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS parent_id INTEGER",
