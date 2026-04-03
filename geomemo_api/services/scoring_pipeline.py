@@ -475,6 +475,26 @@ def score_unscored_articles(cursor, limit=500, batch_name="manual"):
             stats["errors"] += 1
             stats["processed"] += 1
 
+    # Auto-approve and auto-reject after scoring
+    try:
+        cursor.execute("""
+            UPDATE articles SET status = 'approved'
+            WHERE status = 'pending' AND auto_approval_score >= 75
+        """)
+        approved = cursor.rowcount
+        cursor.execute("""
+            UPDATE articles SET status = 'rejected'
+            WHERE status = 'pending' AND auto_approval_score < 40
+        """)
+        rejected_extra = cursor.rowcount
+        cursor.connection.commit()
+        stats["auto_approved"] = approved
+        stats["auto_rejected_extra"] = rejected_extra
+        logger.info(f"Auto-approve: {approved} approved (75+), {rejected_extra} rejected (<40)")
+    except Exception as e:
+        cursor.connection.rollback()
+        logger.error(f"Auto-approve failed: {e}")
+
     logger.info(f"Scoring complete: {stats}")
     return stats
 
