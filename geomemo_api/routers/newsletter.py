@@ -450,71 +450,152 @@ def get_newsletter_by_id(brief_id: int):
 
 def _generate_ai_brief(parents: list, top_stories: list) -> tuple:
     """
-    Call Groq to generate a ~300-word executive intelligence summary.
+    Generate structured intelligence brief using Haiku.
+    Category briefs (75 words each) + Outlook (50 words).
     Returns (plain_text, html).
     """
-    if not groq_client:
-        logger.warning("Groq client not available, skipping AI brief")
-        return "", ""
+    try:
+        import anthropic as anthropic_sdk
+        import os
+        client = anthropic_sdk.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    except Exception:
+        client = None
 
-    # Build article summaries for the prompt (cap at 20 to stay within context)
-    article_summaries = ""
-    for i, a in enumerate(parents[:20]):
-        label = "[TOP STORY] " if a.get('is_top_story') else ""
-        headline = a.get('headline_en') or a.get('headline') or 'N/A'
-        summary = (a.get('summary') or 'N/A')[:400]
-        # Strip HTML tags from summary
-        summary = re.sub(r'<[^>]*>', '', summary)
-        article_summaries += (
-            f"{i+1}. {label}{headline}\n"
-            f"   Category: {a.get('category', 'Other')}\n"
-            f"   Summary: {summary}\n"
-            f"   Source: {a.get('publication_name') or 'Unknown'}\n\n"
+    if not client:
+        logger.warning("Anthropic client not available for brief, falling back to Groq")
+        return _generate_ai_brief_groq(parents, top_stories)
+
+    # Group articles by broad category
+    BRIEF_CATEGORIES = {
+        "CONFLICT & SECURITY": ["Geopolitical Conflict"],
+        "ECONOMICS & TRADE": ["Geopolitical Economics"],
+        "MARKETS & ENERGY": ["Global Markets"],
+        "DIPLOMACY & POLITICS": ["Geopolitical Politics", "International Relations"],
+    }
+
+    category_articles = {}
+    for cat_label, cat_names in BRIEF_CATEGORIES.items():
+        arts = [a for a in parents if a.get('category') in cat_names]
+        if arts:
+            category_articles[cat_label] = arts
+
+    # Also include uncategorized in the most relevant bucket
+    for a in parents:
+        cat = a.get('category', 'Other')
+        if cat in ('GeoNatDisaster', 'GeoLocal', 'Other'):
+            if 'CONFLICT & SECURITY' in category_articles:
+                category_articles.setdefault('CONFLICT & SECURITY', []).append(a)
+            else:
+                category_articles.setdefault('ECONOMICS & TRADE', []).append(a)
+
+    text_parts = []
+    html_parts = []
+
+    for cat_label, arts in category_articles.items():
+        # Build article list for this category
+        article_list = ""
+        for a in arts[:8]:
+            headline = a.get('headline_en') or a.get('headline') or ''
+            summary = re.sub(r'<[^>]*>', '', a.get('summary') or '')[:200]
+            article_list += f"- {headline}: {summary}\n"
+
+        try:
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=150,
+                messages=[{
+                    "role": "user",
+                    "content": f"""Write a 75-word analytical paragraph for the "{cat_label}" section of a daily intelligence brief.
+Synthesize these articles into one cohesive paragraph. Include specific actors, numbers, and facts.
+Connect related developments. Reporter and analyst tone. No bullet points. No hedging.
+Match tense to events. No hashtags or markdown.
+
+Articles:
+{article_list}"""
+                }]
+            )
+            para = msg.content[0].text.strip()
+            # Strip any hashtag lines
+            para = '\n'.join(l for l in para.split('\n') if not l.strip().startswith('#')).strip()
+        except Exception as e:
+            logger.warning(f"Brief section {cat_label} failed: {e}")
+            para = ""
+
+        if para:
+            text_parts.append(f"{cat_label}\n{para}")
+            html_parts.append(
+                f'<div style="margin-bottom:18px">'
+                f'<div style="font-weight:700;font-size:12px;color:#1a5276;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">{cat_label}</div>'
+                f'<p style="font-size:14px;line-height:1.7;color:#333;margin:0">{para}</p>'
+                f'</div>'
+            )
+
+    # Outlook section
+    try:
+        all_headlines = "\n".join(
+            f"- {a.get('headline_en') or a.get('headline') or ''}"
+            for a in top_stories[:10]
+        )
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=100,
+            messages=[{
+                "role": "user",
+                "content": f"""Write a 50-word "WHAT TO WATCH" outlook based on today's top stories.
+Only mention concrete scheduled events, deadlines, or inflection points in the next 24-48 hours.
+No speculation. No "could" or "might". Only facts with dates.
+If no concrete events are known, state what key actors are expected to do next.
+
+Top stories:
+{all_headlines}"""
+            }]
+        )
+        outlook = msg.content[0].text.strip()
+        outlook = '\n'.join(l for l in outlook.split('\n') if not l.strip().startswith('#')).strip()
+    except Exception as e:
+        logger.warning(f"Outlook generation failed: {e}")
+        outlook = ""
+
+    if outlook:
+        text_parts.append(f"WHAT TO WATCH\n{outlook}")
+        html_parts.append(
+            f'<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e8e8e8">'
+            f'<div style="font-weight:700;font-size:12px;color:#c0392b;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">What To Watch</div>'
+            f'<p style="font-size:14px;line-height:1.7;color:#333;margin:0">{outlook}</p>'
+            f'</div>'
         )
 
-    system_prompt = """You are the chief analyst at GeoMemo, a geopolitical intelligence service used by investment bankers, asset managers, and senior policymakers.
+    full_text = "\n\n".join(text_parts)
+    full_html = "".join(html_parts)
 
-Write a "Daily Brief" — a 250-350 word executive summary of today's most significant geopolitical developments and their market/policy implications.
+    return full_text, full_html
 
-REQUIREMENTS:
-1. LEAD with the single most consequential development and its immediate implications
-2. Cover 3-5 key stories, prioritizing TOP STORY items
-3. Draw connections between events when relevant (e.g., "This compounds pressure on..." or "Combined with...")
-4. Include specific data points, names, and figures when available
-5. End with a forward-looking sentence on what to watch next
-6. Tone: authoritative, concise, analytical. No hedging language ("might", "could possibly"). Use direct statements.
-7. NO bullet points. Write in flowing paragraphs (2-3 paragraphs).
-8. Do NOT use any greetings, sign-offs, or meta-commentary. Start directly with the analysis.
 
-FORMAT: Return a JSON object with exactly two fields:
-- "text": The plain text version of the brief
-- "html": The HTML version using only <p> and <strong> tags. Use <strong> for country names, leader names, key figures, and critical terms."""
+def _generate_ai_brief_groq(parents: list, top_stories: list) -> tuple:
+    """Fallback: Groq-based brief if Haiku unavailable."""
+    if not groq_client:
+        return "", ""
 
-    user_prompt = f"Today's approved articles for the Daily Brief:\n\n{article_summaries}"
+    article_summaries = ""
+    for i, a in enumerate(parents[:20]):
+        headline = a.get('headline_en') or a.get('headline') or 'N/A'
+        summary = re.sub(r'<[^>]*>', '', (a.get('summary') or 'N/A')[:400])
+        article_summaries += f"{i+1}. {headline}\n   Summary: {summary}\n\n"
 
     try:
         chat = groq_client.chat.completions.create(
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                {"role": "system", "content": "Write a 200-word executive intelligence summary. Authoritative, analytical tone. No bullets. Return JSON: {\"text\": \"...\", \"html\": \"...\"}"},
+                {"role": "user", "content": f"Articles:\n\n{article_summaries}"},
             ],
             model="llama-3.3-70b-versatile",
             temperature=0.3,
             response_format={"type": "json_object"},
         )
-        raw = chat.choices[0].message.content
-        result = json.loads(raw)
-        text = result.get("text", "")
-        html = result.get("html", f"<p>{text}</p>")
-        return text, html
-    except json.JSONDecodeError as e:
-        logger.error(f"Groq returned invalid JSON for brief: {e}")
-        # Try to extract text from raw response as fallback
-        if raw and len(raw) > 20:
-            return raw[:1000], f"<p>{raw[:1000]}</p>"
-        return "", ""
+        result = json.loads(chat.choices[0].message.content)
+        return result.get("text", ""), result.get("html", "")
     except Exception as e:
-        logger.error(f"Groq brief generation failed: {e}")
+        logger.error(f"Groq brief fallback failed: {e}")
         return "", ""
 
 
@@ -589,12 +670,12 @@ def _build_newsletter_html(
         f'</td></tr></table>'
     )
 
-    # --- AI Daily Brief (keep purple accent — GeoMemo identity) ---
+    # --- AI Intelligence Brief (structured by category) ---
     if brief_html and brief_html.strip():
         parts.append(
             f'<div style="background:#f8f6ff;border-left:4px solid #430297;padding:16px 20px;margin-bottom:28px;border-radius:0 6px 6px 0">'
-            f'<div style="font-family:{HEADLINE_FONT};font-size:14px;font-weight:700;color:#430297;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Daily Brief</div>'
-            f'<div style="font-size:15px;line-height:1.7;color:#333">{brief_html}</div>'
+            f'<div style="font-family:{HEADLINE_FONT};font-size:14px;font-weight:700;color:#430297;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">Daily Intelligence Brief</div>'
+            f'{brief_html}'
             f'</div>'
         )
 
@@ -749,11 +830,13 @@ def _format_article_item(article: dict, children: list, is_top: bool = False) ->
                     label_text = 'contrarian' if child_label == 'CONTRARIAN' else 'different angle'
                     label_badge = f' <span style="font-size:11px;color:{label_color};font-weight:600;text-transform:uppercase">[{label_text}]</span>'
                 html += (
-                    f'<div style="margin-top:8px;font-size:14px;line-height:1.4;padding-left:14px;text-indent:-14px">'
-                    f'&bull; <a href="{child["url"]}" style="color:#333;text-decoration:none">'
+                    f'<table cellpadding="0" cellspacing="0" border="0" style="margin-top:8px"><tr>'
+                    f'<td style="vertical-align:top;padding-right:6px;font-size:14px;line-height:1.4">&bull;</td>'
+                    f'<td style="font-size:14px;line-height:1.4">'
+                    f'<a href="{child["url"]}" style="color:#333;text-decoration:none">'
                     f'{child_angle}</a>'
                     f'{label_badge}'
-                    f'</div>'
+                    f'</td></tr></table>'
                 )
             else:
                 # Legacy format: full summary with attribution
