@@ -319,5 +319,121 @@ def run_serp_fetch(cursor, frequency_filter: str = "4h", max_results_per_query: 
             cursor.connection.rollback()
             stats["errors"] += 1
 
+    # After inserting, fetch full content for new SERP articles
+    if stats["articles_inserted"] > 0:
+        logger.info(f"Fetching content for {stats['articles_inserted']} new SERP articles...")
+        content_stats = fetch_content_for_serp_articles(cursor, limit=stats["articles_inserted"])
+        stats["content_fetched"] = content_stats.get("fetched", 0)
+        stats["content_failed"] = content_stats.get("failed", 0)
+
     logger.info(f"SERP fetch complete: {stats}")
+    return stats
+
+
+# =========================================
+# CONTENT FETCH FOR SERP ARTICLES
+# =========================================
+
+def fetch_content_for_serp_articles(cursor, limit=500) -> dict:
+    """
+    Fetch full article content for SERP articles that have no full_content.
+    Uses direct HTTP + BrightData WebUnlocker fallback.
+    """
+    try:
+        import trafilatura
+    except ImportError:
+        logger.warning("trafilatura not installed, skipping content fetch")
+        return {"fetched": 0, "failed": 0}
+
+    cursor.execute("""
+        SELECT id, url, publication_name
+        FROM articles
+        WHERE content_source = 'serp'
+          AND (full_content IS NULL OR length(full_content) < 50)
+          AND status = 'unscored'
+        ORDER BY id DESC
+        LIMIT %s
+    """, (limit,))
+    articles = [dict(row) for row in cursor.fetchall()]
+
+    if not articles:
+        return {"fetched": 0, "failed": 0}
+
+    stats = {"fetched": 0, "failed": 0}
+
+    # Think tank domains that need WebUnlocker
+    think_tank_domains = [
+        "chathamhouse.org", "rusi.org", "csis.org", "brookings.edu",
+        "cfr.org", "rand.org", "carnegieendowment.org", "atlanticcouncil.org",
+        "iiss.org", "piie.com", "foreignaffairs.com", "crisisgroup.org",
+    ]
+
+    api_key = os.getenv("BRIGHTDATA_WEBUNLOCKER_API_KEY", "")
+    zone = os.getenv("BRIGHTDATA_WEBUNLOCKER_ZONE", "web_unlocker1")
+
+    for art in articles:
+        url = art["url"]
+        article_id = art["id"]
+
+        try:
+            from urllib.parse import urlparse
+            domain = urlparse(url).netloc.lower().replace('www.', '')
+            is_think_tank = any(td in domain for td in think_tank_domains)
+
+            content = None
+            source = 'serp'
+
+            # Step 1: Direct fetch (unless think tank)
+            if not is_think_tank:
+                try:
+                    resp = requests.get(url, timeout=10, headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; GeoMemoBot/2.0)"
+                    })
+                    if resp.status_code == 200:
+                        extracted = trafilatura.extract(resp.text, include_comments=False)
+                        if extracted and len(extracted) >= 300:
+                            content = extracted[:15000]
+                            source = 'direct'
+                except Exception:
+                    pass
+
+            # Step 2: WebUnlocker fallback
+            if not content and api_key:
+                try:
+                    resp = requests.post(
+                        "https://api.brightdata.com/request",
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {api_key}",
+                        },
+                        json={"zone": zone, "url": url, "format": "raw"},
+                        timeout=30,
+                    )
+                    if resp.status_code == 200:
+                        extracted = trafilatura.extract(resp.text, include_comments=False)
+                        if extracted and len(extracted) >= 200:
+                            content = extracted[:15000]
+                            source = 'webunlocker'
+                except Exception:
+                    pass
+
+            # Update article
+            if content:
+                cursor.execute("""
+                    UPDATE articles SET full_content = %s, content_source = %s
+                    WHERE id = %s
+                """, (content, source, article_id))
+                cursor.connection.commit()
+                stats["fetched"] += 1
+            else:
+                stats["failed"] += 1
+
+            time.sleep(0.5)  # Rate limit
+
+        except Exception as e:
+            logger.debug(f"Content fetch failed for #{article_id}: {e}")
+            cursor.connection.rollback()
+            stats["failed"] += 1
+
+    logger.info(f"Content fetch for SERP articles: {stats}")
     return stats
