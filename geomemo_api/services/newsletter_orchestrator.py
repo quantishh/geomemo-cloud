@@ -33,7 +33,9 @@ except ImportError:
 def select_top_40(cursor, target_date: str) -> list:
     """
     Select top 40 approved articles for the target date with category diversity.
-    Fills each category bucket up to its cap, then redistributes remaining slots.
+    Same-day only — no fallback to old days (no stale news).
+    Fills each category up to its cap, then spills unused slots to categories
+    that have more articles than their cap.
     """
     from config import NEWSLETTER_CATEGORY_CAPS, NEWSLETTER_TOTAL
 
@@ -54,51 +56,53 @@ def select_top_40(cursor, target_date: str) -> list:
     all_articles = [dict(row) for row in cursor.fetchall()]
 
     if not all_articles:
-        # Fallback: try last 72 hours
-        cursor.execute("""
-            SELECT id, url, headline, headline_en, summary, summary_long, category,
-                   publication_name, author, scraped_at, is_top_story,
-                   auto_approval_score, confidence_score, parent_id,
-                   country_codes, region, og_image, embedded_tweets, website_tweets,
-                   source_id, significance_score, impact_score,
-                   novelty_score_v2, relevance_score_v2, depth_score,
-                   embedding
-            FROM articles
-            WHERE status = 'approved'
-              AND parent_id IS NULL
-              AND scraped_at >= NOW() - INTERVAL '72 hours'
-            ORDER BY auto_approval_score DESC NULLS LAST, scraped_at DESC
-        """)
-        all_articles = [dict(row) for row in cursor.fetchall()]
+        logger.warning(f"No approved articles for {target_date}")
+        return []
 
     logger.info(f"Top 40 selection: {len(all_articles)} approved articles available")
 
-    # First pass: fill each category bucket
+    # First pass: fill each category up to its cap
     buckets = {cat: [] for cat in NEWSLETTER_CATEGORY_CAPS}
-    selected_ids = set()
-    remaining = []
+    overflow = {cat: [] for cat in NEWSLETTER_CATEGORY_CAPS}  # articles beyond cap
+    uncategorized = []
 
     for art in all_articles:
         cat = art.get('category', 'Other')
         cap = NEWSLETTER_CATEGORY_CAPS.get(cat, 0)
-        if cat in buckets and len(buckets[cat]) < cap:
-            buckets[cat].append(art)
-            selected_ids.add(art['id'])
+        if cat in buckets:
+            if len(buckets[cat]) < cap:
+                buckets[cat].append(art)
+            else:
+                overflow[cat].append(art)
         else:
-            remaining.append(art)
+            uncategorized.append(art)
 
-    # Flatten selected
+    # Calculate unused slots
+    total_selected = sum(len(v) for v in buckets.values())
+    unused_slots = NEWSLETTER_TOTAL - total_selected
+
+    # Second pass: distribute unused slots to categories with overflow (by score)
+    if unused_slots > 0:
+        # Pool all overflow articles, sorted by score
+        all_overflow = []
+        for cat, arts in overflow.items():
+            for art in arts:
+                all_overflow.append(art)
+        all_overflow.extend(uncategorized)
+        all_overflow.sort(key=lambda a: (a.get('auto_approval_score') or 0), reverse=True)
+
+        for art in all_overflow:
+            if unused_slots <= 0:
+                break
+            cat = art.get('category', 'Other')
+            if cat in buckets:
+                buckets[cat].append(art)
+            unused_slots -= 1
+
+    # Flatten
     selected = []
     for cat_articles in buckets.values():
         selected.extend(cat_articles)
-
-    # Second pass: fill to NEWSLETTER_TOTAL from remaining (by score)
-    for art in remaining:
-        if len(selected) >= NEWSLETTER_TOTAL:
-            break
-        if art['id'] not in selected_ids:
-            selected.append(art)
-            selected_ids.add(art['id'])
 
     # Sort final selection by score
     selected.sort(key=lambda a: (a.get('auto_approval_score') or 0), reverse=True)
