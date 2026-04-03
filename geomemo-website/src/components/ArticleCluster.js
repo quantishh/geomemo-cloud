@@ -32,7 +32,7 @@ export default function ArticleCluster({ parent, relatedArticles, relatedSources
       paddingBottom: 'var(--space-5)',
       borderBottom: '1px solid var(--color-border)',
     }}>
-      {/* Summary displayed as headline + optional floating image */}
+      {/* Summary + inline attribution */}
       <div style={{ overflow: 'hidden' }}>
         {ogImage && (
           <img
@@ -50,10 +50,10 @@ export default function ArticleCluster({ parent, relatedArticles, relatedSources
             loading="lazy"
           />
         )}
-        <h3 style={{
+        <div style={{
           fontSize: isTopStory ? '1.15rem' : '1rem',
           fontWeight: 700,
-          lineHeight: 1.35,
+          lineHeight: 1.45,
           margin: 0,
         }}>
           <a
@@ -64,35 +64,31 @@ export default function ArticleCluster({ parent, relatedArticles, relatedSources
           >
             {stripHtml(parent.summary) || parent.headline_en || parent.headline}
           </a>
-        </h3>
-      </div>
-
-      {/* Attribution line — after summary, newsletter style: (Author / Publication) | Category */}
-      <div style={{
-        fontSize: '0.82rem',
-        marginTop: '4px',
-        lineHeight: 1.5,
-        color: 'var(--color-text-muted)',
-      }}>
-        <span style={{ fontWeight: 400 }}>
-          {parent.author ? (
-            <span>({parent.author} / {parent.publication_name})</span>
-          ) : (
-            <span>({parent.publication_name})</span>
-          )}
-        </span>
-        {category && (
-          <>
-            {' | '}
-            <span style={{
-              fontWeight: 300,
-              fontSize: '0.78rem',
-              color: 'var(--color-accent)',
-            }}>
-              {category}
-            </span>
-          </>
-        )}
+          {' '}
+          <span style={{
+            fontSize: '0.82rem',
+            fontWeight: 400,
+            color: 'var(--color-text-muted)',
+          }}>
+            {parent.author ? (
+              <span>({parent.author} / {parent.publication_name})</span>
+            ) : (
+              <span>({parent.publication_name})</span>
+            )}
+            {category && (
+              <>
+                {' | '}
+                <span style={{
+                  fontWeight: 300,
+                  fontSize: '0.78rem',
+                  color: 'var(--color-accent)',
+                }}>
+                  {category}
+                </span>
+              </>
+            )}
+          </span>
+        </div>
       </div>
 
       {/* Related: "More:" with publication name links + summary hover popups */}
