@@ -193,6 +193,8 @@ export default async function Home() {
                   <iframe
                     src="https://monitor.geomemo.news"
                     title="WorldMonitor Live Map"
+                    sandbox="allow-scripts allow-same-origin"
+                    allow=""
                     style={{
                       position: 'absolute',
                       top: 0,
