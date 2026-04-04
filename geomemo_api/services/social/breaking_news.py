@@ -138,6 +138,17 @@ def drip_feed_articles() -> dict:
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     try:
+        # Advisory lock to prevent duplicate posts from multiple uvicorn workers
+        # Lock ID 8675309 is arbitrary — just needs to be consistent
+        cursor.execute("SELECT pg_try_advisory_lock(8675309)")
+        got_lock = cursor.fetchone()[0]
+        if not got_lock:
+            results["skipped_reason"] = "Another worker is already running drip feed"
+            logger.debug("Drip feed skipped — another worker holds the lock")
+            cursor.close()
+            conn.close()
+            return results
+
         cutoff = datetime.now(timezone.utc) - timedelta(hours=DRIP_LOOKBACK_HOURS)
 
         cursor.execute("""
@@ -176,6 +187,11 @@ def drip_feed_articles() -> dict:
         conn.rollback()
         return results
     finally:
+        # Release advisory lock
+        try:
+            cursor.execute("SELECT pg_advisory_unlock(8675309)")
+        except Exception:
+            pass
         cursor.close()
         conn.close()
 
