@@ -587,24 +587,11 @@ def get_website_feed():
         last_newsletter_date = str(last_newsletter_row['date']) if last_newsletter_row else None
 
         # 2. TOP STORIES: recency-first — today's highest-scoring, then backfill from older
+        # Fully autonomous — no manual is_top_story flags, scoring determines top stories
         top_stories = []
         top_story_ids = set()
 
-        # 2a. Manually marked top stories (always first)
-        cursor.execute(f"""
-            SELECT {ARTICLE_COLUMNS}
-            FROM articles
-            WHERE status = 'approved'
-              AND is_top_story = TRUE
-              AND scraped_at >= NOW() - INTERVAL '72 hours'
-            ORDER BY scraped_at DESC
-        """)
-        for row in cursor.fetchall():
-            art = dict(row)
-            top_stories.append(art)
-            top_story_ids.add(art['id'])
-
-        # 2b. Today's highest-scoring approved articles (always prioritized)
+        # 2a. Today's highest-scoring approved articles (always prioritized)
         cursor.execute(f"""
             SELECT {ARTICLE_COLUMNS}
             FROM articles
