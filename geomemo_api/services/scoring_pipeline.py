@@ -170,12 +170,15 @@ Q5 - ANALYTICAL DEPTH: Does the article provide data, named sources, expert anal
   historical context, or quantified impact (not just bare facts from a wire report)?
 
 Also extract:
-- category: MUST be exactly one of: Geopolitical Conflict, Geopolitical Economics, Global Markets, International Relations, Geopolitical Politics, GeoNatDisaster, GeoLocal, Other. No other category names allowed.
+- category: MUST be exactly one of: Geopolitical Conflict, Geopolitical Economics, Global Markets, International Relations, Geopolitical Politics, GeoNatDisaster, GeoLocal, Other.
+- sub_category: specific topic within category (e.g., "Trade War", "Sanctions", "Crypto", "Elections", "Maritime Security", "Nuclear", "Cybersecurity", "Food Security", "Climate", "Migration")
 - countries: list of country names mentioned or implied
 - headline_en: formal English translation of headline (keep original if already English)
+- language: ISO 639-1 language code of the original article (e.g., "en", "ar", "zh", "vi", "es")
+- entities: list of key entities mentioned. For each: name, type (person/organization/company/military/commodity/currency/stock_index/policy/infrastructure/industry), and country code if applicable.
 
 Return valid JSON:
-{"q1": "YES or NO", "q2": "YES or NO", "q3": "YES or NO", "q4": "YES or NO", "q5": "YES or NO", "category": "...", "countries": [...], "headline_en": "..."}"""
+{"q1": "YES or NO", "q2": "YES or NO", "q3": "YES or NO", "q4": "YES or NO", "q5": "YES or NO", "category": "...", "sub_category": "...", "countries": [...], "headline_en": "...", "language": "en", "entities": [{"name": "...", "type": "...", "country": "..."}]}"""
 
     user_prompt = f'Headline: "{headline}"\nContent: "{(content or "")[:3000]}"'
 
@@ -207,16 +210,47 @@ def _derive_scores(q_data):
 
 
 # =========================================
-# HAIKU SUMMARY
+# TWO-TIER SUMMARIES
 # =========================================
 
-def _generate_summary(headline, content):
-    """Generate 30-35 word one-sentence summary via Haiku with post-processing."""
+def _generate_groq_summary(headline, content):
+    """Tier 1: Cheap Groq Llama summary for ALL articles. 30-35 words."""
+    groq = _get_groq()
+    if not groq:
+        return None
+
+    parts = [f"Headline: {headline}"]
+    if content and len(content.strip()) > 50:
+        parts.append(f"Content: {content[:3000]}")
+    article_text = "\n".join(parts)
+
+    try:
+        chat = groq.chat.completions.create(
+            messages=[{
+                "role": "user",
+                "content": f"""Summarize this article in one comprehensive sentence of 30-35 words.
+Write in English, in your own words, reporter and analyst tone.
+Match tense to event. No hashtags, no markdown. Never refuse.
+
+{article_text}"""
+            }],
+            model="llama-3.3-70b-versatile",
+            temperature=0.2,
+            max_tokens=80,
+        )
+        raw = chat.choices[0].message.content.strip()
+        return _clean_summary(raw, headline)
+    except Exception as e:
+        logger.warning(f"Groq summary failed: {e}")
+        return None
+
+
+def _generate_haiku_summary(headline, content):
+    """Tier 2: Quality Haiku summary for APPROVED articles only. 30-35 words."""
     client = _get_anthropic()
     if not client:
         return None
 
-    # Build context
     parts = [f"Headline: {headline}"]
     if content and len(content.strip()) > 50:
         parts.append(f"Content: {content[:4000]}")
@@ -241,6 +275,60 @@ Match tense to event. No hashtags, no markdown. Never refuse.
     except Exception as e:
         logger.warning(f"Haiku summary failed: {e}")
         return None
+
+
+# Legacy alias
+def _generate_summary(headline, content):
+    return _generate_haiku_summary(headline, content)
+
+
+# =========================================
+# ENTITY STORAGE
+# =========================================
+
+def _store_entities(cursor, article_id, entities_data):
+    """Store extracted entities and link to article."""
+    if not entities_data or not isinstance(entities_data, list):
+        return 0
+
+    stored = 0
+    for ent in entities_data:
+        if not isinstance(ent, dict) or not ent.get('name'):
+            continue
+
+        name = ent['name'].strip()
+        etype = ent.get('type', 'unknown').lower()
+        country = ent.get('country', None)
+
+        if len(name) < 2 or len(name) > 200:
+            continue
+
+        try:
+            # Upsert entity
+            cursor.execute("""
+                INSERT INTO entities (name, entity_type, country_code, last_seen_at, article_count)
+                VALUES (%s, %s, %s, NOW(), 1)
+                ON CONFLICT (LOWER(name), entity_type)
+                DO UPDATE SET last_seen_at = NOW(),
+                              article_count = entities.article_count + 1,
+                              country_code = COALESCE(EXCLUDED.country_code, entities.country_code)
+                RETURNING id
+            """, (name, etype, country))
+            entity_id = cursor.fetchone()[0]
+
+            # Link to article
+            cursor.execute("""
+                INSERT INTO article_entities (article_id, entity_id)
+                VALUES (%s, %s)
+                ON CONFLICT (article_id, entity_id) DO NOTHING
+            """, (article_id, entity_id))
+
+            stored += 1
+        except Exception as e:
+            logger.debug(f"Entity store failed for '{name}': {e}")
+            cursor.connection.rollback()
+
+    return stored
 
 
 def _clean_summary(summary: str, headline: str) -> str:
@@ -431,44 +519,55 @@ def score_unscored_articles(cursor, limit=500, batch_name="manual"):
             # Composite score
             auto_score = round(q_composite * 0.70 + credibility * 0.20 + novelty * 0.10, 2)
 
-            # Haiku summary — only if we have content to work with
+            # Tier 1 summary: Groq Llama for ALL articles (cheap)
             if content and len(content.strip()) > 50:
-                summary = _generate_summary(headline_en, content)
+                summary = _generate_groq_summary(headline_en, content)
                 if not summary:
-                    summary = headline_en  # Refusal caught by post-processing
-                else:
-                    stats["haiku_summarized"] += 1
+                    summary = headline_en
+                stats["groq_summarized"] = stats.get("groq_summarized", 0) + 1
             else:
-                # Headline-only: use headline as-is, no Haiku call
                 summary = headline_en
+
+            # Extract sub_category and language from classification
+            sub_category = q_data.get('sub_category', None)
+            content_language = q_data.get('language', 'en')
 
             # Update article
             cursor.execute("""
                 UPDATE articles SET
                     status = 'pending',
                     headline_en = %s, summary = %s, summary_long = %s,
-                    category = %s, embedding = %s,
+                    category = %s, sub_category = %s, embedding = %s,
                     confidence_score = %s, auto_approval_score = %s,
                     significance_score = %s, impact_score = %s,
                     novelty_score_v2 = %s, relevance_score_v2 = %s, depth_score = %s,
-                    country_codes = %s, region = %s
+                    country_codes = %s, region = %s, content_language = %s
                 WHERE id = %s
             """, (
                 headline_en, summary, summary,
-                category, embedding,
+                category, sub_category, embedding,
                 q_composite, auto_score,
                 q1, q2, q3, q4, q5,
                 country_codes if country_codes else None, region,
-                article_id,
+                content_language, article_id,
             ))
             cursor.connection.commit()
+
+            # Store entities from classification
+            entities_data = q_data.get('entities', [])
+            if entities_data:
+                entities_stored = _store_entities(cursor, article_id, entities_data)
+                cursor.connection.commit()
+                stats["entities_stored"] = stats.get("entities_stored", 0) + entities_stored
+
             stats["processed"] += 1
             stats["_scored_ids"].append(article_id)
 
             logger.info(
                 f"Scored #{article_id}: '{headline_en[:50]}' | "
                 f"Q:{q_composite} Auto:{auto_score} | "
-                f"Q1:{q1} Q2:{q2} Q3:{q3} Q4:{q4} Q5:{q5}"
+                f"Q1:{q1} Q2:{q2} Q3:{q3} Q4:{q4} Q5:{q5} | "
+                f"Entities:{len(entities_data)}"
             )
 
         except Exception as e:
@@ -507,11 +606,42 @@ def score_unscored_articles(cursor, limit=500, batch_name="manual"):
             rejected_extra = cursor.rowcount
         cursor.connection.commit()
         stats["auto_approved"] = approved
+        stats["auto_approved"] = approved
         stats["auto_rejected_extra"] = rejected_extra
         logger.info(f"Auto-approve: {approved} approved (75+), {rejected_extra} rejected (<40)")
+
+        # Tier 2: Haiku summary upgrade for approved articles ONLY
+        if approved > 0:
+            logger.info(f"Upgrading {approved} approved articles with Haiku summaries...")
+            cursor.execute("""
+                SELECT id, headline_en, full_content, summary
+                FROM articles
+                WHERE status = 'approved'
+                  AND id = ANY(%s)
+            """, (scored_ids if scored_ids else [],))
+            approved_articles = [dict(row) for row in cursor.fetchall()]
+
+            haiku_upgraded = 0
+            for art in approved_articles:
+                art_content = art.get('full_content') or art.get('summary') or ''
+                if art_content and len(art_content.strip()) > 50:
+                    haiku_summary = _generate_haiku_summary(
+                        art['headline_en'] or '', art_content
+                    )
+                    if haiku_summary:
+                        cursor.execute("""
+                            UPDATE articles SET summary = %s, summary_long = %s
+                            WHERE id = %s
+                        """, (haiku_summary, haiku_summary, art['id']))
+                        haiku_upgraded += 1
+
+            cursor.connection.commit()
+            stats["haiku_upgraded"] = haiku_upgraded
+            logger.info(f"Haiku upgrade: {haiku_upgraded}/{approved} articles")
+
     except Exception as e:
         cursor.connection.rollback()
-        logger.error(f"Auto-approve failed: {e}")
+        logger.error(f"Auto-approve/Haiku upgrade failed: {e}")
 
     # Clean internal tracking before returning
     scored_count = len(stats.get("_scored_ids", []))
@@ -542,7 +672,9 @@ def _send_pipeline_report(stats: dict):
 
         processed = stats.get("processed", 0)
         classified = stats.get("groq_classified", 0)
-        summarized = stats.get("haiku_summarized", 0)
+        groq_summarized = stats.get("groq_summarized", 0)
+        haiku_upgraded = stats.get("haiku_upgraded", 0)
+        entities_stored = stats.get("entities_stored", 0)
         rejected = stats.get("keyword_rejected", 0)
         approved = stats.get("auto_approved", 0)
         rejected_extra = stats.get("auto_rejected_extra", 0)
@@ -558,7 +690,9 @@ def _send_pipeline_report(stats: dict):
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"📥 Processed: {processed}\n"
             f"🤖 Classified (Groq): {classified}\n"
-            f"✍️ Summarized (Haiku): {summarized}\n"
+            f"📝 Summarized (Groq): {groq_summarized}\n"
+            f"✨ Upgraded (Haiku): {haiku_upgraded}\n"
+            f"🏷️ Entities extracted: {entities_stored}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"✅ Approved (75+): {approved}\n"
             f"⏳ Pending (40-74): {pending}\n"

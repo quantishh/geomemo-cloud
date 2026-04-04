@@ -213,6 +213,123 @@ def init_db():
             );
         """)
 
+        # --- Intelligence Database: Entities ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS entities (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                sub_type TEXT,
+                country_code TEXT,
+                description TEXT,
+                aliases TEXT[],
+                metadata JSONB DEFAULT '{}',
+                first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+                last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+                article_count INTEGER DEFAULT 0,
+                avg_sentiment FLOAT DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_entities_name_type
+            ON entities (LOWER(name), entity_type);
+        """)
+
+        # --- Intelligence Database: Article-Entity relationships ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS article_entities (
+                id SERIAL PRIMARY KEY,
+                article_id INTEGER REFERENCES articles(id) ON DELETE CASCADE,
+                entity_id INTEGER REFERENCES entities(id) ON DELETE CASCADE,
+                role TEXT DEFAULT 'mentioned',
+                sentiment TEXT DEFAULT 'neutral',
+                context TEXT,
+                extracted_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(article_id, entity_id)
+            );
+        """)
+
+        # --- Intelligence Database: Economic Indicators ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS economic_indicators (
+                id SERIAL PRIMARY KEY,
+                country_code TEXT NOT NULL,
+                indicator_type TEXT NOT NULL,
+                value TEXT NOT NULL,
+                value_numeric FLOAT,
+                unit TEXT,
+                direction TEXT,
+                period TEXT,
+                previous_value TEXT,
+                source_type TEXT DEFAULT 'article',
+                source_org TEXT,
+                article_id INTEGER REFERENCES articles(id),
+                api_series_id TEXT,
+                reported_at TIMESTAMPTZ,
+                extracted_at TIMESTAMPTZ DEFAULT NOW(),
+                confidence FLOAT DEFAULT 1.0
+            );
+        """)
+
+        # --- Intelligence Database: Bilateral Relations ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bilateral_relations (
+                id SERIAL PRIMARY KEY,
+                country_a TEXT NOT NULL,
+                country_b TEXT NOT NULL,
+                relation_type TEXT NOT NULL,
+                status TEXT DEFAULT 'active',
+                event_summary TEXT,
+                significance_score INTEGER,
+                article_id INTEGER REFERENCES articles(id),
+                extracted_at TIMESTAMPTZ DEFAULT NOW(),
+                started_at TIMESTAMPTZ,
+                ended_at TIMESTAMPTZ
+            );
+        """)
+
+        # --- Intelligence Database: Country Profiles ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS country_profiles (
+                country_code TEXT PRIMARY KEY,
+                country_name TEXT NOT NULL,
+                head_of_state TEXT,
+                head_of_state_entity_id INTEGER,
+                government_type TEXT,
+                latest_gdp TEXT,
+                latest_gdp_growth TEXT,
+                latest_inflation TEXT,
+                latest_interest_rate TEXT,
+                latest_unemployment TEXT,
+                latest_credit_rating TEXT,
+                latest_debt_to_gdp TEXT,
+                risk_score FLOAT,
+                stability_index FLOAT,
+                article_count_7d INTEGER DEFAULT 0,
+                article_count_30d INTEGER DEFAULT 0,
+                top_categories JSONB DEFAULT '{}',
+                top_entities JSONB DEFAULT '[]',
+                trending_topics JSONB DEFAULT '[]',
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+
+        # --- Intelligence Database: API Data Sources ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_data_sources (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                base_url TEXT NOT NULL,
+                api_key_env TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
+                last_fetched_at TIMESTAMPTZ,
+                fetch_frequency TEXT DEFAULT 'daily',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+
         # --- Migrations (safe ADD COLUMN IF NOT EXISTS) ---
         migrations = [
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS parent_id INTEGER",
@@ -291,6 +408,21 @@ def init_db():
             # Phase 2: Newsletter approval flow
             "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS approval_token TEXT",
             "ALTER TABLE daily_briefs ADD COLUMN IF NOT EXISTS preview_sent_at TIMESTAMPTZ",
+            # Intelligence Database: article columns
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS full_content_en TEXT",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_language TEXT",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS sub_category TEXT",
+            # Intelligence Database: indexes
+            "CREATE INDEX IF NOT EXISTS idx_entities_country ON entities (country_code)",
+            "CREATE INDEX IF NOT EXISTS idx_entities_type ON entities (entity_type)",
+            "CREATE INDEX IF NOT EXISTS idx_entities_article_count ON entities (article_count DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_article_entities_article ON article_entities (article_id)",
+            "CREATE INDEX IF NOT EXISTS idx_article_entities_entity ON article_entities (entity_id)",
+            "CREATE INDEX IF NOT EXISTS idx_econ_country ON economic_indicators (country_code)",
+            "CREATE INDEX IF NOT EXISTS idx_econ_type ON economic_indicators (indicator_type)",
+            "CREATE INDEX IF NOT EXISTS idx_econ_country_type ON economic_indicators (country_code, indicator_type)",
+            "CREATE INDEX IF NOT EXISTS idx_bilateral_countries ON bilateral_relations (country_a, country_b)",
+            "CREATE INDEX IF NOT EXISTS idx_bilateral_type ON bilateral_relations (relation_type)",
         ]
         for sql in migrations:
             try:
