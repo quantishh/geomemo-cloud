@@ -330,6 +330,38 @@ def init_db():
             );
         """)
 
+        # --- Intelligence Database: Authors ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS authors (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT,
+                x_handle TEXT,
+                linkedin_url TEXT,
+                website_url TEXT,
+                publication_name TEXT,
+                publications TEXT[],
+                bio TEXT,
+                country_code TEXT,
+                entity_id INTEGER REFERENCES entities(id),
+                total_articles INTEGER DEFAULT 0,
+                avg_score FLOAT DEFAULT 0,
+                top_categories JSONB DEFAULT '{}',
+                top_countries JSONB DEFAULT '{}',
+                top_entities JSONB DEFAULT '{}',
+                top_sub_categories JSONB DEFAULT '{}',
+                expertise_tags TEXT[],
+                expertise_score FLOAT DEFAULT 0,
+                first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+                last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_authors_name_pub
+            ON authors (LOWER(name), LOWER(COALESCE(publication_name, '')));
+        """)
+
         # --- Migrations (safe ADD COLUMN IF NOT EXISTS) ---
         migrations = [
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS parent_id INTEGER",
@@ -412,6 +444,9 @@ def init_db():
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS full_content_en TEXT",
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_language TEXT",
             "ALTER TABLE articles ADD COLUMN IF NOT EXISTS sub_category TEXT",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS author_email TEXT",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS author_x_handle TEXT",
+            "ALTER TABLE articles ADD COLUMN IF NOT EXISTS author_id INTEGER REFERENCES authors(id)",
             # Intelligence Database: indexes
             "CREATE INDEX IF NOT EXISTS idx_entities_country ON entities (country_code)",
             "CREATE INDEX IF NOT EXISTS idx_entities_type ON entities (entity_type)",
@@ -423,6 +458,10 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_econ_country_type ON economic_indicators (country_code, indicator_type)",
             "CREATE INDEX IF NOT EXISTS idx_bilateral_countries ON bilateral_relations (country_a, country_b)",
             "CREATE INDEX IF NOT EXISTS idx_bilateral_type ON bilateral_relations (relation_type)",
+            # Authors indexes
+            "CREATE INDEX IF NOT EXISTS idx_authors_expertise ON authors USING GIN (expertise_tags)",
+            "CREATE INDEX IF NOT EXISTS idx_authors_score ON authors (expertise_score DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_articles_author_id ON articles (author_id)",
         ]
         for sql in migrations:
             try:

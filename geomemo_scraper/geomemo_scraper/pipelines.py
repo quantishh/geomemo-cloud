@@ -360,11 +360,12 @@ class GeomemoDatabasePipeline:
 
     def _fetch_full_content(self, url: str, publication_name: str = None) -> tuple:
         """
-        Fetch full article content. Returns (content_text, content_source).
+        Fetch full article content. Returns (content_text, content_source, raw_html).
         content_source: 'direct', 'webunlocker', or 'rss_only'
+        raw_html: original HTML for author extraction (None if not fetched)
         """
         if not trafilatura:
-            return None, 'rss_only'
+            return None, 'rss_only', None
 
         # Check if think tank domain (always use WebUnlocker)
         is_think_tank = False
@@ -387,9 +388,10 @@ class GeomemoDatabasePipeline:
                     "User-Agent": "Mozilla/5.0 (compatible; GeoMemoBot/2.0)"
                 })
                 if resp.status_code == 200:
-                    extracted = trafilatura.extract(resp.text, include_comments=False)
+                    raw_html = resp.text
+                    extracted = trafilatura.extract(raw_html, include_comments=False)
                     if extracted and len(extracted) >= 500:
-                        return extracted[:15000], 'direct'
+                        return extracted[:15000], 'direct', raw_html
             except Exception as e:
                 self.logger.debug(f"Direct fetch failed for {url[:60]}: {e}")
 
@@ -410,13 +412,14 @@ class GeomemoDatabasePipeline:
                 timeout=30,
             )
             if resp.status_code == 200:
-                extracted = trafilatura.extract(resp.text, include_comments=False)
+                raw_html = resp.text
+                extracted = trafilatura.extract(raw_html, include_comments=False)
                 if extracted and len(extracted) >= 200:
-                    return extracted[:15000], 'webunlocker'
+                    return extracted[:15000], 'webunlocker', raw_html
         except Exception as e:
             self.logger.debug(f"WebUnlocker failed for {url[:60]}: {e}")
 
-        return None, 'rss_only'
+        return None, 'rss_only', None
 
     # =========================================
     # PHASE 1: THREE-TIER PRE-FILTERING
@@ -911,47 +914,68 @@ You MUST always produce a summary — never refuse or ask for more information.
 
         try:
             # === STEP 1: Full Content Extraction ===
-            full_content, content_source = self._fetch_full_content(
+            full_content, content_source, raw_html = self._fetch_full_content(
                 adapter['url'], publication_name
             )
 
-            # === STEP 2: Source lookup/create ===
+            # === STEP 2: Author Extraction (Layer 1 — from HTML) ===
+            author_name = adapter.get('author') or ''
+            author_email = None
+            author_x_handle = None
+            if raw_html:
+                try:
+                    import sys
+                    sys.path.insert(0, '/app/geomemo_api')
+                    from services.author_extractor import extract_author_info
+                    author_info = extract_author_info(raw_html, adapter['url'])
+                    if not author_name and author_info.get('name'):
+                        author_name = author_info['name']
+                    author_email = author_info.get('email')
+                    author_x_handle = author_info.get('x_handle')
+                except Exception as e:
+                    self.logger.debug(f"Author extraction failed: {e}")
+
+            # === STEP 3: Source lookup/create ===
             source_id = adapter.get('source_id') or self._lookup_or_create_source(publication_name)
 
-            # === STEP 3: OG Image ===
+            # === STEP 4: OG Image ===
             og_image = adapter.get('og_image')
             if not og_image:
                 og_image = self._fetch_og_image(adapter['url'])
 
-            # === STEP 4: INSERT raw article (no scoring) ===
+            # === STEP 5: INSERT raw article (no scoring) ===
             self.cursor.execute(
                 """
                 INSERT INTO articles
                 (url, headline, publication_name, author,
                  summary, category, status, scraped_at,
                  source_id, og_image,
-                 full_content, content_source)
+                 full_content, content_source,
+                 author_email, author_x_handle)
                 VALUES (%s, %s, %s, %s,
                         %s, %s, 'unscored', NOW(),
+                        %s, %s,
                         %s, %s,
                         %s, %s)
                 ON CONFLICT (url) DO NOTHING
                 """,
                 (
                     adapter['url'], headline, publication_name,
-                    adapter.get('author'),
+                    author_name or adapter.get('author'),
                     rss_description[:500] if rss_description else None,
                     'Other',
                     source_id, og_image,
                     full_content, content_source,
+                    author_email, author_x_handle,
                 )
             )
             self.connection.commit()
 
             content_len = len(full_content) if full_content else 0
+            author_info_str = f"Author: {author_name}" if author_name else ""
             self.logger.info(
                 f"Ingested: '{headline[:60]}' | Source: {publication_name} | "
-                f"Content: {content_source} ({content_len} chars)"
+                f"Content: {content_source} ({content_len} chars) {author_info_str}"
             )
 
         except DropItem as e:
